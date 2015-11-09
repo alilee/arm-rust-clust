@@ -8,11 +8,14 @@ OBJDUMP=arm-none-eabi-objdump
 
 OBJS=$(patsubst %,%.o,$(basename $(wildcard *.[cs])))
 
+ASFLAGS = -mcpu=cortex-a8
+CFLAGS = -Og -mcpu=cortex-a8 -ffreestanding
+
 %.o: %.s
-	$(AS) -mcpu=$(CPU) -g $< -o $@
+	$(AS) $(ASFLAGS) -g $< -o $@
 
 %.o: %.c
-	$(CC) -c -mcpu=$(CPU) -g $< -o $@
+	$(CC) -c $(CFLAGS) -g $< -o $@
 
 %.elf: %.ld $(OBJS)
 	$(LD) -T $^ -o $@
@@ -24,5 +27,5 @@ OBJS=$(patsubst %,%.o,$(basename $(wildcard *.[cs])))
 build: test.bin
 
 clean: 
-	$(RM) *.bin *.elf *.o
+	$(RM) *.bin *.elf *.o *.code
 
