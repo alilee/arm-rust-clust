@@ -27,5 +27,5 @@ CFLAGS = -Og -mcpu=cortex-a8 -ffreestanding
 build: test.bin
 
 clean: 
-	$(RM) *.bin *.elf *.o *.code
+	$(RM) *.bin *.o *.code
 
