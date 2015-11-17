@@ -3,3 +3,7 @@
 *.code
 *.bin
 *.img
+.DS_Store
+Cargo.lock
+core/src
+target

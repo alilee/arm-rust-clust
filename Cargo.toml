@@ -1,0 +1,11 @@
+[package]
+name = "arm"
+version = "0.1.0"
+authors = ["Alister Lee <alister@dev.shortepic.com>"]
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies.core]
+path = "core"
+
