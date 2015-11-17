@@ -9,3 +9,5 @@ crate-type = ["staticlib"]
 [dependencies.core]
 path = "core"
 
+[target.arm-none-eabi]
+ar = "arm-none-eabi-ar"

@@ -7,3 +7,5 @@
 Cargo.lock
 core/src
 target
+build
+a.out

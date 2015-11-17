@@ -1,11 +1,19 @@
 ENTRY(_reset)
 SECTIONS
 {
+
+ /DISCARD/ :
+ {
+   *(.ARM.exidx*)
+ }
+ 
  . = 0x10000;
- .startup . : { startup.o(.text) }
- .text : { *(.text) *(.text.boot) }
- .data : { *(.data) }
- .bss : { *(.bss COMMON) }
+ .text : 
+ { 
+     *(.startup) 
+     *(.text*) 
+ }
+ 
  . = ALIGN(0x1000);
  stack = .;
  . = . + 0x1000; /* 4kB of stack memory */

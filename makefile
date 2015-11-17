@@ -13,14 +13,9 @@ OBJS=$(patsubst %,%.o,$(basename $(wildcard *.[cs] *.rs)))
 ASFLAGS = -mcpu=cortex-a8
 CFLAGS = -Og
 
-%.o: %.s
+build/%.o: src/%.s
+	@mkdir -p $(shell dirname $@)
 	$(AS) $(ASFLAGS) -g $< -o $@
-
-%.o: %.c
-	$(CC) -c $(CFLAGS) -g $< -o $@
-
-%.o: %.rs lib-arm/libcore.rlib
-	$(RC) --target=$(TARGET) $(CFLAGS) -L lib-arm -g $< -o $@
 
 %.elf: %.ld $(OBJS)
 	$(LD) -T $^ -o $@
@@ -29,11 +24,27 @@ CFLAGS = -Og
 	$(OBJCOPY) -O binary $< $@
 	$(OBJDUMP) -dS $< > $*.code
 
-build: test.bin
+kernel := build/kernel
+rust_os := target/$(TARGET)/debug/arm.o
+linker_script := src/linker.ld
 
-clean: 
-	$(RM) *.bin *.o *.code
+assembly_source_files := $(wildcard src/*.s)
+assembly_object_files := $(patsubst src/%.s, build/%.o, $(assembly_source_files))
 
-lib-arm/libcore.rlib: 
-	$(RC) -C opt-level=2 -Z no-landing-pads --target $(TARGET) -g libcore/lib.rs --out-dir lib-arm
+.PHONY: all clean run iso cargo
 
+all: $(kernel)
+
+clean:
+	@cargo clean
+	@rm -rf build
+
+$(kernel).elf: cargo $(rust_os) $(assembly_object_files) $(linker_script)
+	$(LD) -nt -nostdlib --gc-sections -T $(linker_script) -o $@ $(rust_os) $(assembly_object_files)
+
+$(kernel): $(kernel).elf
+	$(OBJCOPY) -O binary $< $@
+	$(OBJDUMP) -dS $< > $(kernel).code
+
+cargo:
+	@cargo rustc --target $(TARGET) -- -Z no-landing-pads --emit=obj
