@@ -2,9 +2,9 @@ ENTRY(_reset)
 SECTIONS
 {
 
- /DISCARD/ :
+ /DISCARD/ : 
  {
-   *(.ARM.exidx*)
+     *(.ARM.exidx*)
  }
  
  . = 0x10000;

@@ -1,37 +1,27 @@
-CPU=arm926ej-s
-
 TARGET=arm-none-eabi
-AS=arm-none-eabi-as
-CC=arm-none-eabi-gcc
-RC=rustc
-LD=arm-none-eabi-ld
-OBJCOPY=arm-none-eabi-objcopy
-OBJDUMP=arm-none-eabi-objdump
+AS=$(TARGET)-as
+LD=$(TARGET)-ld
+OBJCOPY=$(TARGET)-objcopy
+OBJDUMP=$(TARGET)-objdump
 
-OBJS=$(patsubst %,%.o,$(basename $(wildcard *.[cs] *.rs)))
+ASFLAGS = -mcpu=cortex-a8 -g
 
-ASFLAGS = -mcpu=cortex-a8
-CFLAGS = -Og
-
-build/%.o: src/%.s
-	@mkdir -p $(shell dirname $@)
-	$(AS) $(ASFLAGS) -g $< -o $@
-
-%.elf: %.ld $(OBJS)
-	$(LD) -T $^ -o $@
+%.o: %.s
+	$(AS) $(ASFLAGS) $< -o $@
 
 %.bin: %.elf
 	$(OBJCOPY) -O binary $< $@
 	$(OBJDUMP) -dS $< > $*.code
 
-kernel := build/kernel
-rust_os := target/$(TARGET)/debug/arm.o
+kernel := build/kernel.bin
+
+rust_os := target/$(TARGET)/debug/libarm.a
 linker_script := src/linker.ld
 
 assembly_source_files := $(wildcard src/*.s)
-assembly_object_files := $(patsubst src/%.s, build/%.o, $(assembly_source_files))
+assembly_object_files := $(patsubst %.s, %.o, $(assembly_source_files))
 
-.PHONY: all clean run iso cargo
+.PHONY: all clean cargo
 
 all: $(kernel)
 
@@ -39,12 +29,12 @@ clean:
 	@cargo clean
 	@rm -rf build
 
-$(kernel).elf: cargo $(rust_os) $(assembly_object_files) $(linker_script)
-	$(LD) -nt -nostdlib --gc-sections -T $(linker_script) -o $@ $(rust_os) $(assembly_object_files)
-
-$(kernel): $(kernel).elf
-	$(OBJCOPY) -O binary $< $@
-	$(OBJDUMP) -dS $< > $(kernel).code
+build/kernel.elf: cargo $(rust_os) $(assembly_object_files) $(linker_script)
+	@mkdir -p $(shell dirname $@)
+	$(LD) --gc-sections -T $(linker_script) -o $@ $(assembly_object_files) $(rust_os)
 
 cargo:
-	@cargo rustc --target $(TARGET) -- -Z no-landing-pads --emit=obj
+	@cargo rustc --target $(TARGET) -- -g
+
+
+# 	@cargo rustc --target $(TARGET) -- -g -Z no-landing-pads --emit=obj
