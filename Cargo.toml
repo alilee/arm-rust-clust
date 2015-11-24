@@ -6,8 +6,8 @@ authors = ["Alister Lee <alister@dev.shortepic.com>"]
 [lib]
 crate-type = ["staticlib"]
 
-[dependencies.core]
-path = "core"
+[dependencies]
 
 [target.arm-none-eabi]
 ar = "arm-none-eabi-ar"
+
