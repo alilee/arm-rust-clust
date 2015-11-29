@@ -28,8 +28,6 @@ pub extern fn rust_main2() {
 #[no_mangle]
 pub extern fn rust_main() {
     
-    loop {}
-    
     let gpio = 0x3F200000 as *mut u32;
     let LED_GPFBIT = (1 << 21);
     let LED_GPIO_BIT = (1 << 15);

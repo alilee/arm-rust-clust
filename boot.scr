@@ -1,0 +1,6 @@
+setenv serverip 192.168.1.101
+setenv bootfile rpi/uImage
+setenv autostart yes
+
+usb start
+tftpboot

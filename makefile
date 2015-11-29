@@ -33,7 +33,7 @@ libcore := $(rustlib_dir)/libcore.rlib
 assembly_source_files := $(wildcard src/*.s)
 assembly_object_files := $(patsubst %.s, %.o, $(assembly_source_files))
 
-.PHONY: all clean cargo
+.PHONY: all clean qemu
 
 all: $(image)
 
@@ -45,7 +45,7 @@ clean:
 $(image): $(kernel)
 	@mkdir -p $(shell dirname $@)
 	$(MKIMAGE) -A arm -C gzip -O linux -T kernel -d $< -a 0x10000 -e 0x10000 $@
-	chmod 644 $@
+	@chmod 644 $@
 
 $(libcore): $(shell find core/src/ -type f -name '*.rs')
 	@mkdir -p $(shell dirname $@)
@@ -62,7 +62,10 @@ build/kernel.elf: $(rust_os) $(assembly_object_files) $(linker_script)
 	$(LD) $(LDFLAGS) -T $(linker_script) -o $@ $(assembly_object_files) $(rust_os)
 
 $(rust_os): $(wildcard src/*.rs) Cargo.toml $(libcore)
-	@cargo build --target $(TARGET) --verbose
+	cargo rustc --target $(TARGET) --verbose -- -C opt-level=1
+
+boot.scr.uimg: boot.scr
+	$(MKIMAGE) -A arm -C none -O linux -T script -n boot.scr -d $< $@
 
 qemu: $(kernel)
 	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -s -S -kernel $(kernel)
