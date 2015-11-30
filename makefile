@@ -35,7 +35,7 @@ libcore := $(rustlib_dir)/libcore.rlib
 assembly_source_files := $(wildcard src/*.s)
 assembly_object_files := $(patsubst %.s, %.o, $(assembly_source_files))
 
-.PHONY: all clean qemu update-rust
+.PHONY: all clean qemu update-rust tftp
 
 all: $(image)
 
@@ -77,3 +77,10 @@ update-rust:
 	rustc --version | sed 's/^.*(\(.*\) .*$$/\1/' > rustc-commit.txt
 	cd rust && git fetch && git checkout `cat ../rustc-commit.txt`
 	@rm rustc-commit.txt
+
+tftp:
+	sudo launchctl load -F tftpd.plist
+	sudo launchctl start com.apple.tftpd
+	sudo mkdir -p /private/tftpboot/rpi
+	sudo chown `whoami`:staff /private/tftpboot/rpi
+	

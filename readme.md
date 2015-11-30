@@ -19,15 +19,15 @@ The goal is a clustered lisp machine running as a sasos on a cluster of raspberr
 
 Multirust (nightly): 
 
-    brew install multirust
+    $ brew install multirust
 
 Boot manager: http://elinux.org/RPi_U-Boot
 
-    brew install u-boot-tools
-    git clone git://git.denx.de/u-boot.git
-    set -x CROSS_COMPILE arm-none-eabi
-    make rpi_2_defconfig
-    make -j8 -s   # u-boot.bin
+    $ brew install u-boot-tools
+    $ git clone git://git.denx.de/u-boot.git
+    $ set -x CROSS_COMPILE arm-none-eabi
+    $ make rpi_2_defconfig
+    $ make -j8 -s   # u-boot.bin
 
 SD image:
 
@@ -36,12 +36,9 @@ SD image:
     kernel.img    # mv u-boot.bin kernel.img
     boot.scr.uimg # make boot.scr.uimg
 
-TFTP:
+TFTPD:
 
-    sudo launchctl load -F tftpd.plist
-    sudo launchctl start com.apple.tftpd
-    sudo mkdir /private/tftpboot/rpi
-    sudo chown (whoami):staff /private/tftpboot/rpi
+    $ make tftp
 
 ## Updating Rust
 
