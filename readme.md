@@ -6,13 +6,18 @@ The goal is a clustered lisp machine running as a sasos on a cluster of raspberr
 
 # Colophon
 
-Development host: Mac OS X El Capitan
-Development board: Raspberry Pi 2
+### Platforms
 
-Shell: http://fishshell.com/
-Package manager: http://brew.sh/
-LLVM cross compilers from here: https://launchpad.net/gcc-arm-embedded
-Multirust: 
+* Development host: Mac OS X El Capitan
+* Development board: Raspberry Pi 2
+
+### Tools
+
+* Shell: http://fishshell.com/
+* Package manager: http://brew.sh/
+* LLVM cross compilers from here: https://launchpad.net/gcc-arm-embedded
+
+Multirust (nightly): 
 
     brew install multirust
 
@@ -29,17 +34,26 @@ SD image:
     bootcode.bin  # rpi
     start.elf     # rpi
     kernel.img    # mv u-boot.bin kernel.img
-    boot.scr.uimg #
+    boot.scr.uimg # make boot.scr.uimg
 
 TFTP:
+
     sudo launchctl load -F tftpd.plist
     sudo launchctl start com.apple.tftpd
     sudo ln -s /private/tftpboot/rpi build/image
 
-
 # Setup
 
-You need a libcore for your target architecture in the right place under the sysroot for your 
-    $ ll core
+You need a libcore for your target architecture in the right place under rustc's sysroot (until multirust includes support for [cross-compilation](https://github.com/brson/multirust/pull/112). The makefile achieves this by expecting a symlink to the core directory of the same checkout as multirust's instance of nightly.     
+
+    $ ll core/*
     -rw-r--r--@ 1 alilee  staff   112B 17 Nov 20:13 Cargo.toml
     lrwxr-xr-x  1 alilee  staff    22B 17 Nov 19:58 src -> ../../rust/src/libcore
+
+This means you need to checkout the same version of the rust sourcecode that you are running.
+
+    $ rustc --version
+    $ cd ~/rust
+    $ git pull
+    $ git checkout xxxx
+    
