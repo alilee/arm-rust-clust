@@ -43,19 +43,8 @@ TFTP:
     sudo mkdir /private/tftpboot/rpi
     sudo chown (whoami):staff /private/tftpboot/rpi
 
-# Setup
+## Updating Rust
 
-You need a libcore for your target architecture in the right place under rustc's sysroot (until multirust includes support for [cross-compilation](https://github.com/brson/multirust/pull/112). The makefile achieves this by expecting a symlink to the core directory of the same checkout as multirust's instance of nightly.     
+You need a libcore for your target architecture in the right place under rustc's sysroot (until multirust includes support for [cross-compilation](https://github.com/brson/multirust/pull/112). The makefile achieves this by using a git submodule holding rust. When you want to update rust, it also checks out the corresponding build of libcore which is used to build libcore.    
 
-    $ ll core/*
-    -rw-r--r--@ 1 alilee  staff   112B 17 Nov 20:13 Cargo.toml
-    lrwxr-xr-x  1 alilee  staff    22B 17 Nov 19:58 src -> ~/rust/src/libcore
-
-This means you need to checkout the same version of the rust sourcecode that you are running.
-
-    $ rustc --version
-    rustc 1.6.0-nightly (xxxxxxxx 2015-11-23)
-    $ cd ~/rust
-    $ git pull
-    $ git checkout xxxxxxxx
-    
+    $ make update-rust
