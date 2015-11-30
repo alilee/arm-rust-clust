@@ -27,7 +27,7 @@ Boot manager: http://elinux.org/RPi_U-Boot
     git clone git://git.denx.de/u-boot.git
     set -x CROSS_COMPILE arm-none-eabi
     make rpi_2_defconfig
-    make -j8 -s
+    make -j8 -s   # u-boot.bin
 
 SD image:
 
@@ -40,7 +40,8 @@ TFTP:
 
     sudo launchctl load -F tftpd.plist
     sudo launchctl start com.apple.tftpd
-    sudo ln -s /private/tftpboot/rpi build/image
+    sudo mkdir /private/tftpboot/rpi
+    sudo chown (whoami):staff /private/tftpboot/rpi
 
 # Setup
 
@@ -48,12 +49,13 @@ You need a libcore for your target architecture in the right place under rustc's
 
     $ ll core/*
     -rw-r--r--@ 1 alilee  staff   112B 17 Nov 20:13 Cargo.toml
-    lrwxr-xr-x  1 alilee  staff    22B 17 Nov 19:58 src -> ../../rust/src/libcore
+    lrwxr-xr-x  1 alilee  staff    22B 17 Nov 19:58 src -> ~/rust/src/libcore
 
 This means you need to checkout the same version of the rust sourcecode that you are running.
 
     $ rustc --version
+    rustc 1.6.0-nightly (xxxxxxxx 2015-11-23)
     $ cd ~/rust
     $ git pull
-    $ git checkout xxxx
+    $ git checkout xxxxxxxx
     

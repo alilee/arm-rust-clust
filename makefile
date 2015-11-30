@@ -21,7 +21,7 @@ LDFLAGS = --gc-sections
 	$(OBJDUMP) -d $< > $*.s
 
 kernel := build/kernel.bin
-image := build/image/uImage
+image := /private/tftpboot/rpi/uImage
 
 rust_os := target/$(TARGET)/debug/libarm.a
 linker_script := src/linker.ld
@@ -43,7 +43,6 @@ clean:
 	@rm $(libcore)
 
 $(image): $(kernel)
-	@mkdir -p $(shell dirname $@)
 	$(MKIMAGE) -A arm -C gzip -O linux -T kernel -d $< -a 0x10000 -e 0x10000 $@
 	@chmod 644 $@
 
