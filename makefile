@@ -53,6 +53,7 @@ $(image): $(kernel)
 
 $(libcore): $(shell find $(libcore_src)/ -type f -name '*.rs')
 	@mkdir -p $(shell dirname $@)
+	rm core/src
 	ln -s ../$(libcore_src) core/src
 	rustc core/src/lib.rs \
 	  --crate-name core \
@@ -89,11 +90,11 @@ u-boot/u-boot.bin:
 
 sdimage/bootcode.bin: 
 	@mkdir -p sdimage
-	$(CURL) -o $@ https://github.com/raspberrypi/firmware/blob/master/boot/bootcode.bin?raw=true
+	$(CURL) -fso $@ https://github.com/raspberrypi/firmware/blob/master/boot/bootcode.bin?raw=true
 
 sdimage/start.elf:
 	@mkdir -p sdimage 
-	$(CURL) -o $@ https://github.com/raspberrypi/firmware/blob/master/boot/start.elf?raw=true
+	$(CURL) -fso $@ https://github.com/raspberrypi/firmware/blob/master/boot/start.elf?raw=true
 
 sdimage/kernel.img: u-boot/u-boot.bin
 	@mkdir -p sdimage
