@@ -36,4 +36,4 @@ You need a libcore for your target architecture in the right place under rustc's
 
 ## Build kernel
 
-    make
+    $ make

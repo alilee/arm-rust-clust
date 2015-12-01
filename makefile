@@ -6,6 +6,7 @@ OBJCOPY=$(TARGET)-objcopy
 OBJDUMP=$(TARGET)-objdump
 MKIMAGE=mkimage
 QEMU=qemu-system-arm
+GDB=$(TARGET)-gdb
 
 BOARD=versatilepb
 CPU=cortex-a9
@@ -37,7 +38,7 @@ libcore := $(rustlib_dir)/libcore.rlib
 assembly_source_files := $(wildcard src/*.s)
 assembly_object_files := $(patsubst %.s, %.o, $(assembly_source_files))
 
-.PHONY: all clean qemu update-rust tftpd sdimage
+.PHONY: all clean qemu update-rust tftpd sdimage gdb
 
 all: $(image)
 
@@ -68,7 +69,7 @@ build/kernel.elf: $(rust_os) $(assembly_object_files) $(linker_script)
 	$(LD) $(LDFLAGS) -T $(linker_script) -o $@ $(assembly_object_files) $(rust_os)
 
 $(rust_os): $(wildcard src/*.rs) Cargo.toml $(libcore)
-	cargo rustc --target $(TARGET) --verbose -- -C opt-level=1
+	cargo rustc --target $(TARGET) --verbose -- -C opt-level=1 -C target-cpu=$(CPU)
 
 qemu: $(kernel)
 	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -s -S -kernel $(kernel)
@@ -105,3 +106,6 @@ sdimage/boot.scr.uimg: boot.scr
 	$(MKIMAGE) -A arm -C none -O linux -T script -n $< -d $< $@
 	
 sdimage: sdimage/kernel.img sdimage/boot.scr.uimg sdimage/bootcode.bin sdimage/start.elf
+
+gdb:
+	$(GDB) -ex 'file $(patsubst %.bin, %.elf, $(kernel))' -ex 'target remote localhost:1234'
