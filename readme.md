@@ -18,12 +18,9 @@ The goal is a clustered lisp machine running as a sasos on a cluster of raspberr
 * LLVM cross compilers from here: https://launchpad.net/gcc-arm-embedded
 * Build: https://www.gnu.org/software/make/
 * Boot manager: http://elinux.org/RPi_U-Boot
+* Rust: Multirust (nightly): https://github.com/brson/multirust (available from brew)
 
-Multirust (nightly): https://github.com/brson/multirust
-
-    $ brew install multirust
-
-TFTPD:
+## Start TFTPD
 
     $ make tftpd
 
@@ -33,7 +30,10 @@ TFTPD:
 
 ## Updating Rust
 
-You need a libcore for your target architecture in the right place under rustc's sysroot (until multirust includes support for [cross-compilation](https://github.com/brson/multirust/pull/112). The makefile achieves this by using a git submodule holding rust. When you want to update rust, it also checks out the corresponding build of libcore which is used to build libcore.    
+You need a libcore for your target architecture in the right place under rustc's sysroot (until multirust includes support for [cross-compilation](https://github.com/brson/multirust/pull/112). The makefile achieves this by using a git submodule holding rust. When you want to update rust, it also checks out the corresponding commit of libcore which is used to build libcore.    
 
     $ make update-rust
 
+## Build kernel
+
+    make
