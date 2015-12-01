@@ -8,7 +8,7 @@
 #[lang = "panic_fmt"] extern fn panic_fmt() -> ! { loop{} }
 
 mod aeabi;
-mod io;
+mod uart;
 // mod vm;
 
 // extern {
@@ -32,7 +32,7 @@ mod io;
 #[no_mangle]
 pub extern fn rust_main() {
 
-    io::puts("hello world\n");
+    uart::puts("hello world\n");
     
 }
 
