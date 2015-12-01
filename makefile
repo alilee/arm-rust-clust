@@ -22,7 +22,8 @@ LDFLAGS = --gc-sections
 	$(OBJDUMP) -d $< > $*.s
 
 kernel := build/kernel.bin
-image := /private/tftpboot/rpi/uImage
+tftpboot_rpi := /private/tftpboot/rpi
+image := $(tftpboot_rpi)/uImage
 
 rust_os := target/$(TARGET)/debug/libarm.a
 linker_script := src/linker.ld
@@ -36,7 +37,7 @@ libcore := $(rustlib_dir)/libcore.rlib
 assembly_source_files := $(wildcard src/*.s)
 assembly_object_files := $(patsubst %.s, %.o, $(assembly_source_files))
 
-.PHONY: all clean qemu update-rust tftp
+.PHONY: all clean qemu update-rust tftpd sdimage
 
 all: $(image)
 
@@ -77,15 +78,14 @@ update-rust:
 	cd rust && git fetch && git checkout `cat ../rustc-commit.txt`
 	@rm rustc-commit.txt
 
-tftp:
+tftpd:
 	sudo launchctl load -F tftpd.plist
 	sudo launchctl start com.apple.tftpd
-	sudo mkdir -p /private/tftpboot/rpi
-	sudo chown `whoami`:staff /private/tftpboot/rpi
+	sudo mkdir -p $(tftpboot_rpi)
+	sudo chown `whoami`:staff $(tftpboot_rpi)
 	
 u-boot/u-boot.bin:
-	cd u-boot && CROSS_COMPILE=$(TARGET)- make rpi_2_defconfig
-	cd u-boot && CROSS_COMPILE=$(TARGET)- make -j8 -s
+	cd u-boot && CROSS_COMPILE=$(TARGET)- make rpi_2_defconfig all
 
 sdimage/bootcode.bin: 
 	@mkdir -p sdimage

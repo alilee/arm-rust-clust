@@ -16,32 +16,24 @@ The goal is a clustered lisp machine running as a sasos on a cluster of raspberr
 * Shell: http://fishshell.com/
 * Package manager: http://brew.sh/
 * LLVM cross compilers from here: https://launchpad.net/gcc-arm-embedded
+* Build: https://www.gnu.org/software/make/
+* Boot manager: http://elinux.org/RPi_U-Boot
 
-Multirust (nightly): 
+Multirust (nightly): https://github.com/brson/multirust
 
     $ brew install multirust
 
-Boot manager: http://elinux.org/RPi_U-Boot
-
-    $ brew install u-boot-tools
-    $ git clone git://git.denx.de/u-boot.git
-    $ set -x CROSS_COMPILE arm-none-eabi
-    $ make rpi_2_defconfig
-    $ make -j8 -s   # u-boot.bin
-
-SD image:
-
-    bootcode.bin  # rpi
-    start.elf     # rpi
-    kernel.img    # mv u-boot.bin kernel.img
-    boot.scr.uimg # make boot.scr.uimg
-
 TFTPD:
 
-    $ make tftp
+    $ make tftpd
+
+## Building the SD image
+
+    $ make sdimage
 
 ## Updating Rust
 
 You need a libcore for your target architecture in the right place under rustc's sysroot (until multirust includes support for [cross-compilation](https://github.com/brson/multirust/pull/112). The makefile achieves this by using a git submodule holding rust. When you want to update rust, it also checks out the corresponding build of libcore which is used to build libcore.    
 
     $ make update-rust
+
