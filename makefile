@@ -1,4 +1,5 @@
 TARGET=arm-none-eabi
+CURL=curl
 AS=$(TARGET)-as
 LD=$(TARGET)-ld
 OBJCOPY=$(TARGET)-objcopy
@@ -43,6 +44,7 @@ clean:
 	@cargo clean
 	@rm -rf build
 	@rm $(libcore)
+	@rm -rf sdimage
 
 $(image): $(kernel)
 	$(MKIMAGE) -A arm -C gzip -O linux -T kernel -d $< -a 0x10000 -e 0x10000 $@
@@ -66,9 +68,6 @@ build/kernel.elf: $(rust_os) $(assembly_object_files) $(linker_script)
 $(rust_os): $(wildcard src/*.rs) Cargo.toml $(libcore)
 	cargo rustc --target $(TARGET) --verbose -- -C opt-level=1
 
-boot.scr.uimg: boot.scr
-	$(MKIMAGE) -A arm -C none -O linux -T script -n boot.scr -d $< $@
-
 qemu: $(kernel)
 	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -s -S -kernel $(kernel)
 
@@ -84,3 +83,24 @@ tftp:
 	sudo mkdir -p /private/tftpboot/rpi
 	sudo chown `whoami`:staff /private/tftpboot/rpi
 	
+u-boot/u-boot.bin:
+	cd u-boot && CROSS_COMPILE=$(TARGET)- make rpi_2_defconfig
+	cd u-boot && CROSS_COMPILE=$(TARGET)- make -j8 -s
+
+sdimage/bootcode.bin: 
+	@mkdir -p sdimage
+	$(CURL) -o $@ https://github.com/raspberrypi/firmware/blob/master/boot/bootcode.bin?raw=true
+
+sdimage/start.elf:
+	@mkdir -p sdimage 
+	$(CURL) -o $@ https://github.com/raspberrypi/firmware/blob/master/boot/start.elf?raw=true
+
+sdimage/kernel.img: u-boot/u-boot.bin
+	@mkdir -p sdimage
+	cp $< $@
+
+sdimage/boot.scr.uimg: boot.scr
+	@mkdir -p sdimage
+	$(MKIMAGE) -A arm -C none -O linux -T script -n $< -d $< $@
+	
+sdimage: sdimage/kernel.img sdimage/boot.scr.uimg sdimage/bootcode.bin sdimage/start.elf

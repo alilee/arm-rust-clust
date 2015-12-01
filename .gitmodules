@@ -1,3 +1,6 @@
 [submodule "rust"]
 	path = rust
 	url = https://github.com/rust-lang/rust.git
+[submodule "u-boot"]
+	path = u-boot
+	url = git://git.denx.de/u-boot.git
