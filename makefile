@@ -27,7 +27,7 @@ tftpboot_rpi := /private/tftpboot/rpi
 image := $(tftpboot_rpi)/uImage
 
 rust_os := target/$(TARGET)/debug/libarm.a
-linker_script := src/linker.ld
+linker_script := linker.ld
 
 # init the submodule and checkout the same build as your nightly (see readme.md)
 libcore_src := rust/src/libcore
