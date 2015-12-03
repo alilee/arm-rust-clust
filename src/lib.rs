@@ -4,12 +4,12 @@
 #![feature(core_str_ext)]
 #![no_std]
 
-#[lang = "eh_personality"] extern fn eh_personality() {}
-#[lang = "panic_fmt"] extern fn panic_fmt() -> ! { loop{} }
+// #[lang = "eh_personality"] extern fn eh_personality() {}
+// #[lang = "panic_fmt"] extern fn panic_fmt() -> ! { loop{} }
 
 mod aeabi;
 mod uart;
-// mod vm;
+mod vm;
 
 // extern {
 //     static page_table: *const u32;
