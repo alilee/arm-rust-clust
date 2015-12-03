@@ -4,8 +4,11 @@
 #![feature(core_str_ext)]
 #![no_std]
 
-// #[lang = "eh_personality"] extern fn eh_personality() {}
-// #[lang = "panic_fmt"] extern fn panic_fmt() -> ! { loop{} }
+#[cfg(not(test))] // missing in libcore, supplied by libstd
+#[lang = "eh_personality"] extern fn eh_personality() {}
+
+#[cfg(not(test))] // missing in libcore, supplied by libstd
+#[lang = "panic_fmt"] extern fn panic_fmt() -> ! { loop{} }
 
 mod aeabi;
 mod uart;
@@ -21,7 +24,6 @@ mod vm;
 // #[no_mangle]
 // pub extern fn rust_main2() {
 //     let x = ["Hello", " ", "World", "!"];
-//     vm::init();
 //     vm::id_map(stack as u32, 1);
 //     vm::id_map(text as u32, 1);
 //     vm::id_map(page_table as u32, 6);
@@ -31,6 +33,8 @@ mod vm;
 
 #[no_mangle]
 pub extern fn rust_main() {
+
+    vm::init();
 
     uart::puts("hello world\n");
     
