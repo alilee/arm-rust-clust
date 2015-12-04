@@ -1,5 +1,5 @@
 
-mod frame;
+pub mod frame;
 
 use core::intrinsics as i;
 

@@ -38,7 +38,7 @@ libcore := $(rustlib_dir)/libcore.rlib
 assembly_source_files := $(wildcard src/*.s)
 assembly_object_files := $(patsubst %.s, %.o, $(assembly_source_files))
 
-.PHONY: all clean qemu update-rust tftpd sdimage gdb
+.PHONY: all clean qemu update-rust tftpd sdimage gdb test doc
 
 all: $(image)
 
@@ -47,6 +47,12 @@ clean:
 	@rm -rf build
 	@rm $(libcore)
 	@rm -rf sdimage
+	
+test: 
+	@cargo test
+	
+doc:
+	@cargo doc --open
 
 $(image): $(kernel)
 	$(MKIMAGE) -A arm -C gzip -O linux -T kernel -d $< -a 0x10000 -e 0x10000 $@
@@ -77,6 +83,8 @@ update-rust:
 	  --emit=link \
 	  -g \
 	  --target $(TARGET)
+
+$(libcore): update-rust
 
 tftpd:
 	sudo launchctl load -F tftpd.plist

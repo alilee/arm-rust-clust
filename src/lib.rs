@@ -13,7 +13,7 @@
 extern crate aeabi;
 
 mod uart;
-mod vm;
+pub mod vm;
 
 // extern {
 //     static page_table: *const u32;
