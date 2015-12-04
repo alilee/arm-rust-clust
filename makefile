@@ -52,23 +52,11 @@ $(image): $(kernel)
 	$(MKIMAGE) -A arm -C gzip -O linux -T kernel -d $< -a 0x10000 -e 0x10000 $@
 	@chmod 644 $@
 
-$(libcore): $(shell find $(libcore_src)/ -type f -name '*.rs')
-	@mkdir -p $(shell dirname $@)
-	rm core/src
-	ln -s ../$(libcore_src) core/src
-	rustc core/src/lib.rs \
-	  --crate-name core \
-	  --crate-type lib \
-	  --out-dir $(shell dirname $@) \
-	  --emit=link \
-	  -g \
-	  --target $(TARGET) 
-
 build/kernel.elf: $(rust_os) $(assembly_object_files) $(linker_script)
 	@mkdir -p $(shell dirname $@)
 	$(LD) $(LDFLAGS) -T $(linker_script) -o $@ $(assembly_object_files) $(rust_os)
 
-$(rust_os): $(wildcard src/*.rs) Cargo.toml $(libcore)
+$(rust_os): $(shell find src/ -type f -name '*.rs') Cargo.toml $(libcore)
 	cargo rustc --target $(TARGET) --verbose -- -C opt-level=1 -C target-cpu=$(CPU)
 
 qemu: $(kernel)
@@ -79,6 +67,16 @@ update-rust:
 	rustc --version | sed 's/^.*(\(.*\) .*$$/\1/' > rustc-commit.txt
 	cd rust && git fetch && git checkout `cat ../rustc-commit.txt`
 	@rm rustc-commit.txt
+	@mkdir -p $(shell dirname $(libcore))
+	rm core/src
+	ln -s ../$(libcore_src) core/src
+	rustc core/src/lib.rs \
+	  --crate-name core \
+	  --crate-type lib \
+	  --out-dir $(shell dirname $(libcore)) \
+	  --emit=link \
+	  -g \
+	  --target $(TARGET)
 
 tftpd:
 	sudo launchctl load -F tftpd.plist

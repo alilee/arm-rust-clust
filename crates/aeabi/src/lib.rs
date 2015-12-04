@@ -1,3 +1,5 @@
+#![feature(no_std)]
+#![no_std]
 
 #[no_mangle]
 pub unsafe extern fn __aeabi_memclr4(s: *mut u8, n: usize) -> *mut u8 {

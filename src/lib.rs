@@ -10,7 +10,8 @@
 #[cfg(not(test))] // missing in libcore, supplied by libstd
 #[lang = "panic_fmt"] extern fn panic_fmt() -> ! { loop{} }
 
-mod aeabi;
+extern crate aeabi;
+
 mod uart;
 mod vm;
 
@@ -23,7 +24,6 @@ mod vm;
 
 // #[no_mangle]
 // pub extern fn rust_main2() {
-//     let x = ["Hello", " ", "World", "!"];
 //     vm::id_map(stack as u32, 1);
 //     vm::id_map(text as u32, 1);
 //     vm::id_map(page_table as u32, 6);
