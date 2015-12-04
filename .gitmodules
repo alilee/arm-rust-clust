@@ -1,5 +1,5 @@
 [submodule "rust"]
-	path = rust
+	path = crates/rust
 	url = https://github.com/rust-lang/rust.git
 [submodule "u-boot"]
 	path = deploy/u-boot

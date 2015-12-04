@@ -30,10 +30,11 @@ rust_os := target/$(TARGET)/debug/libarm.a
 linker_script := linker.ld
 
 # init the submodule and checkout the same build as your nightly (see readme.md)
-libcore_src := rust/src/libcore
+rust_libcore := crates/rust/src/libcore
+libcore_src := crates/core/src
 sysroot := $(shell rustc --print sysroot)
 rustlib_dir := $(sysroot)/lib/rustlib/$(TARGET)/lib
-libcore := $(rustlib_dir)/libcore.rlib
+libcore_dest := $(rustlib_dir)/libcore.rlib
 
 sdimage_dir := deploy/sdimage
 
@@ -47,8 +48,8 @@ all: $(image)
 clean:
 	@cargo clean
 	@rm -rf build
-	@rm $(libcore)
-	@rm -rf sdimage
+	@rm $(libcore_dest)
+	@rm -rf $(sdimage_dir)
 	
 test: 
 	@cargo test
@@ -72,16 +73,16 @@ qemu: $(kernel)
 
 update-rust:
 	multirust update
-	rustc --version | sed 's/^.*(\(.*\) .*$$/\1/' > rustc-commit.txt
-	cd rust && git fetch && git checkout `cat ../rustc-commit.txt`
-	@rm rustc-commit.txt
-	@mkdir -p $(shell dirname $(libcore))
-	rm core/src
-	ln -s ../$(libcore_src) core/src
-	rustc core/src/lib.rs \
+	rustc --version | sed 's/^.*(\(.*\) .*$$/\1/' > /tmp/rustc-commit.txt
+	cd $(rust_libcore) && git fetch && git checkout `cat /tmp/rustc-commit.txt`
+	@rm /tmp/rustc-commit.txt
+	rm $(libcore_src)
+	ln -s ../rust/src/libcore $(libcore_src)
+	@mkdir -p $(shell dirname $(libcore_dest))
+	rustc $(libcore_src)/lib.rs \
 	  --crate-name core \
 	  --crate-type lib \
-	  --out-dir $(shell dirname $(libcore)) \
+	  --out-dir $(shell dirname $(libcore_dest)) \
 	  --emit=link \
 	  -g \
 	  --target $(TARGET)
