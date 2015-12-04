@@ -35,6 +35,8 @@ sysroot := $(shell rustc --print sysroot)
 rustlib_dir := $(sysroot)/lib/rustlib/$(TARGET)/lib
 libcore := $(rustlib_dir)/libcore.rlib
 
+sdimage_dir := deploy/sdimage
+
 assembly_source_files := $(wildcard src/*.s)
 assembly_object_files := $(patsubst %.s, %.o, $(assembly_source_files))
 
@@ -85,31 +87,30 @@ update-rust:
 	  --target $(TARGET)
 
 tftpd:
-	sudo launchctl load -F tftpd.plist
+	sudo launchctl load -F deploy/tftpd.plist
 	sudo launchctl start com.apple.tftpd
 	sudo mkdir -p $(tftpboot_rpi)
 	sudo chown `whoami`:staff $(tftpboot_rpi)
 	
-u-boot/u-boot.bin:
+deploy/u-boot/u-boot.bin:
 	cd u-boot && CROSS_COMPILE=$(TARGET)- make rpi_2_defconfig all
 
-sdimage/bootcode.bin: 
-	@mkdir -p sdimage
+$(sdimage_dir)/bootcode.bin: 
 	$(CURL) -fso $@ https://github.com/raspberrypi/firmware/blob/master/boot/bootcode.bin?raw=true
 
-sdimage/start.elf:
-	@mkdir -p sdimage 
+$(sdimage_dir)/start.elf:
 	$(CURL) -fso $@ https://github.com/raspberrypi/firmware/blob/master/boot/start.elf?raw=true
 
-sdimage/kernel.img: u-boot/u-boot.bin
-	@mkdir -p sdimage
+$(sdimage_dir)/kernel.img: deploy/u-boot/u-boot.bin
 	cp $< $@
 
-sdimage/boot.scr.uimg: boot.scr
-	@mkdir -p sdimage
+$(sdimage_dir):
+	@mkdir -p $@
+
+$(sdimage_dir)/boot.scr.uimg: deploy/boot.scr
 	$(MKIMAGE) -A arm -C none -O linux -T script -n $< -d $< $@
-	
-sdimage: sdimage/kernel.img sdimage/boot.scr.uimg sdimage/bootcode.bin sdimage/start.elf
+
+sdimage: $(sdimage_dir) $(sdimage_dir)/kernel.img $(sdimage_dir)/boot.scr.uimg $(sdimage_dir)/bootcode.bin $(sdimage_dir)/start.elf
 
 gdb:
 	$(GDB) -ex 'file $(patsubst %.bin, %.elf, $(kernel))' -ex 'target remote localhost:1234'

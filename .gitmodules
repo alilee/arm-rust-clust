@@ -2,5 +2,5 @@
 	path = rust
 	url = https://github.com/rust-lang/rust.git
 [submodule "u-boot"]
-	path = u-boot
+	path = deploy/u-boot
 	url = git://git.denx.de/u-boot.git
