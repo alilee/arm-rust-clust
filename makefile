@@ -62,7 +62,7 @@ build/kernel.elf: $(rust_os) $(assembly_object_files) $(linker_script)
 	@mkdir -p $(shell dirname $@)
 	$(LD) $(LDFLAGS) -T $(linker_script) -o $@ $(assembly_object_files) $(rust_os)
 
-$(rust_os): $(shell find src/ -type f -name '*.rs') Cargo.toml $(libcore)
+$(rust_os): $(shell find src/ -type f -name '*.rs') Cargo.toml
 	cargo rustc --target $(TARGET) --verbose -- -C opt-level=1 -C target-cpu=$(CPU)
 
 qemu: $(kernel)
@@ -83,8 +83,6 @@ update-rust:
 	  --emit=link \
 	  -g \
 	  --target $(TARGET)
-
-$(libcore): update-rust
 
 tftpd:
 	sudo launchctl load -F tftpd.plist

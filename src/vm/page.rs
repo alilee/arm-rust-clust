@@ -4,7 +4,8 @@ pub mod frame;
 use core::intrinsics as i;
 
 extern {
-    static page_table: *mut u32;
+    static mut page_table: [u32; 1024];
+    static mut frame_table: [u32; 1024];
 }
 
 /// Empty the page table
@@ -12,6 +13,10 @@ pub fn init() {
     // Zero four pages to clear the L1 translation table
     unsafe {
         i::write_bytes(page_table, 0, 0x1000);
+    }
+    frame::init(frame_table.as_mut());
+    unsafe {
+        *page_table = frame_table[1];
     }
 }
 

@@ -1,7 +1,7 @@
 #![feature(no_std, lang_items)]
-#![feature(core)]
 #![feature(core_intrinsics)]
 #![feature(core_str_ext)]
+#![feature(core_slice_ext)]
 #![no_std]
 
 #[cfg(not(test))] // missing in libcore, supplied by libstd
