@@ -15,3 +15,11 @@
 10. io out from qemu
 11. logging
 12. self-test
+
+# spinlock
+
+priority boost: 
+
+1. holding spinlock
+2. waiting on spinlock (if nothing holding, then panic)
+
