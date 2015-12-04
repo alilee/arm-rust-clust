@@ -13,7 +13,7 @@
 /// scan through fully allocated pages as they will be zeroes.
 pub fn init(base: &mut [u32]) {
     for i in 0..base.len() {
-        base[i] = 0xFFFFFFFF;
+        base[i] = !0;
     }
 }
 
@@ -26,19 +26,24 @@ fn contig_bits(n: u8) -> u32 {
     }
 }
 
+/// Pattern of n bits in the correct location for a given offset.
+fn shifted_pattern(n: u8, page: u32) -> u32 {
+    let bit_offset = page & 31;
+    let contig_pattern = contig_bits(n);
+    contig_pattern >> bit_offset
+}  
+
 /// Set aside a number of pages starting at a specific offset.
 ///
 /// Assumes that physical memory is addressed from 0x0.
 pub fn allocate_fixed(base: &mut [u32], page: u32, n_pages: u8) -> Option<u32> {
     let word_offset = (page / 32) as usize;
-    let bit_offset = page & 31;
     unsafe {
         // FIXME: SMP race condition here
         let frame_word = base[word_offset];
-        let contig_pattern = contig_bits(n_pages);
-        let shifted_pattern = contig_pattern >> bit_offset;
-        if shifted_pattern == frame_word & shifted_pattern {
-            base[word_offset] = frame_word & !shifted_pattern;
+        let reqd_pattern = shifted_pattern(n_pages, page);
+        if reqd_pattern == frame_word & reqd_pattern {
+            base[word_offset] = frame_word & !reqd_pattern;
             Some(page)
         } else {
             None 
@@ -53,12 +58,10 @@ pub fn allocate(base: &mut [u32], n_pages: u8) -> Option<u32> {
             // FIXME: SMP race condition here
             let frame_word = base[word_offset];
             if frame_word == 0 { continue; }
-            let contig_pattern = contig_bits(n_pages);
             for bit_offset in 0..(32-n_pages) {
-                let shifted_pattern = contig_pattern >> bit_offset;
-                if shifted_pattern == frame_word & shifted_pattern {
-                    // found
-                    base[word_offset] = frame_word | !shifted_pattern;
+                let reqd_pattern = shifted_pattern(n_pages, bit_offset as u32);
+                if reqd_pattern == frame_word & reqd_pattern {
+                    base[word_offset] = frame_word & !reqd_pattern;
                     return Some(word_offset as u32 * 32 + (bit_offset as u32));
                 }
             }
@@ -74,12 +77,11 @@ pub fn free(base: &mut [u32], page: u32, n_pages: u8) {
     unsafe {
         // FIXME: SMP race condition here
         let mut frame_word = base[word_offset];
-        let contig_pattern = contig_bits(n_pages);
-        let shifted_pattern = contig_pattern >> bit_offset;
-        if 0 != frame_word & !shifted_pattern {
+        let reqd_pattern = shifted_pattern(n_pages, page);
+        if 0 != frame_word & !reqd_pattern {
             panic!("Freeing unallocated frame")
         } else {
-            base[word_offset] = frame_word & !shifted_pattern;
+            base[word_offset] = frame_word | reqd_pattern;
         }
     }    
 }
@@ -107,6 +109,23 @@ mod tests {
     fn test_init() {
         let mut buffer = [0xDEADBEEFu32; 4];
         init(buffer.as_mut());
+        assert!(buffer.iter().all(|&x| x == 0xFFFFFFFF));
     }
+    
+    #[test]
+    fn test_allocate_fixed() {
+        let mut buffer = [0xDEADBEEFu32; 4];
+        init(buffer.as_mut());
+        allocate_fixed(buffer.as_mut(), 0, 1);
+        assert_eq!(buffer[0], !(1 << 31));
+        allocate_fixed(buffer.as_mut(), 40, 3);
+        assert_eq!(buffer[1], !(0b111 << 21));
+        allocate_fixed(buffer.as_mut(), 64, 1);
+        allocate_fixed(buffer.as_mut(), 65, 1);
+        allocate_fixed(buffer.as_mut(), 66, 1);
+        assert_eq!(buffer[2], !(0b111 << 29));
+        assert_eq!(None, allocate_fixed(buffer.as_mut(), 64, 1));
+    }
+    
     
 }

@@ -34,7 +34,9 @@ pub mod vm;
 #[no_mangle]
 pub extern fn rust_main() {
 
-    vm::init();
+    unsafe {
+        vm::init();
+    }
 
     uart::puts("hello world\n");
     
