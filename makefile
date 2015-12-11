@@ -65,14 +65,14 @@ build/kernel.elf: $(rust_os) $(assembly_object_files) $(linker_script)
 	@mkdir -p $(shell dirname $@)
 	$(LD) $(LDFLAGS) -T $(linker_script) -o $@ $(assembly_object_files) $(rust_os)
 
-$(rust_os): $(shell find src/ -type f -name '*.rs') Cargo.toml
+$(rust_os): $(shell find src/ -type f -name '*.rs') $(shell find crates/aeabi/ -type f -name '*.rs') Cargo.toml
 	cargo rustc --target $(TARGET) --verbose -- -C opt-level=1 -C target-cpu=$(CPU)
 
 qemu: $(kernel)
 	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -s -S -kernel $(kernel)
 
 update-rust:
-	multirust update
+	multirust update nightly
 	rustc --version | sed 's/^.*(\(.*\) .*$$/\1/' > /tmp/rustc-commit.txt
 	cd $(rust_libcore) && git fetch && git checkout `cat /tmp/rustc-commit.txt`
 	@rm /tmp/rustc-commit.txt
