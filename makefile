@@ -66,7 +66,7 @@ build/kernel.elf: $(rust_os) $(assembly_object_files) $(linker_script)
 	$(LD) $(LDFLAGS) -T $(linker_script) -o $@ $(assembly_object_files) $(rust_os)
 
 $(rust_os): $(shell find src/ -type f -name '*.rs') $(shell find crates/aeabi/ -type f -name '*.rs') Cargo.toml
-	cargo rustc --target $(TARGET) --verbose -- -C opt-level=1 -C target-cpu=$(CPU)
+	cargo rustc --target $(TARGET) --verbose -- -g -C opt-level=1 -C target-cpu=$(CPU) --emit asm,link,llvm-ir
 
 qemu: $(kernel)
 	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -s -S -kernel $(kernel)

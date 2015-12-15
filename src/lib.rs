@@ -36,21 +36,18 @@ use core::fmt::Write;
 
 #[no_mangle]
 pub extern fn rust_main() {
+    // UART0.write_str(file!());
+    // UART0.write_str(line!());
+    // UART0.write_str(module_path!());
 
     info!("starting");
 
-    unsafe {
-        vm::init();
-    }
-
-    info!("done");
-    
-    unsafe {
-        
-        let res = aeabi::__aeabi_uidivmod(27, 5);
-        write!(uart::UART0, "({},{})", res.0, res.1);
-
-    }
+    //
+    // // unsafe {
+    // //     vm::init();
+    // // }
+    //
+    // info!("done");
     
     loop {}
     

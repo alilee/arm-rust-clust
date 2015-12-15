@@ -10,33 +10,34 @@ pub unsafe extern fn __aeabi_memclr4(s: *mut u8, n: usize) -> *mut u8 {
     return s;
 }
 
+/// Divide two unsigned words returning quotient and remainder  
+/// 
+/// http://www.dragonwins.com/domains/getteched/de248/binary_division.htm
 #[no_mangle]
 pub unsafe extern fn __aeabi_uidivmod(dividend: u32, divisor: u32) -> (u32, u32) {
 
-    if divisor == 0 { panic!("divide by zero") }
+    let mut quotient = 0u32;
+    let mut remainder = dividend;
+    let mut term = 1u32;
+    let mut product = divisor;
     
-    let mut pos = 0;
-    let mut d = divisor;
-    while d <= dividend {
-        pos += 1;
-        d <<= 1;
-    } 
-    pos -= 1;
-    
-    let mut quot = 0;
-    let mut rem = dividend;
-    loop {
-        quot |= 1;
-        rem -= divisor << pos; 
-        loop {
-            if pos == 0 { return (quot, rem); }
-
-            quot <<= 1;
-            pos -= 1;
-            
-            if rem >= (divisor << pos) { break; }
-        }
+    while (term < 0x8000000u32) && (product < remainder) {
+        product <<= 1;
+        term <<= 1;
     }
+    
+    loop {
+        if product <= remainder {
+            remainder -= product;
+            quotient += term;
+        }
+        
+        if term == 1u32 { return (quotient, remainder); }
+        
+        product >>= 1;
+        term >>= 1;    
+    }
+    
 }
 
 #[cfg(test)]
