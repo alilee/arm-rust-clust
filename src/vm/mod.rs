@@ -1,3 +1,5 @@
+use log;
+
 pub mod frame;
 pub mod page;
 
@@ -7,6 +9,9 @@ extern {
 }
 
 pub unsafe fn init() {
+
+    info!("initialising");
+
     frame::init(frame_table.as_mut());
     // page::init(page_table.as_mut());
 }

@@ -7,6 +7,7 @@ OBJDUMP=$(TARGET)-objdump
 MKIMAGE=mkimage
 QEMU=qemu-system-arm
 GDB=$(TARGET)-gdb
+arm-libgcc=/usr/local/opt/gcc-arm-none-eabi/lib/gcc/arm-none-eabi/4.9.3/libgcc.a
 
 BOARD=versatilepb
 CPU=cortex-a9
@@ -30,10 +31,12 @@ rust_os := target/$(TARGET)/debug/libarm.a
 linker_script := linker.ld
 
 # init the submodule and checkout the same build as your nightly (see readme.md)
-rust_libcore := crates/rust/src/libcore
-libcore_src := crates/core/src
 sysroot := $(shell rustc --print sysroot)
 rustlib_dir := $(sysroot)/lib/rustlib/$(TARGET)/lib
+rust_crate := externals/rust
+
+# libcore
+libcore_src := externals/core/src
 libcore_dest := $(rustlib_dir)/libcore.rlib
 
 sdimage_dir := deploy/sdimage
@@ -49,6 +52,7 @@ clean:
 	@cargo clean
 	@rm -rf build
 	@rm $(libcore_dest)
+	@rm $(libcompiler-rt_dest)
 	@rm -rf $(sdimage_dir)
 	
 test: 
@@ -65,8 +69,8 @@ build/kernel.elf: $(rust_os) $(assembly_object_files) $(linker_script)
 	@mkdir -p $(shell dirname $@)
 	$(LD) $(LDFLAGS) -T $(linker_script) -o $@ $(assembly_object_files) $(rust_os)
 
-$(rust_os): $(shell find src/ -type f -name '*.rs') $(shell find crates/aeabi/ -type f -name '*.rs') Cargo.toml
-	cargo rustc --target $(TARGET) --verbose -- -g -C opt-level=1 -C target-cpu=$(CPU) --emit asm,link,llvm-ir
+$(rust_os): $(shell find src/ -type f -name '*.rs') Cargo.toml
+	cargo rustc --target $(TARGET) --verbose -- -C opt-level=2 -C target-cpu=$(CPU) --emit asm,link,llvm-ir
 
 qemu: $(kernel)
 	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -s -S -kernel $(kernel)
@@ -74,11 +78,12 @@ qemu: $(kernel)
 update-rust:
 	multirust update nightly
 	rustc --version | sed 's/^.*(\(.*\) .*$$/\1/' > /tmp/rustc-commit.txt
-	cd $(rust_libcore) && git fetch && git checkout `cat /tmp/rustc-commit.txt`
-	@rm /tmp/rustc-commit.txt
-	rm $(libcore_src)
+	cd $(rust_crate) && git fetch && git checkout `cat /tmp/rustc-commit.txt`
+	rm /tmp/rustc-commit.txt
+	mkdir -p $(shell dirname $(rustlib_dir))
+	rm -f $(libcore_src)
+	mkdir -p $(shell dirname $(libcore_src))
 	ln -s ../rust/src/libcore $(libcore_src)
-	@mkdir -p $(shell dirname $(libcore_dest))
 	rustc $(libcore_src)/lib.rs \
 	  --crate-name core \
 	  --crate-type lib \

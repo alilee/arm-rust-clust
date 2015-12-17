@@ -32,11 +32,16 @@ use core::fmt;
 impl fmt::Display for LogLevel {
     
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "INFO")
+        match *self {
+            LogLevel::Error => write!(f, "ERROR"),
+            LogLevel::Warn  => write!(f, "WARN "),
+            LogLevel::Info  => write!(f, "Info "),
+            LogLevel::Debug => write!(f, "Debug"),
+            LogLevel::Trace => write!(f, "Trace"),
+        }
     }
     
 }
-
 
 use uart::UART0;
 use core::fmt::Write;
