@@ -1,6 +1,7 @@
 TARGET=arm-none-eabi
 CURL=curl
 AS=$(TARGET)-as
+GCC=$(TARGET)-gcc
 LD=$(TARGET)-ld
 OBJCOPY=$(TARGET)-objcopy
 OBJDUMP=$(TARGET)-objdump
@@ -13,10 +14,20 @@ BOARD=versatilepb
 CPU=cortex-a9
 
 ASFLAGS = -mcpu=$(CPU) -g
+CFLAGS = -mcpu=$(CPU) -g
 LDFLAGS = --gc-sections
 
-%.o: %.s
+build/%.o: %.c
+	@mkdir -p $(shell dirname $@)
+	$(GCC) $(CFLAGS) -c $< -o $@
+
+build/%.o: %.s
+	@mkdir -p $(shell dirname $@)
 	$(AS) $(ASFLAGS) $< -o $@
+
+build/%.o: %.S
+	@mkdir -p $(shell dirname $@)
+	$(GCC) -E $(CFLAGS) $< | $(AS) $(ASFLAGS) -o $@
 
 %.bin: %.elf
 	$(OBJCOPY) -O binary $< $@
@@ -41,8 +52,12 @@ libcore_dest := $(rustlib_dir)/libcore.rlib
 
 sdimage_dir := deploy/sdimage
 
-assembly_source_files := $(wildcard src/*.s)
-assembly_object_files := $(patsubst %.s, %.o, $(assembly_source_files))
+c_source_files := $(shell find src -name '*.c')
+assembly_source_files := $(shell find src -name '*.s')
+assemblypp_source_files := $(shell find src -name '*.S')
+c_object_files := $(patsubst %.c, build/%.o, $(c_source_files)) 
+assembly_object_files := $(patsubst %.s, build/%.o, $(assembly_source_files)) 
+assemblypp_object_files := $(patsubst %.S, build/%.o, $(assemblypp_source_files))
 
 .PHONY: all clean qemu update-rust tftpd sdimage gdb test doc
 
@@ -52,7 +67,6 @@ clean:
 	@cargo clean
 	@rm -rf build
 	@rm $(libcore_dest)
-	@rm $(libcompiler-rt_dest)
 	@rm -rf $(sdimage_dir)
 	
 test: 
@@ -65,12 +79,12 @@ $(image): $(kernel)
 	$(MKIMAGE) -A arm -C gzip -O linux -T kernel -d $< -a 0x10000 -e 0x10000 $@
 	@chmod 644 $@
 
-build/kernel.elf: $(rust_os) $(assembly_object_files) $(linker_script)
+build/kernel.elf: $(rust_os) $(assembly_object_files) $(assemblypp_object_files) $(c_object_files) $(linker_script)
 	@mkdir -p $(shell dirname $@)
-	$(LD) $(LDFLAGS) -T $(linker_script) -o $@ $(assembly_object_files) $(rust_os)
+	$(LD) $(LDFLAGS) -T $(linker_script) -o $@ $(assembly_object_files) $(rust_os) $(assemblypp_object_files) $(c_object_files)
 
 $(rust_os): $(shell find src/ -type f -name '*.rs') Cargo.toml
-	cargo rustc --target $(TARGET) --verbose -- -C opt-level=2 -C target-cpu=$(CPU) --emit asm,link,llvm-ir
+	cargo rustc --target $(TARGET) --verbose -- -C opt-level=1 -C target-cpu=$(CPU) --emit asm,link,llvm-ir
 
 qemu: $(kernel)
 	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -s -S -kernel $(kernel)
@@ -79,11 +93,11 @@ update-rust:
 	multirust update nightly
 	rustc --version | sed 's/^.*(\(.*\) .*$$/\1/' > /tmp/rustc-commit.txt
 	cd $(rust_crate) && git fetch && git checkout `cat /tmp/rustc-commit.txt`
-	rm /tmp/rustc-commit.txt
-	mkdir -p $(shell dirname $(rustlib_dir))
-	rm -f $(libcore_src)
-	mkdir -p $(shell dirname $(libcore_src))
-	ln -s ../rust/src/libcore $(libcore_src)
+	@rm /tmp/rustc-commit.txt
+	@mkdir -p $(shell dirname $(rustlib_dir))
+	@rm -f $(libcore_src)
+	@mkdir -p $(shell dirname $(libcore_src))
+	@ln -s ../rust/src/libcore $(libcore_src)
 	rustc $(libcore_src)/lib.rs \
 	  --crate-name core \
 	  --crate-type lib \

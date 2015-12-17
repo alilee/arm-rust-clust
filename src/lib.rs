@@ -7,8 +7,6 @@
 #![no_std]
 #![no_main]
 
-extern crate aeabi;
-
 #[macro_use]
 mod log;
 
