@@ -5,7 +5,6 @@
 #![feature(type_macros)]
 #![feature(const_fn)]
 #![no_std]
-#![no_main]
 
 #[macro_use]
 mod log;
@@ -20,9 +19,7 @@ pub extern fn rust_main() {
 
     info!("starting");
 
-    unsafe {
-        vm::init();
-    }
+    vm::init();
     
     info!("done, looping.");
     loop {}
