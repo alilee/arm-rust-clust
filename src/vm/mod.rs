@@ -13,12 +13,12 @@ pub fn init() {
 
     info!("initialising");
     
-    const p_frame_table: *mut u32 = (200 * 4096) as *mut u32; // 1 page
-    const p_range_table: *mut u32 = (201 * 4096) as *mut u32; // 1 page
-    const p_page_table: *mut u32 = (202 * 4096) as *mut u32; // 2 pages
+    const P_FRAME_TABLE: *mut u32 = (200 * 4096) as *mut u32; // 1 page
+    const P_RANGE_TABLE: *mut u32 = (201 * 4096) as *mut u32; // 1 page
+    // const P_PAGE_TABLE: *mut u32 = (202 * 4096) as *mut u32; // 2 pages
 
-    frame::Table::init(p_frame_table);
-    range::Table::init(p_range_table);
+    frame::Table::init(P_FRAME_TABLE);
+    range::Table::init(P_RANGE_TABLE);
     // page::Table::init(page_table_page);
     
     // id_map(&start, 6);
@@ -31,10 +31,10 @@ pub fn init() {
 
 
 /// Map a sequence of pages  
-pub fn map(npages: u8) {
+pub fn map(_: u8) {
     
 }
 
-pub fn id_map(page: u32, npages: u8) {
+pub fn id_map(_: u32, _: u8) {
     
 }

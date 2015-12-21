@@ -25,9 +25,13 @@ impl Table {
         }
     }
     
-    fn push(&mut self, r: entry::Range) {
-        self.ranges[self.n_ranges] = r;
-        self.n_ranges += 1;
+    fn push(&mut self, o: Option<entry::Range>) {
+        match o {
+            Some(r) =>  {   self.ranges[self.n_ranges] = r;
+                            self.n_ranges += 1;
+                        }
+            None =>     {}
+        }
     }
     
     /// Request an address range of a specified number of pages in length
@@ -38,16 +42,25 @@ impl Table {
                 let r = self.ranges[i];
                 self.push(r.residual_after(n_pages));
                 self.ranges[i].allocate(n_pages);
-                return Some(self.ranges[i].base_page);
+                return Some(r.base_page);
             }
         }
         None
     }
 
     /// Request an address range of a specified length at a specified address
-    pub fn map(&mut self, _: u32, _: u8) {
-        
-        unimplemented!();
+    pub fn map(&mut self, page: u32, n_pages: u8) -> Option<u32> {
+        // find a free area that spans the requested area
+        for i in 0..self.n_ranges {
+            if self.ranges[i].available_over(page, n_pages) {
+                let r = self.ranges[i];
+                self.push(r.residual_front(page, n_pages));
+                self.push(r.residual_back(page, n_pages));
+                self.ranges[i].allocate_fixed(page, n_pages);
+                return Some(page);
+            }
+        }
+        None
     }
 
     pub fn free(&mut self, _: u32) {
@@ -76,6 +89,21 @@ mod tests {
             Table::init(buffer);
         }
         assert_eq!(table.n_ranges, 1);
+        assert_eq!(table.ranges[0].available_for(6), true);
+    }
+ 
+    #[test]
+    fn test_request() {
+        let mut buffer = Table { n_ranges: 0, ranges: [Range::null(); 511] };
+        let mut table = unsafe {
+                            let p_table = transmute::<&mut Table, *mut u32>(&mut buffer);
+                            Table::init(p_table)
+                        };
+        table.request(3);
+        table.request(13);
+        table.request(17);
+        assert_eq!(table.n_ranges,4);
+        assert_eq!(table.ranges[3].base_page, 33);
     }
     
 }

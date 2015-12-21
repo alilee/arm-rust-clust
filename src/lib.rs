@@ -21,6 +21,12 @@ pub extern fn rust_main() {
 
     vm::init();
     
+    error!("test error");
+    warn!("test warn");
+    info!("test info");
+    debug!("test debug");
+    trace!("test trace");    
+    
     info!("done, looping.");
     loop {}
     

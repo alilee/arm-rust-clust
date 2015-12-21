@@ -8,7 +8,7 @@ pub enum LogLevel {
     /// The "error" level.
     ///
     /// Designates very serious errors.
-    Error = 1, // This way these line up with the discriminants for LogLevelFilter below
+    Error = 1, 
     /// The "warn" level.
     ///
     /// Designates hazardous situations.
@@ -46,8 +46,8 @@ impl fmt::Display for LogLevel {
 use uart::UART0;
 use core::fmt::Write;
 
-pub fn __log(lvl: LogLevel, file: &str, line: u32, module_path: &str, msg: &str) {
-    write!(UART0, "[{}] {}/{}:{} {}\n", lvl, module_path, file, line, msg);
+pub fn __log(lvl: LogLevel, file: &str, line: u32, module_path: &str, msg: &str) -> Result<(), fmt::Error> {
+    write!(UART0, "[{}] {}/{}:{} {}\n", lvl, module_path, file, line, msg)
 }
 
 #[macro_export]
@@ -56,6 +56,27 @@ macro_rules! log {
 }
 
 #[macro_export]
+macro_rules! error {
+    ($msg:expr) => ( log::__log(log::LogLevel::Error, file!(), line!(), module_path!(), $msg) )
+}
+
+#[macro_export]
+macro_rules! warn {
+    ($msg:expr) => ( log::__log(log::LogLevel::Warn, file!(), line!(), module_path!(), $msg) )
+}
+
+#[macro_export]
 macro_rules! info {
     ($msg:expr) => ( log::__log(log::LogLevel::Info, file!(), line!(), module_path!(), $msg) )
+}
+
+
+#[macro_export]
+macro_rules! debug {
+    ($msg:expr) => ( log::__log(log::LogLevel::Debug, file!(), line!(), module_path!(), $msg) )
+}
+
+#[macro_export]
+macro_rules! trace {
+    ($msg:expr) => ( log::__log(log::LogLevel::Trace, file!(), line!(), module_path!(), $msg) )
 }
