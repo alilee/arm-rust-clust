@@ -13,6 +13,7 @@ pub struct Table {
     n_ranges: usize,            // offset of top of stack 
 }
 
+#[allow(dead_code)]
 impl Table {
     
     /// Initialise the address range data structure into a specific physical address

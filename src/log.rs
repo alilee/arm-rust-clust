@@ -46,8 +46,8 @@ impl fmt::Display for LogLevel {
 use uart::UART0;
 use core::fmt::Write;
 
-pub fn __log(lvl: LogLevel, file: &str, line: u32, module_path: &str, msg: &str) -> Result<(), fmt::Error> {
-    write!(UART0, "[{}] {}/{}:{} {}\n", lvl, module_path, file, line, msg)
+pub fn __log(lvl: LogLevel, file: &str, line: u32, module_path: &str, msg: &str) {
+    write!(UART0, "[{}] {}/{}:{} {}\n", lvl, module_path, file, line, msg).ok();
 }
 
 #[macro_export]

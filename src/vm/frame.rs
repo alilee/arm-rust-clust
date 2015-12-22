@@ -14,6 +14,7 @@ pub struct Table {
     n_free: usize,          // offset to empty position above the top of stack (ie. 0 when empty)  
 }
 
+#[allow(dead_code)]
 impl Table {
     
     /// Initialise the page frame data structure into a specific physical address

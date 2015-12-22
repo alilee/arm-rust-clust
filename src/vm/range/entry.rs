@@ -10,6 +10,7 @@ pub struct Range {
     n_pages: i32,  // negative if allocated
 }
 
+#[allow(dead_code)]
 impl Range {
 
     /// A null range as placeholder for testing
