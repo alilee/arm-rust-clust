@@ -94,7 +94,7 @@ update-rust:
 	rustc --version | sed 's/^.*(\(.*\) .*$$/\1/' > /tmp/rustc-commit.txt
 	cd $(rust_crate) && git fetch && git checkout `cat /tmp/rustc-commit.txt`
 	@rm /tmp/rustc-commit.txt
-	@mkdir -p $(shell dirname $(rustlib_dir))
+	@mkdir -p $(shell dirname $(libcore_dest))
 	@rm -f $(libcore_src)
 	@mkdir -p $(shell dirname $(libcore_src))
 	@ln -s ../rust/src/libcore $(libcore_src)

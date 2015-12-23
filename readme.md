@@ -15,7 +15,7 @@ The goal is a clustered lisp machine running as a sasos on a cluster of raspberr
 
 * Shell: http://fishshell.com/
 * Package manager: http://brew.sh/
-* LLVM cross compilers from here: https://launchpad.net/gcc-arm-embedded
+* ARM bintools from here: https://launchpad.net/gcc-arm-embedded
 * Build: https://www.gnu.org/software/make/
 * Boot manager: http://elinux.org/RPi_U-Boot
 * Rust: Multirust (nightly): https://github.com/brson/multirust (available from brew)
