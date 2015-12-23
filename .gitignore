@@ -5,7 +5,7 @@
 *.img
 .DS_Store
 Cargo.lock
-core/src
+crates/core/src
 target
 build
 a.out

@@ -1,6 +1,6 @@
-[submodule "rust"]
-	path = rust
+[submodule "externals/compiler-rt"]
+	path = externals/compiler-rt
+	url = https://github.com/llvm-mirror/compiler-rt.git
+[submodule "externals/rust"]
+	path = externals/rust
 	url = https://github.com/rust-lang/rust.git
-[submodule "u-boot"]
-	path = u-boot
-	url = git://git.denx.de/u-boot.git

@@ -1,42 +1,40 @@
-#![feature(no_std, lang_items)]
-#![feature(core)]
-#![feature(core_intrinsics)]
-#![feature(core_str_ext)]
+#![feature(lang_items)]
+// #![feature(core_intrinsics)]
+// #![feature(core_str_ext)]
+// #![feature(core_slice_ext)]
+#![feature(type_macros)]
+#![feature(const_fn)]
 #![no_std]
 
-#[cfg(not(test))] // missing in libcore, supplied by libstd
-#[lang = "eh_personality"] extern fn eh_personality() {}
+#[macro_use]
+mod log;
 
-#[cfg(not(test))] // missing in libcore, supplied by libstd
-#[lang = "panic_fmt"] extern fn panic_fmt() -> ! { loop{} }
-
-mod aeabi;
 mod uart;
-mod vm;
 
-// extern {
-//     static page_table: *const u32;
-//     static stack: *const u32;
-//     static text: *const u32;
-//     static frame_table: *const u32;
-// }
+pub mod vm;
 
-// #[no_mangle]
-// pub extern fn rust_main2() {
-//     let x = ["Hello", " ", "World", "!"];
-//     vm::id_map(stack as u32, 1);
-//     vm::id_map(text as u32, 1);
-//     vm::id_map(page_table as u32, 6);
-//     vm::id_map(frame_table as u32, 1);
-// }
-//
 
 #[no_mangle]
 pub extern fn rust_main() {
 
-    vm::init();
+    info!("starting");
 
-    uart::puts("hello world\n");
+    vm::init();
+    
+    error!("test error");
+    warn!("test warn");
+    info!("test info");
+    debug!("test debug");
+    trace!("test trace");    
+    
+    info!("done, looping.");
+    loop {}
     
 }
 
+
+#[cfg(not(test))] 
+#[lang = "eh_personality"] extern fn eh_personality() {}
+
+#[cfg(not(test))] 
+#[lang = "panic_fmt"] fn panic_fmt() -> ! { loop{} }

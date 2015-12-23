@@ -1,18 +1,37 @@
+//! A stream sink which writes to the serial port.
 
-/// Address of UART0 transmit register
-const UART0DR: *mut u32 = 0x101f1000 as *mut u32;
+use core::fmt::{Write, Result};
 
-/// Write one character to the serial
-pub fn putc(c: u8) {
-    let i = c as u32;
-    unsafe {
-        *UART0DR = i;
+/// Represents a UART end-point.
+pub struct Uart {
+    dr_addr: *mut u32,
+}
+
+impl Uart {
+    
+    /// Create a Uart structure for UART0. 
+    pub const fn uart0() -> Uart {
+        Uart { dr_addr: 0x101f1000 as *mut u32 }
+    }
+    
+    /// Write one byte to the Uart.
+    fn put(&self, b: u8) {
+        unsafe {
+            *self.dr_addr = b as u32;
+        }
     }
 }
 
-/// Write a string of characters to the serial port
-pub fn puts(s: &str) {
-    for c in s.as_bytes() {
-        putc(*c)
+pub const UART0: Uart = Uart::uart0();
+
+impl Write for Uart {
+    
+    /// Writes a slice of bytes to Uart, as stream for formatted output.
+    fn write_str(&mut self, s: &str) -> Result {
+        for b in s.as_bytes() {
+            self.put(*b)
+        }
+        Ok(())
     }
+
 }
