@@ -4,6 +4,7 @@
 // #![feature(core_slice_ext)]
 #![feature(type_macros)]
 #![feature(const_fn)]
+#![feature(associated_consts)]
 #![no_std]
 
 #[macro_use]

@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 /// Page table entry
+#[derive(Debug, Clone, Copy)]
 pub struct Entry {
     value: u32,
 }
@@ -23,16 +24,24 @@ impl Entry {
     pub fn offset(&self, table_base: *const u32) -> usize {
         let page_table_address = (self.value & PAGE_TABLE_BASE_ADDR_MASK) as *const u32;
         let address_offset = (page_table_address as u32) - (table_base as u32);
-        (address_offset / 4096) as usize
+        (address_offset / 1024) as usize
+    }
+    
+    pub fn is_fault(&self) -> bool {
+        0 == self.value & FAULT_MASK
     }
     
 }
 
 pub struct Table {
-    entries: [Entry; 4096],
+    pub entries: [Entry; 1024],
 }
 
 impl Table {
+
+    pub fn init(value: u32) -> Table {
+        Table { entries: [ Entry { value: value }; 1024 ] }
+    }
 
     pub fn reset(&mut self) {
         for e in self.entries.iter_mut() {
