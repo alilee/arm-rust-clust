@@ -49,3 +49,5 @@ Builds the kernel and copies the u-boot ready image into the TFTPD server direct
 * [Julia Evans](http://jvns.ca/blog/2014/03/21/my-rust-os-will-never-be-finished/)
 * [Bodil Stokke](https://skillsmatter.com/skillscasts/4484-build-your-own-lisp-for-great-justice)
 * [Philipp Oppermann](http://os.phil-opp.com/)
+* [Lucas Hartmann](http://interim-os.com/) We follow in his footsteps!
+* [Dawid Ciężarkiewicz](https://github.com/dpc/titanos) And Dawid's too!
