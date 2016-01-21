@@ -2,6 +2,9 @@
 .global _reset
 .extern rust_main
 _reset:
- LDR sp, =stack_top
- BL rust_main
- B .
+	ldr x11, =stack_top
+	mov sp, x11
+
+    # ldr x10, =rust_main
+    # br x10
+    b .

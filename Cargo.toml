@@ -1,5 +1,5 @@
 [package]
-name = "arm"
+name = "arc"
 version = "0.1.0"
 authors = ["Alister Lee <alister@dev.shortepic.com>"]
 
@@ -11,3 +11,5 @@ crate-type = ["staticlib"]
 [target.arm-none-eabi]
 ar = "arm-none-eabi-ar"
 
+[target.aarch64-none-elf]
+ar = "aarch64-none-elf-ar"

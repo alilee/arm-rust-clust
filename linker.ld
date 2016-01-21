@@ -7,7 +7,7 @@ SECTIONS
         *(.ARM.exidx*)
     }
  
-    . = 0x10000;
+    . = 0x40080000;
     .text : 
     { 
         text = .;

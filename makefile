@@ -1,4 +1,4 @@
-TARGET=arm-none-eabi
+TARGET=aarch64-none-elf
 CURL=curl
 AS=$(TARGET)-as
 GCC=$(TARGET)-gcc
@@ -6,28 +6,18 @@ LD=$(TARGET)-ld
 OBJCOPY=$(TARGET)-objcopy
 OBJDUMP=$(TARGET)-objdump
 MKIMAGE=mkimage
-QEMU=qemu-system-arm
+QEMU=qemu-system-aarch64
 GDB=$(TARGET)-gdb
-arm-libgcc=/usr/local/opt/gcc-arm-none-eabi/lib/gcc/arm-none-eabi/4.9.3/libgcc.a
 
-BOARD=versatilepb
-CPU=cortex-a9
+BOARD=virt
+CPU=cortex-a53
 
 ASFLAGS = -mcpu=$(CPU) -g
 CFLAGS = -mcpu=$(CPU) -g
-LDFLAGS = --gc-sections
-
-build/%.o: %.c
-	@mkdir -p $(shell dirname $@)
-	$(GCC) $(CFLAGS) -c $< -o $@
 
 build/%.o: %.s
 	@mkdir -p $(shell dirname $@)
 	$(AS) $(ASFLAGS) $< -o $@
-
-build/%.o: %.S
-	@mkdir -p $(shell dirname $@)
-	$(GCC) -E $(CFLAGS) $< | $(AS) $(ASFLAGS) -o $@
 
 %.bin: %.elf
 	$(OBJCOPY) -O binary $< $@
@@ -38,7 +28,7 @@ kernel := build/kernel.bin
 tftpboot_rpi := /private/tftpboot/rpi
 image := $(tftpboot_rpi)/uImage
 
-rust_os := target/$(TARGET)/debug/libarm.a
+rust_os := target/$(TARGET)/debug/libarc.a
 linker_script := linker.ld
 
 # init the submodule and checkout the same build as your nightly (see readme.md)
@@ -52,12 +42,8 @@ libcore_dest := $(rustlib_dir)/libcore.rlib
 
 sdimage_dir := deploy/sdimage
 
-c_source_files := $(shell find src -name '*.c')
 assembly_source_files := $(shell find src -name '*.s')
-assemblypp_source_files := $(shell find src -name '*.S')
-c_object_files := $(patsubst %.c, build/%.o, $(c_source_files)) 
 assembly_object_files := $(patsubst %.s, build/%.o, $(assembly_source_files)) 
-assemblypp_object_files := $(patsubst %.S, build/%.o, $(assemblypp_source_files))
 
 .PHONY: all clean qemu update-rust tftpd sdimage gdb test doc
 
@@ -79,9 +65,9 @@ $(image): $(kernel)
 	$(MKIMAGE) -A arm -C gzip -O linux -T kernel -d $< -a 0x10000 -e 0x10000 $@
 	@chmod 644 $@
 
-build/kernel.elf: $(rust_os) $(assembly_object_files) $(assemblypp_object_files) $(c_object_files) $(linker_script)
+build/kernel.elf: $(rust_os) $(assembly_object_files) $(linker_script)
 	@mkdir -p $(shell dirname $@)
-	$(LD) $(LDFLAGS) -T $(linker_script) -o $@ $(assembly_object_files) $(rust_os) $(assemblypp_object_files) $(c_object_files)
+	$(LD) $(LDFLAGS) -T $(linker_script) -o $@ $(assembly_object_files) $(rust_os) 
 
 $(rust_os): $(shell find src/ -type f -name '*.rs') Cargo.toml
 	cargo rustc --target $(TARGET) --verbose -- -C opt-level=1 -C target-cpu=$(CPU) --emit asm,link,llvm-ir
