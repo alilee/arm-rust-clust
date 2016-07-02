@@ -1,4 +1,4 @@
-TARGET=aarch64-none-elf
+TARGET=aarch64-unknown-linux-gnu
 CURL=curl
 AS=$(TARGET)-as
 GCC=$(TARGET)-gcc
@@ -31,14 +31,14 @@ image := $(tftpboot_rpi)/uImage
 rust_os := target/$(TARGET)/debug/libarc.a
 linker_script := linker.ld
 
-# init the submodule and checkout the same build as your nightly (see readme.md)
-sysroot := $(shell rustc --print sysroot)
-rustlib_dir := $(sysroot)/lib/rustlib/$(TARGET)/lib
-rust_crate := externals/rust
+# # init the submodule and checkout the same build as your nightly (see readme.md)
+# sysroot := $(shell rustc --print sysroot)
+# rustlib_dir := $(sysroot)/lib/rustlib/$(TARGET)/lib
+# rust_crate := externals/rust
 
-# libcore
-libcore_src := externals/core/src
-libcore_dest := $(rustlib_dir)/libcore.rlib
+# # libcore
+# libcore_src := externals/core/src
+# libcore_dest := $(rustlib_dir)/libcore.rlib
 
 sdimage_dir := deploy/sdimage
 
@@ -70,28 +70,14 @@ build/kernel.elf: $(rust_os) $(assembly_object_files) $(linker_script)
 	$(LD) $(LDFLAGS) -T $(linker_script) -o $@ $(assembly_object_files) $(rust_os) 
 
 $(rust_os): $(shell find src/ -type f -name '*.rs') Cargo.toml
-	cargo rustc --target $(TARGET) --verbose -- -C opt-level=1 -C target-cpu=$(CPU) --emit asm,link,llvm-ir
+	cargo build
 
 qemu: $(kernel)
 	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -s -S -kernel $(kernel)
 
 update-rust:
-	multirust update nightly
-	rustc --version | sed 's/^.*(\(.*\) .*$$/\1/' > /tmp/rustc-commit.txt
-	cd $(rust_crate) && git fetch && git checkout `cat /tmp/rustc-commit.txt`
-	@rm /tmp/rustc-commit.txt
-	@mkdir -p $(shell dirname $(libcore_dest))
-	@rm -f $(libcore_src)
-	@mkdir -p $(shell dirname $(libcore_src))
-	@ln -s ../rust/src/libcore $(libcore_src)
-	rustc $(libcore_src)/lib.rs \
-	  --crate-name core \
-	  --crate-type lib \
-	  --out-dir $(shell dirname $(libcore_dest)) \
-	  --emit=link \
-	  -g \
-	  --target $(TARGET)
-
+	rustup update
+	
 tftpd:
 	sudo launchctl load -F deploy/tftpd.plist
 	sudo launchctl start com.apple.tftpd

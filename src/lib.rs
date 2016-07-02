@@ -7,28 +7,28 @@
 #![feature(associated_consts)]
 #![no_std]
 
-#[macro_use]
-mod log;
-
-mod uart;
-
-pub mod vm;
+// #[macro_use]
+// mod log;
+//
+// mod uart;
+//
+// pub mod vm;
 
 
 #[no_mangle]
 pub extern fn rust_main() {
 
-    info!("starting");
-
-    vm::init();
-    
-    error!("test error");
-    warn!("test warn");
-    info!("test info");
-    debug!("test debug");
-    trace!("test trace");    
-    
-    info!("done, looping.");
+    // info!("starting");
+    //
+    // vm::init();
+    //
+    // error!("test error");
+    // warn!("test warn");
+    // info!("test info");
+    // debug!("test debug");
+    // trace!("test trace");
+    //
+    // info!("done, looping.");
     loop {}
     
 }

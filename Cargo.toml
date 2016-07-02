@@ -6,10 +6,6 @@ authors = ["Alister Lee <alister@dev.shortepic.com>"]
 [lib]
 crate-type = ["staticlib"]
 
-[dependencies]
+[profile.dev]
+opt-level = 1
 
-[target.arm-none-eabi]
-ar = "arm-none-eabi-ar"
-
-[target.aarch64-none-elf]
-ar = "aarch64-none-elf-ar"
