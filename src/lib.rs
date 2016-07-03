@@ -15,10 +15,15 @@ mod uart;
 
 extern crate rlibc;
 
+use uart::UART0;
+use core::fmt::Write;
+
 #[no_mangle]
 pub extern fn rust_main() {
 
-    info!("starting");
+    write!(UART0, "hello");
+    
+    // info!("starting");
     //
     // vm::init();
     //

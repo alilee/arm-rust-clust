@@ -8,13 +8,18 @@ SECTIONS
     }
  
     . = 0x40080000;
+    
     .text : 
     { 
-        text = .;
         *(.startup) 
         *(.text*) 
     }
 
+    .rodata :
+    {
+        *(.rodata*)
+    }
+    
     .data :
     ALIGN(0x1000)
     {

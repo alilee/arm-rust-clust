@@ -11,7 +11,7 @@ impl Uart {
     
     /// Create a Uart structure for UART0. 
     pub const fn uart0() -> Uart {
-        Uart { dr_addr: 0x101f1000 as *mut u32 }
+        Uart { dr_addr: 0x09000000 as *mut u32 }
     }
     
     /// Write one byte to the Uart.
