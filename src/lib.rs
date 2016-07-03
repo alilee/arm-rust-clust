@@ -2,23 +2,23 @@
 // #![feature(core_intrinsics)]
 // #![feature(core_str_ext)]
 // #![feature(core_slice_ext)]
-#![feature(type_macros)]
+// #![feature(type_macros)]
 #![feature(const_fn)]
-#![feature(associated_consts)]
+// #![feature(associated_consts)]
 #![no_std]
 
-// #[macro_use]
-// mod log;
-//
-// mod uart;
+#[macro_use]
+mod log;
+mod uart;
 //
 // pub mod vm;
 
+extern crate rlibc;
 
 #[no_mangle]
 pub extern fn rust_main() {
 
-    // info!("starting");
+    info!("starting");
     //
     // vm::init();
     //
@@ -34,8 +34,19 @@ pub extern fn rust_main() {
 }
 
 
-#[cfg(not(test))] 
+#[cfg(not(test))]
 #[lang = "eh_personality"] extern fn eh_personality() {}
 
-#[cfg(not(test))] 
-#[lang = "panic_fmt"] fn panic_fmt() -> ! { loop{} }
+#[cfg(not(test))]
+#[lang = "panic_fmt"] extern fn panic_fmt() -> ! { loop{} }
+
+// #[cfg(not(test))]
+// #[no_mangle]
+// fn panic_fmt() -> ! { loop{} }
+
+#[cfg(not(test))]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn _Unwind_Resume() -> ! {
+    loop {}
+}

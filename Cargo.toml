@@ -6,6 +6,12 @@ authors = ["Alister Lee <alister@dev.shortepic.com>"]
 [lib]
 crate-type = ["staticlib"]
 
+[dependencies]
+rlibc = "1.0.0"
+
 [profile.dev]
 opt-level = 1
+panic = "abort"
 
+[profile.release]
+panic = "abort"

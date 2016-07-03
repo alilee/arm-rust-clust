@@ -14,6 +14,7 @@ CPU=cortex-a53
 
 ASFLAGS = -mcpu=$(CPU) -g
 CFLAGS = -mcpu=$(CPU) -g
+LDFLAGS = --gc-sections
 
 build/%.o: %.s
 	@mkdir -p $(shell dirname $@)
@@ -52,7 +53,6 @@ all: $(image)
 clean:
 	@cargo clean
 	@rm -rf build
-	@rm $(libcore_dest)
 	@rm -rf $(sdimage_dir)
 	
 test: 
@@ -75,9 +75,6 @@ $(rust_os): $(shell find src/ -type f -name '*.rs') Cargo.toml
 qemu: $(kernel)
 	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -s -S -kernel $(kernel)
 
-update-rust:
-	rustup update
-	
 tftpd:
 	sudo launchctl load -F deploy/tftpd.plist
 	sudo launchctl start com.apple.tftpd
