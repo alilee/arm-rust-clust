@@ -1,6 +1,6 @@
 
 
-send: async send package to thread, interrupt if running
+send: async send package to thread, interrupt if running, but not if masked
 
 thread:
 running:  inter-processor interrupt, software generated interrupt, GIC, re-entrant?

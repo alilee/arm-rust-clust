@@ -25,14 +25,14 @@ Thread stats: (decaying over a period)
   writes:
   write-misses:
 
-cluster:
+ranges: distributed view of va ranges (also range security?)
   init(base)
   range: allocated and free virtual address ranges (cluster-wide)
     reserve(initial_size)
     extend(base, new_size)
     release(base)
 
-vm:
+vm: maps va to pa
   init(base)
   idle()
   frame: used and free physical RAM (on the current node)
@@ -51,7 +51,7 @@ vm:
     data_fault()
     
     
-frame table:
+frame table: track physical frames either in use or free
   bitmap of physical pages 4k page per 128Mb of mem
   init: 1 full table - all free
   allocate(n): n contig

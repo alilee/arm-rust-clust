@@ -22,6 +22,9 @@ impl Uart {
     }
 }
 
+unsafe impl Sync for Uart { }
+unsafe impl Send for Uart { }
+
 pub const UART0: Uart = Uart::uart0();
 
 impl Write for Uart {

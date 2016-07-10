@@ -102,4 +102,4 @@ $(sdimage_dir)/boot.scr.uimg: deploy/boot.scr
 sdimage: $(sdimage_dir) $(sdimage_dir)/kernel.img $(sdimage_dir)/boot.scr.uimg $(sdimage_dir)/bootcode.bin $(sdimage_dir)/start.elf
 
 gdb:
-	$(GDB) -ex 'file $(patsubst %.bin, %.elf, $(kernel))' -ex 'target remote localhost:1234'
+	$(GDB) -iex 'file $(patsubst %.bin, %.elf, $(kernel))' -iex 'target remote localhost:1234'

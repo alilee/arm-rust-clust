@@ -1,29 +1,25 @@
 #![feature(lang_items)]
-// #![feature(core_intrinsics)]
-// #![feature(core_str_ext)]
-// #![feature(core_slice_ext)]
-// #![feature(type_macros)]
 #![feature(const_fn)]
-// #![feature(associated_consts)]
-#![no_std]
+#![feature(asm)]
 
-#[macro_use]
-mod log;
-mod uart;
-//
-// pub mod vm;
+#![no_std]
 
 extern crate rlibc;
 
-use uart::UART0;
-use core::fmt::Write;
+mod uart;
+mod uart_logger;
+
+#[macro_use]
+extern crate log;
+
+// pub mod vm;
 
 #[no_mangle]
 pub extern fn rust_main() {
 
-    write!(UART0, "hello");
+    uart_logger::init().unwrap();
     
-    // info!("starting");
+    info!("starting");
     //
     // vm::init();
     //
@@ -33,21 +29,26 @@ pub extern fn rust_main() {
     // debug!("test debug");
     // trace!("test trace");
     //
-    // info!("done, looping.");
-    loop {}
+    
+    loop_forever();
+    uart_logger::shutdown().unwrap();
     
 }
 
+fn loop_forever() {
+    info!("done, looping..");
+    loop {
+        unsafe {
+            asm!("wfi");
+        } 
+    }
+}
 
 #[cfg(not(test))]
 #[lang = "eh_personality"] extern fn eh_personality() {}
 
 #[cfg(not(test))]
 #[lang = "panic_fmt"] extern fn panic_fmt() -> ! { loop{} }
-
-// #[cfg(not(test))]
-// #[no_mangle]
-// fn panic_fmt() -> ! { loop{} }
 
 #[cfg(not(test))]
 #[allow(non_snake_case)]
