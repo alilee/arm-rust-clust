@@ -44,7 +44,7 @@ linker_script := linker.ld
 sdimage_dir := deploy/sdimage
 
 assembly_source_files := $(shell find src -name '*.s')
-assembly_object_files := $(patsubst %.s, build/%.o, $(assembly_source_files)) 
+assembly_object_files := $(patsubst %.s, build/%.o, $(assembly_source_files))
 
 .PHONY: all clean qemu update-rust tftpd sdimage gdb test doc
 
@@ -54,10 +54,10 @@ clean:
 	@cargo clean
 	@rm -rf build
 	@rm -rf $(sdimage_dir)
-	
-test: 
+
+test:
 	@cargo test
-	
+
 doc:
 	@cargo doc --open
 
@@ -67,10 +67,10 @@ $(image): $(kernel)
 
 build/kernel.elf: $(rust_os) $(assembly_object_files) $(linker_script)
 	@mkdir -p $(shell dirname $@)
-	$(LD) $(LDFLAGS) -T $(linker_script) -o $@ $(assembly_object_files) $(rust_os) 
+	$(LD) $(LDFLAGS) -T $(linker_script) -o $@ $(assembly_object_files) $(rust_os)
 
 $(rust_os): $(shell find src/ -type f -name '*.rs') Cargo.toml
-	cargo build
+	cargo build --target=$(TARGET)
 
 qemu: $(kernel)
 	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -s -S -kernel $(kernel)
@@ -80,11 +80,11 @@ tftpd:
 	sudo launchctl start com.apple.tftpd
 	sudo mkdir -p $(tftpboot_rpi)
 	sudo chown `whoami`:staff $(tftpboot_rpi)
-	
+
 deploy/u-boot/u-boot.bin:
 	cd u-boot && CROSS_COMPILE=$(TARGET)- make rpi_2_defconfig all
 
-$(sdimage_dir)/bootcode.bin: 
+$(sdimage_dir)/bootcode.bin:
 	$(CURL) -fso $@ https://github.com/raspberrypi/firmware/blob/master/boot/bootcode.bin?raw=true
 
 $(sdimage_dir)/start.elf:

@@ -8,7 +8,7 @@ crate-type = ["staticlib"]
 
 [dependencies]
 rlibc = "1.0.0"
-log = { version = "0.3.6", default-features = false }
+log = { version = "0.3.7", default-features = false }
 
 [profile.dev]
 opt-level = 1
