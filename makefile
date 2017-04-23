@@ -7,7 +7,8 @@ OBJCOPY=$(TARGET)-objcopy
 OBJDUMP=$(TARGET)-objdump
 MKIMAGE=mkimage
 QEMU=qemu-system-aarch64
-GDB=$(TARGET)-gdb
+# GDB=$(TARGET)-gdb
+GDB=gdb
 
 BOARD=virt
 CPU=cortex-a53
@@ -103,3 +104,14 @@ sdimage: $(sdimage_dir) $(sdimage_dir)/kernel.img $(sdimage_dir)/boot.scr.uimg $
 
 gdb:
 	$(GDB) -iex 'file $(patsubst %.bin, %.elf, $(kernel))' -iex 'target remote localhost:1234'
+
+deploy/u-boot/simpleimage-pine64-latest.img:
+	@mkdir -p $(@D)
+	wget -q https://www.stdin.xyz/downloads/people/longsleep/pine64-images/simpleimage-pine64-latest.img.xz -O $@.xz
+	xz -d $@.xz
+
+deploy/u-boot/boot0.img: deploy/u-boot/simpleimage-pine64-latest.img
+	dd if=$< bs=1k skip=8 count=64 of=$(@D)/boot0.img
+
+deploy/u-boot/uboot.img: deploy/u-boot/simpleimage-pine64-latest.img
+	dd if=$< bs=1k skip=19096 count=1384 of=$(@D)/uboot.img

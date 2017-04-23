@@ -1,0 +1,3 @@
+[build]
+target = "aarch64-unknown-linux-gnu"
+rustflags = ["-Ctarget-cpu=cortex-a53","-Ctarget-feature=-neon","-Ctarget-feature=-fp-armv8"]
