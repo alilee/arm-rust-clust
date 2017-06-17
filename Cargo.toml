@@ -12,7 +12,7 @@ log = { version = "0.3.6", default-features = false }
 
 [profile.dev]
 opt-level = 1
-panic = "abort"
+panic = 'abort'
 
 [profile.release]
-panic = "abort"
+panic = 'abort'

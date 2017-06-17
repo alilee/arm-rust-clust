@@ -8,12 +8,11 @@ pub struct Uart {
 }
 
 impl Uart {
-    
-    /// Create a Uart structure for UART0. 
+    /// Create a Uart structure for UART0.
     pub const fn uart0() -> Uart {
         Uart { dr_addr: 0x09000000 as *mut u32 }
     }
-    
+
     /// Write one byte to the Uart.
     fn put(&self, b: u8) {
         unsafe {
@@ -22,13 +21,12 @@ impl Uart {
     }
 }
 
-unsafe impl Sync for Uart { }
-unsafe impl Send for Uart { }
+unsafe impl Sync for Uart {}
+unsafe impl Send for Uart {}
 
 pub const UART0: Uart = Uart::uart0();
 
 impl Write for Uart {
-    
     /// Writes a slice of bytes to Uart, as stream for formatted output.
     fn write_str(&mut self, s: &str) -> Result {
         for b in s.as_bytes() {
@@ -36,5 +34,4 @@ impl Write for Uart {
         }
         Ok(())
     }
-
 }

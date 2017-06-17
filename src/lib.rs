@@ -20,36 +20,33 @@ use dbg::uart_logger;
 extern crate log;
 
 #[no_mangle]
-pub extern fn rust_main() {
+pub extern "C" fn rust_main() {
 
     uart_logger::init().unwrap();
-    
+
     info!("starting");
-    arch::hello();
-    
-    // assume we're starting our own cluster 
+
+    // assume we're starting our own cluster
 
     // map live kernel into fixed va
     //   vbar table
     //   exception handlers
-    //   
+    //
     // start device discovery
     //   blk: backing store
-    //   con: 
+    //   con:
     //   start login task on consoles
     //
     // vm::init();
     //
-    
-    // exc::drop_to_EL0();
-    
-    info!("EL0");
-    
+
+    arch::drop_to_userspace();
+
     workload();
-    
+
     loop_forever();
     uart_logger::shutdown().unwrap();
-    
+
 }
 
 fn loop_forever() {
@@ -57,7 +54,7 @@ fn loop_forever() {
     loop {
         unsafe {
             asm!("wfi");
-        } 
+        }
     }
 }
 
@@ -72,14 +69,19 @@ fn workload() {
 }
 
 #[cfg(not(test))]
-#[lang = "eh_personality"] extern fn eh_personality() {}
+#[lang = "eh_personality"]
+extern "C" fn eh_personality() {}
 
 #[cfg(not(test))]
-#[lang = "panic_fmt"] extern fn panic_fmt() -> ! { loop{} }
-
-#[cfg(not(test))]
-#[allow(non_snake_case)]
-#[no_mangle]
-pub extern "C" fn _Unwind_Resume() -> ! {
+#[lang = "panic_fmt"]
+#[no_mangle] // FIXME: https://github.com/rust-lang/rust/issues/38281
+extern "C" fn panic_fmt() -> ! {
     loop {}
 }
+
+// #[cfg(not(test))]
+// #[allow(non_snake_case)]
+// #[no_mangle]
+// pub extern "C" fn _Unwind_Resume() -> ! {
+//     loop {}
+// }
