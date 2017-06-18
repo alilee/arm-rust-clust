@@ -2,6 +2,7 @@
 #![feature(const_fn)]
 #![feature(asm)]
 
+#![no_main]
 #![no_std]
 
 extern crate rlibc;
@@ -68,14 +69,14 @@ fn workload() {
     }
 }
 
-#[cfg(not(test))]
-#[lang = "eh_personality"]
-extern "C" fn eh_personality() {}
+// #[cfg(not(test))]
+// #[lang = "eh_personality"]
+// extern "C" fn eh_personality() {}
 
 #[cfg(not(test))]
 #[lang = "panic_fmt"]
 #[no_mangle] // FIXME: https://github.com/rust-lang/rust/issues/38281
-extern "C" fn panic_fmt() -> ! {
+pub extern "C" fn panic_fmt() -> ! {
     loop {}
 }
 

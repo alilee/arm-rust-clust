@@ -3,12 +3,12 @@ name = "arc"
 version = "0.1.0"
 authors = ["Alister Lee <alister@dev.shortepic.com>"]
 
-[lib]
-crate-type = ["staticlib"]
-
 [dependencies]
 rlibc = "1.0.0"
 log = { version = "0.3.6", default-features = false }
+
+[build-dependencies]
+gcc = "0.3.51"
 
 [profile.dev]
 opt-level = 1

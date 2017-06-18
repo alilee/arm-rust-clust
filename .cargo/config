@@ -1,4 +1,9 @@
 [build]
 target = "aarch64-unknown-linux-gnu"
 rustflags = ["-Ctarget-cpu=cortex-a53",
-             "-Ctarget-feature=-neon,-fp-armv8"]
+             "-Ctarget-feature=-neon,-fp-armv8",
+             "-Clink-arg=-Tlinker.ld",
+             "-Zlinker-flavor=ld"]
+
+[target.aarch64-unknown-linux-gnu]
+linker = "aarch64-unknown-linux-gnu-ld"
