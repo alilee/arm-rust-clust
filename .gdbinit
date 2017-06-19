@@ -1,5 +1,4 @@
 display/i $pc
 break arc::rust_main
-break arc::loop_forever
+break archs::armv8::loop_forever
 continue
-

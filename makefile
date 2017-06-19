@@ -7,7 +7,7 @@ OBJCOPY=$(TARGET)-objcopy
 OBJDUMP=$(TARGET)-objdump
 MKIMAGE=mkimage
 QEMU=qemu-system-aarch64
-GDB=$(TARGET)-gdb
+GDB=gdb
 
 BOARD=virt
 CPU=cortex-a53
@@ -16,35 +16,16 @@ ASFLAGS = -mcpu=$(CPU) -g -a
 CFLAGS = -mcpu=$(CPU) -g
 LDFLAGS = --gc-sections
 
-target/$(TARGET)/build/%.o: src/arch/$(TARGET)/%.s
-	@mkdir -p $(shell dirname $@)
-	$(AS) $(ASFLAGS) $< -o $@
-
-%.bin: %.elf
+%.bin: %
 	$(OBJCOPY) -O binary $< $@
 	$(OBJDUMP) -dS $< > $*.code
 	$(OBJDUMP) -d $< > $*.s
 
-kernel := target/$(TARGET)/build/kernel.elf
+kernel := target/$(TARGET)/debug/arc
 tftpboot_rpi := /private/tftpboot/rpi
 image := $(tftpboot_rpi)/uImage
 
-rust_os := target/$(TARGET)/debug/libarc.a
-linker_script := linker.ld
-
-# # init the submodule and checkout the same build as your nightly (see readme.md)
-# sysroot := $(shell rustc --print sysroot)
-# rustlib_dir := $(sysroot)/lib/rustlib/$(TARGET)/lib
-# rust_crate := externals/rust
-
-# # libcore
-# libcore_src := externals/core/src
-# libcore_dest := $(rustlib_dir)/libcore.rlib
-
 sdimage_dir := deploy/sdimage
-
-assembly_source_files := $(shell find src/arch/$(TARGET) -name '*.s')
-assembly_object_files := $(assembly_source_files:src/arch/$(TARGET)/%.s=target/$(TARGET)/build/%.o)
 
 .PHONY: all clean qemu update-rust tftpd sdimage gdb test doc
 
@@ -60,19 +41,15 @@ test:
 doc:
 	@cargo doc --open
 
-$(image): $(kernel)
+$(image): $(kernel).bin
 	$(MKIMAGE) -A arm -C gzip -O linux -T kernel -d $< -a 0x10000 -e 0x10000 $@
 	@chmod 644 $@
 
-$(kernel): $(rust_os) $(assembly_object_files) $(linker_script)
-	@mkdir -p $(shell dirname $@)
-	$(LD) $(LDFLAGS) -T $(linker_script) -o $@ $(assembly_object_files) $(rust_os)
-
-$(rust_os): $(shell find src/ -type f -name '*.rs') Cargo.toml
+$(kernel):
 	cargo build
 
-qemu: $(kernel)
-	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -s -S -kernel $(kernel)
+qemu: $(kernel).bin
+	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -s -S -kernel $<
 
 tftpd:
 	sudo launchctl load -F deploy/tftpd.plist
@@ -100,5 +77,5 @@ $(sdimage_dir)/boot.scr.uimg: deploy/boot.scr
 
 sdimage: $(sdimage_dir) $(sdimage_dir)/kernel.img $(sdimage_dir)/boot.scr.uimg $(sdimage_dir)/bootcode.bin $(sdimage_dir)/start.elf
 
-gdb:
-	$(GDB) -iex 'file $(kernel: %.bin=%.elf)' -iex 'target remote localhost:1234'
+gdb: $(kernel)
+	$(GDB) -iex 'file $(kernel)' -iex 'target remote localhost:1234'
