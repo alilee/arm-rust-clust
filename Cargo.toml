@@ -5,7 +5,7 @@ authors = ["Alister Lee <alister@dev.shortepic.com>"]
 
 [dependencies]
 rlibc = "1.0.0"
-log = { version = "0.3.6", default-features = false }
+log = { version = "0.3.7", default-features = false }
 
 [build-dependencies]
 gcc = "0.3.51"

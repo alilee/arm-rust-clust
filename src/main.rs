@@ -69,20 +69,11 @@ fn workload() {
     }
 }
 
-// #[cfg(not(test))]
-// #[lang = "eh_personality"]
-// extern "C" fn eh_personality() {}
-
 #[cfg(not(test))]
-#[lang = "panic_fmt"]
-#[no_mangle] // FIXME: https://github.com/rust-lang/rust/issues/38281
-pub extern "C" fn panic_fmt() -> ! {
-    loop {}
+pub mod lang_items {
+    #[lang = "panic_fmt"]
+    #[no_mangle] // FIXME: https://github.com/rust-lang/rust/issues/38281
+    pub extern "C" fn panic_fmt() -> ! {
+        loop {}
+    }
 }
-
-// #[cfg(not(test))]
-// #[allow(non_snake_case)]
-// #[no_mangle]
-// pub extern "C" fn _Unwind_Resume() -> ! {
-//     loop {}
-// }

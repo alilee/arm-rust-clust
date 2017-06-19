@@ -59,10 +59,6 @@ tftpd:
 deploy/u-boot/u-boot.bin:
 	cd u-boot && CROSS_COMPILE=$(TARGET)- make rpi_2_defconfig all
 
-$(image): $(kernel).bin
-	$(MKIMAGE) -A arm -C gzip -O linux -T kernel -d $< -a 0x10000 -e 0x10000 $@
-	@chmod 644 $@
-
 $(sdimage_dir)/bootcode.bin:
 	$(CURL) -fso $@ https://github.com/raspberrypi/firmware/blob/master/boot/bootcode.bin?raw=true
 
