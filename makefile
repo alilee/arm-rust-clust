@@ -34,12 +34,17 @@ all: $(image)
 clean:
 	@cargo clean
 	@rm -rf $(sdimage_dir)
+	@rm $(image)
 
 test:
 	@cargo test
 
 doc:
 	@cargo doc --open
+
+$(image): $(kernel).bin
+	$(MKIMAGE) -A arm -C gzip -O linux -T kernel -d $< -a 0x10000 -e 0x10000 $@
+	@chmod 644 $@
 
 $(kernel):
 	cargo build
