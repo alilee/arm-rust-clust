@@ -41,15 +41,14 @@ test:
 doc:
 	@cargo doc --open
 
-$(image): $(kernel).bin
-	$(MKIMAGE) -A arm -C gzip -O linux -T kernel -d $< -a 0x10000 -e 0x10000 $@
-	@chmod 644 $@
-
 $(kernel):
 	cargo build
 
 qemu: $(kernel).bin
 	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -s -S -kernel $<
+
+gdb: $(kernel)
+	$(GDB) -iex 'file $(kernel)' -iex 'target remote localhost:1234'
 
 tftpd:
 	sudo launchctl load -F deploy/tftpd.plist
@@ -59,6 +58,10 @@ tftpd:
 
 deploy/u-boot/u-boot.bin:
 	cd u-boot && CROSS_COMPILE=$(TARGET)- make rpi_2_defconfig all
+
+$(image): $(kernel).bin
+	$(MKIMAGE) -A arm -C gzip -O linux -T kernel -d $< -a 0x10000 -e 0x10000 $@
+	@chmod 644 $@
 
 $(sdimage_dir)/bootcode.bin:
 	$(CURL) -fso $@ https://github.com/raspberrypi/firmware/blob/master/boot/bootcode.bin?raw=true
@@ -76,6 +79,3 @@ $(sdimage_dir)/boot.scr.uimg: deploy/boot.scr
 	$(MKIMAGE) -A arm -C none -O linux -T script -n $< -d $< $@
 
 sdimage: $(sdimage_dir) $(sdimage_dir)/kernel.img $(sdimage_dir)/boot.scr.uimg $(sdimage_dir)/bootcode.bin $(sdimage_dir)/start.elf
-
-gdb: $(kernel)
-	$(GDB) -iex 'file $(kernel)' -iex 'target remote localhost:1234'
