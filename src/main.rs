@@ -3,6 +3,8 @@
 #![no_main]
 #![no_std]
 
+extern crate kernel;
+
 #[cfg(not(test))]
 pub mod lang_items {
     #[lang = "panic_fmt"]

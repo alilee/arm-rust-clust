@@ -1,8 +1,6 @@
-#![feature(lang_items)]
 #![feature(const_fn)]
 #![feature(asm)]
 
-#![no_main]
 #![no_std]
 
 extern crate rlibc;
@@ -71,14 +69,5 @@ pub fn workload() {
         while i > 0 {
             i = i - 1;
         }
-    }
-}
-
-#[cfg(not(test))]
-pub mod lang_items {
-    #[lang = "panic_fmt"]
-    #[no_mangle] // FIXME: https://github.com/rust-lang/rust/issues/38281
-    pub extern "C" fn panic_fmt() -> ! {
-        loop {}
     }
 }
