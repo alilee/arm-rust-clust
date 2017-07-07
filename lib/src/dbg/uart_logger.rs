@@ -1,3 +1,5 @@
+//! Some doco
+
 extern crate log;
 
 use log::{LogRecord, LogLevel, LogLevelFilter, LogMetadata, SetLoggerError, ShutdownLoggerError};
@@ -25,6 +27,7 @@ impl log::Log for uart::Uart {
     }
 }
 
+/// Doco
 pub fn init() -> Result<(), SetLoggerError> {
     unsafe {
         log::set_logger_raw(|max_log_level| {
@@ -34,6 +37,7 @@ pub fn init() -> Result<(), SetLoggerError> {
     }
 }
 
+/// Doco amore
 pub fn shutdown() -> Result<(), ShutdownLoggerError> {
     log::shutdown_logger_raw().map(|_| { writeln!(uart::UART0, ".!").unwrap(); })
 }

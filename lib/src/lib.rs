@@ -1,3 +1,8 @@
+//! This is the kernel crate.
+//!
+//! Responsible for booting the OS and establishing virtual memory and scheduler.
+
+#![warn(missing_docs)]
 #![feature(const_fn)]
 #![feature(asm)]
 
@@ -23,6 +28,7 @@ use dbg::uart_logger;
 #[macro_use]
 extern crate log;
 
+/// Some documentation.
 #[no_mangle]
 pub extern "C" fn rust_main() {
 
@@ -62,6 +68,7 @@ fn loop_forever() {
     }
 }
 
+#[doc(hidden)]
 pub fn workload() {
     loop {
         info!("working...");

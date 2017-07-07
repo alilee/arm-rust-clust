@@ -1,3 +1,5 @@
+//! A proxy to build the library with particular link settings.
+
 #![feature(lang_items)]
 
 #![no_main]
@@ -5,6 +7,7 @@
 
 extern crate kernel;
 
+#[doc(hidden)]
 #[cfg(not(test))]
 pub mod lang_items {
     #[lang = "panic_fmt"]
