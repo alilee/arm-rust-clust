@@ -2,14 +2,14 @@ This is a rust baremetal OS project for raspberry pi, hosted on OS X.
 
 # Goal
 
-The goal is a clustered lisp machine running as a sasos on a cluster of raspberry pis. Host lang under lisp is rust.
+The goal is a clustered lisp machine running as a sasos on a cluster of arm SOC boards. Host lang under lisp is rust.
 
 # Colophon
 
 ### Platforms
 
 * Development host: Mac OS X El Capitan
-* Development board: Raspberry Pi 2
+* Development board: Raspberry Pi 2, Pine64 plus
 
 ### Tools
 
@@ -28,7 +28,7 @@ So we don't have to mess with updating the kernel on the SD card, we set it up t
 
 ## Building the SD image
 
-This gives you just what you need to start an rpi2, boot the bootloader, and have it start a kernel using TFTP. Key network settings for TFTP in boot.scr. You can probably control this outside if you have a more configurable DHCP host than mine. 
+This gives you just what you need to start an rpi2, boot the bootloader, and have it start a kernel using TFTP. Key network settings for TFTP in boot.scr. You can probably control this outside if you have a more configurable DHCP host than mine.
 
     $ make sdimage
 
@@ -41,7 +41,7 @@ You need a libcore for your target architecture in the right place under rustc's
 ## Build kernel
 
 Builds the kernel and copies the u-boot ready image into the TFTPD server directory. Also creates some useful debugging files.
- 
+
     $ make
 
 # Thanks

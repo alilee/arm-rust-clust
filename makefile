@@ -29,7 +29,7 @@ sdimage_dir := deploy/sdimage
 
 .PHONY: all clean qemu update-rust tftpd sdimage gdb test doc
 
-all: $(image)
+all: $(kernel).bin
 
 clean:
 	@cargo clean
