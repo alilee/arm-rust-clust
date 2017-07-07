@@ -1,8 +1,4 @@
 
-pub fn hello() {
-    info!("hello armv8");
-}
-
 pub fn svc(a: u16) {
     unsafe {
         asm!("svc $0"::"i"(a));

@@ -64,7 +64,7 @@ fn loop_forever() {
     }
 }
 
-fn workload() {
+pub fn workload() {
     loop {
         info!("working...");
         let mut i = 1000000000u64;
