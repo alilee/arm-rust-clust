@@ -3,6 +3,8 @@ name = "arc"
 version = "0.1.0"
 authors = ["Alister Lee <alister@dev.shortepic.com>"]
 
+[workspace]
+
 [dependencies]
 kernel = { path = "./lib" }
 
