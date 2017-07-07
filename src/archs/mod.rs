@@ -1,3 +1,3 @@
 
-pub mod armv7;
-pub mod armv8;
+pub mod arm;
+pub mod aarch64;

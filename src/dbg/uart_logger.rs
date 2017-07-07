@@ -12,14 +12,15 @@ impl log::Log for uart::Uart {
 
     fn log(&self, record: &LogRecord) {
         if self.enabled(record.metadata()) {
-            writeln!(uart::UART0,
-                     "[{}] {}: [{}:{}] {}",
-                     record.level(),
-                     record.target(),
-                     record.location().file(),
-                     record.location().line(),
-                     record.args())
-                .unwrap_or(());
+            writeln!(
+                uart::UART0,
+                "[{}] {}: [{}:{}] {}",
+                record.level(),
+                record.target(),
+                record.location().file(),
+                record.location().line(),
+                record.args()
+            ).unwrap_or(());
         }
     }
 }
@@ -34,7 +35,5 @@ pub fn init() -> Result<(), SetLoggerError> {
 }
 
 pub fn shutdown() -> Result<(), ShutdownLoggerError> {
-    log::shutdown_logger_raw().map(|_| {
-        writeln!(uart::UART0, ".!").unwrap();
-    })
+    log::shutdown_logger_raw().map(|_| { writeln!(uart::UART0, ".!").unwrap(); })
 }

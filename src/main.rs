@@ -8,7 +8,12 @@
 extern crate rlibc;
 
 mod archs;
-use archs::armv8 as arch;
+
+#[cfg(target_arch = "aarch64")]
+use archs::aarch64 as arch;
+
+#[cfg(target_arch = "arm")]
+use archs::arm as arch;
 
 mod dev;
 mod exc;
