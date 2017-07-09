@@ -6,7 +6,7 @@ authors = ["Alister Lee <alister@dev.shortepic.com>"]
 [workspace]
 
 [dependencies]
-kernel = { path = "./lib" }
+kernel = { path = "./kernel" }
 
 [profile.dev]
 opt-level = 1
