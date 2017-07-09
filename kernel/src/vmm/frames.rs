@@ -6,6 +6,8 @@
 
 use core::mem::transmute;
 
+use arch;
+
 /// The frame table is the highest currently used page and a stack of the free pages
 /// residing under that mark
 pub struct FrameTable {
