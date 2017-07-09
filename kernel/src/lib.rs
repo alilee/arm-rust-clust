@@ -48,7 +48,7 @@ pub extern "C" fn boot2() -> ! {
 fn init() -> () {
 
     // test: should be able to get back to EL1 at this point
-    arch::svc(10);
+    // arch::svc(10);
 
     // 2. start vmm
     //   map live kernel into fixed va

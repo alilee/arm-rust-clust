@@ -6,8 +6,6 @@
 
 use core::mem::transmute;
 
-use arch;
-
 /// The frame table is the highest currently used page and a stack of the free pages
 /// residing under that mark
 pub struct FrameTable {
@@ -88,19 +86,20 @@ mod tests {
 
     #[test]
     fn test_init() {
-        let mut table = Table {
-            highwater_mark: 1,
-            n_free: 1,
-            free_page_nos: [99; 1024 - 2],
-        };
-        assert_eq!(table.highwater_mark, 1);
-        assert_eq!(table.n_free, 1);
-        unsafe {
-            let buffer = transmute::<&mut Table, *mut usize>(&mut table);
-            FrameTable::init(buffer);
-        }
-        assert_eq!(table.highwater_mark, 0);
-        assert_eq!(table.n_free, 0);
+        // let mut table = FrameTable {
+        //     highwater_mark: 1,
+        //     n_free: 1,
+        //     free_page_nos: [99; 1024 - 2],
+        // };
+        // assert_eq!(table.highwater_mark, 1);
+        // assert_eq!(table.n_free, 1);
+        // unsafe {
+        //     let buffer = transmute::<&mut FrameTable, *mut usize>(&mut table);
+        //     FrameTable::init(buffer);
+        // }
+        // assert_eq!(table.highwater_mark, 0);
+        // assert_eq!(table.n_free, 0);
+        assert_eq!(1, 2);
     }
 
     #[test]

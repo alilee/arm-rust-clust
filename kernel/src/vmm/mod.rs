@@ -4,8 +4,6 @@ mod frames;
 mod range;
 mod page;
 
-use arch;
-
 extern "C" {
     static frame_table: *mut usize;
     static page_table: *mut usize;
@@ -28,8 +26,6 @@ struct PhysicalAddress {
 pub fn init() {
 
     info!("initialising");
-
-    arch::drop_to_userspace();
 
     frames::FrameTable::init(unsafe { frame_table });
     // pages::PageTree::init(unsafe { page_table });
