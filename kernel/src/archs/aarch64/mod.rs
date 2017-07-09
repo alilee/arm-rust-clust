@@ -1,4 +1,6 @@
 
+pub mod vmm;
+
 pub fn svc(a: u16) {
     unsafe {
         asm!("svc $0"::"i"(a));

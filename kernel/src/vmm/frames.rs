@@ -8,18 +8,18 @@ use core::mem::transmute;
 
 /// The frame table is the highest currently used page and a stack of the free pages
 /// residing under that mark
-pub struct Table {
+pub struct FrameTable {
     free_page_nos: [u32; 1024 - 2],
     highwater_mark: u32, // page number of highest page previously allocated.
     n_free: usize, // offset to empty position above the top of stack (ie. 0 when empty)
 }
 
 #[allow(dead_code)]
-impl Table {
+impl FrameTable {
     /// Initialise the page frame data structure into a specific physical address
-    pub fn init<'a>(a: *mut u32) -> &'a mut Table {
+    pub fn init<'a>(a: *mut usize) -> &'a mut FrameTable {
         unsafe {
-            let p_table = transmute::<*mut u32, &mut Table>(a);
+            let p_table = transmute::<*mut usize, &mut FrameTable>(a);
             p_table.n_free = 0;
             p_table.highwater_mark = 0;
             p_table
@@ -86,15 +86,19 @@ mod tests {
 
     #[test]
     fn test_init() {
-        // let mut table = Table { highwater_mark: 1, n_free: 1, free_page_nos: [99; 1024-2] };
-        // assert_eq!(table.highwater_mark, 1);
-        // assert_eq!(table.n_free, 1);
-        // unsafe {
-        //     let buffer = transmute::<&mut Table, *mut u32>(&mut table);
-        //     Table::init(buffer);
-        // }
-        // assert_eq!(table.highwater_mark, 0);
-        // assert_eq!(table.n_free, 0);
+        let mut table = Table {
+            highwater_mark: 1,
+            n_free: 1,
+            free_page_nos: [99; 1024 - 2],
+        };
+        assert_eq!(table.highwater_mark, 1);
+        assert_eq!(table.n_free, 1);
+        unsafe {
+            let buffer = transmute::<&mut Table, *mut usize>(&mut table);
+            FrameTable::init(buffer);
+        }
+        assert_eq!(table.highwater_mark, 0);
+        assert_eq!(table.n_free, 0);
     }
 
     #[test]

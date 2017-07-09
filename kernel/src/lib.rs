@@ -30,7 +30,7 @@ extern crate log;
 
 /// Some documentation.
 #[no_mangle]
-pub extern "C" fn rust_main() -> ! {
+pub extern "C" fn boot2() -> ! {
 
     uart_logger::init().unwrap();
 
@@ -41,6 +41,11 @@ pub extern "C" fn rust_main() -> ! {
     // 1. set up scheduling
     //    boot2 is this thread, now EL0, must be cleaned up
     thread::init();
+    thread::spawn(init);
+    thread::discard_boot();
+}
+
+fn init() -> () {
 
     // test: should be able to get back to EL1 at this point
     arch::svc(10);
@@ -49,32 +54,19 @@ pub extern "C" fn rust_main() -> ! {
     //   map live kernel into fixed va
     //   vbar table
     //   exception handlers
-    //
+    vmm::init();
+
     // start device discovery
     //   blk: backing store
     //   con:
     //   start login task on consoles
-    //
-    vmm::init();
+    dev::init();
 
     thread::spawn(workload);
-
-    thread::discard_boot();
-
-    unreachable!()
-}
-
-fn loop_forever() {
-    info!("done, looping..");
-    loop {
-        unsafe {
-            asm!("wfi");
-        }
-    }
 }
 
 #[doc(hidden)]
-pub fn workload() -> u32 {
+pub fn workload() -> () {
     loop {
         info!("working...");
         let mut i = 1000000000u64;
@@ -82,5 +74,4 @@ pub fn workload() -> u32 {
             i = i - 1;
         }
     }
-    42
 }

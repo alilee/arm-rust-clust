@@ -1,6 +1,6 @@
 .section        .startup
 .global         _reset
-.extern         rust_main
+.extern         boot2
 
 _reset:         mrs     x7, CurrentEL
                 mrs     x6, CPACR_EL1
@@ -10,6 +10,6 @@ _reset:         mrs     x7, CurrentEL
 	        ldr     x11, =stack_top
 	        mov     sp, x11
 
-                ldr     x10, =rust_main
+                ldr     x10, =boot2
                 br      x10
                 b       .

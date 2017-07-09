@@ -1,10 +1,16 @@
 use log;
 
-mod frame;
+mod frames;
 mod range;
 mod page;
 
 use super::arch;
+use super::arch::vmm;
+
+extern "C" {
+    static frame_table: *mut usize;
+    static page_table: *mut usize;
+}
 
 const PAGESIZE_BYTES: u32 = 4096;
 const PAGESIZE_WORDS: u32 = PAGESIZE_BYTES / 4;
@@ -24,19 +30,14 @@ pub fn init() {
 
     info!("initialising");
 
-    const P_FRAME_TABLE: *mut u32 = (200 * PAGESIZE_BYTES) as *mut u32; // 1 page gap
-    const P_RANGE_TABLE: *mut u32 = (201 * PAGESIZE_BYTES) as *mut u32; // 1 page gap
-    const P_PAGE_TREE: *mut u32 = (202 * PAGESIZE_BYTES) as *mut u32; // 2 pages?
+    frames::FrameTable::init(unsafe { frame_table });
+    // pages::PageTree::init(unsafe { page_table });
 
-    frame::Table::init(P_FRAME_TABLE);
-    range::Table::init(P_RANGE_TABLE);
-    page::Tree::init(P_PAGE_TREE);
+    // range::Table::init(P_RANGE_TABLE);
 
     // id_map(&start, 6);
     // id_map(frame::table, 1);
     // id_map(page::table, 2);
-
-    // enable_vmmu();
 
 }
 
