@@ -19,8 +19,8 @@ use archs::aarch64 as arch;
 use archs::arm as arch;
 
 mod dev;
-mod exc;
-// mod vm;
+mod thread;
+mod vmm;
 
 mod dbg;
 use dbg::uart_logger;
@@ -30,7 +30,7 @@ extern crate log;
 
 /// Some documentation.
 #[no_mangle]
-pub extern "C" fn rust_main() {
+pub extern "C" fn rust_main() -> ! {
 
     uart_logger::init().unwrap();
 
@@ -38,7 +38,15 @@ pub extern "C" fn rust_main() {
 
     // assume we're starting our own cluster
 
-    // map live kernel into fixed va
+    // 1. set up scheduling
+    //    boot2 is this thread, now EL0, must be cleaned up
+    thread::init();
+
+    // test: should be able to get back to EL1 at this point
+    arch::svc(10);
+
+    // 2. start vmm
+    //   map live kernel into fixed va
     //   vbar table
     //   exception handlers
     //
@@ -47,16 +55,13 @@ pub extern "C" fn rust_main() {
     //   con:
     //   start login task on consoles
     //
-    // vm::init();
-    //
+    vmm::init();
 
-    arch::drop_to_userspace();
+    thread::spawn(workload);
 
-    workload();
+    thread::discard_boot();
 
-    loop_forever();
-    uart_logger::shutdown().unwrap();
-
+    unreachable!()
 }
 
 fn loop_forever() {
@@ -69,7 +74,7 @@ fn loop_forever() {
 }
 
 #[doc(hidden)]
-pub fn workload() {
+pub fn workload() -> u32 {
     loop {
         info!("working...");
         let mut i = 1000000000u64;
@@ -77,4 +82,5 @@ pub fn workload() {
             i = i - 1;
         }
     }
+    42
 }

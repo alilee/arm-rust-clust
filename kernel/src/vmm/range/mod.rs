@@ -1,7 +1,7 @@
-//! Manages virtual address range assignments. 
+//! Manages virtual address range assignments.
 //!
 //! Allows a process to receive a block of address ranges which has not previously been requested,
-//! and define some access characteristics.  
+//! and define some access characteristics.
 
 use core::mem::transmute;
 
@@ -12,31 +12,31 @@ const TABLE_RESERVE: usize = 4;
 /// The range table is a stack of address ranges
 pub struct Table {
     ranges: [entry::Range; (super::PAGESIZE_BYTES as usize - TABLE_RESERVE) / entry::RANGE_SIZE],
-    n_ranges: usize,            // offset of top of stack 
+    n_ranges: usize, // offset of top of stack
 }
 
 #[allow(dead_code)]
 impl Table {
-    
     /// Initialise the address range data structure into a specific physical address
     pub fn init<'a>(a: *mut u32) -> &'a mut Table {
         unsafe {
-            let p_table = transmute::<*mut u32, &mut Table>(a); 
+            let p_table = transmute::<*mut u32, &mut Table>(a);
             p_table.n_ranges = 1;
             p_table.ranges[0] = entry::Range::all_free();
             p_table
         }
     }
-    
+
     fn push(&mut self, o: Option<entry::Range>) {
         match o {
-            Some(r) =>  {   self.ranges[self.n_ranges] = r;
-                            self.n_ranges += 1;
-                        }
-            None =>     {}
+            Some(r) => {
+                self.ranges[self.n_ranges] = r;
+                self.n_ranges += 1;
+            }
+            None => {}
         }
     }
-    
+
     /// Request an address range of a specified number of pages in length
     pub fn request(&mut self, n_pages: u8) -> Option<u32> {
         for i in 0..self.n_ranges {
@@ -68,11 +68,10 @@ impl Table {
 
     pub fn free(&mut self, _: u32) {
         unimplemented!();
-    } 
+    }
 
     /// Opportunity to use idle time for housekeeping and reconciliation
     pub fn idle(_: &mut [u32]) {}
-
 }
 
 
@@ -94,7 +93,7 @@ mod tests {
         // assert_eq!(table.n_ranges, 1);
         // assert_eq!(table.ranges[0].available_for(6), true);
     }
- 
+
     #[test]
     fn test_request() {
         // let mut buffer = Table { n_ranges: 0, ranges: [Range::null(); 511] };
@@ -108,5 +107,5 @@ mod tests {
         // assert_eq!(table.n_ranges,4);
         // assert_eq!(table.ranges[3].base_page, 33);
     }
-    
+
 }

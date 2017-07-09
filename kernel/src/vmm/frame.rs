@@ -1,32 +1,31 @@
-//! Manages a page frame table, which holds which pages of physical memory 
-//! have been allocated for virtual address ranges 
+//! Manages a page frame table, which holds which pages of physical memory
+//! have been allocated for virtual address ranges
 //!
-//! Pages which have not been allocated, are free memory. Since pages may 
-//! be freed, there may be fragmentation, if multiple pages are required. 
+//! Pages which have not been allocated, are free memory. Since pages may
+//! be freed, there may be fragmentation, if multiple pages are required.
 
 use core::mem::transmute;
 
 /// The frame table is the highest currently used page and a stack of the free pages
 /// residing under that mark
 pub struct Table {
-    free_page_nos: [u32; 1024-2],
-    highwater_mark: u32,    // page number of highest page previously allocated. 
-    n_free: usize,          // offset to empty position above the top of stack (ie. 0 when empty)  
+    free_page_nos: [u32; 1024 - 2],
+    highwater_mark: u32, // page number of highest page previously allocated.
+    n_free: usize, // offset to empty position above the top of stack (ie. 0 when empty)
 }
 
 #[allow(dead_code)]
 impl Table {
-    
     /// Initialise the page frame data structure into a specific physical address
     pub fn init<'a>(a: *mut u32) -> &'a mut Table {
         unsafe {
-            let p_table = transmute::<*mut u32, &mut Table>(a); 
+            let p_table = transmute::<*mut u32, &mut Table>(a);
             p_table.n_free = 0;
             p_table.highwater_mark = 0;
             p_table
         }
     }
-    
+
     fn raise_hwm(&mut self, page: u32, n_pages: u8) -> Option<u32> {
         // TODO: find sequences not above current high-water mark
         // TODO: out of range if (page + n_pages) > physical memory.
@@ -40,7 +39,7 @@ impl Table {
             self.n_free += page as usize - self.highwater_mark as usize;
             self.highwater_mark = page + n_pages as u32;
             Some(page)
-        }        
+        }
     }
 
     /// Set aside a number of pages starting at a specific offset
@@ -53,7 +52,7 @@ impl Table {
 
     /// Set aside a number of contiguous pages
     pub fn allocate(&mut self, n_pages: u8) -> Option<u32> {
-        // TODO: grab contiguous pages from freelist (just top?) 
+        // TODO: grab contiguous pages from freelist (just top?)
         if n_pages == 1 && self.n_free > 0 {
             self.n_free -= 1;
             Some(self.free_page_nos[self.n_free])
@@ -63,7 +62,7 @@ impl Table {
         }
     }
 
-    /// Return the contiguous sequence of pages starting at specific table address 
+    /// Return the contiguous sequence of pages starting at specific table address
     pub fn free(&mut self, page: u32, n_pages: u8) {
         for p in 0..n_pages {
             self.free_page_nos[self.n_free + p as usize] = page + p as u32;
@@ -77,7 +76,6 @@ impl Table {
         // TODO: detect page_nos above high-water mark and panic
         // TODO: sort the free page_nos and retract high-water mark
     }
-
 }
 
 #[cfg(test)]
@@ -85,7 +83,7 @@ mod tests {
 
     use super::*;
     use core::mem::transmute;
-    
+
     #[test]
     fn test_init() {
         // let mut table = Table { highwater_mark: 1, n_free: 1, free_page_nos: [99; 1024-2] };
@@ -98,7 +96,7 @@ mod tests {
         // assert_eq!(table.highwater_mark, 0);
         // assert_eq!(table.n_free, 0);
     }
-    
+
     #[test]
     fn test_allocation() {
         // let mut buffer = Table { highwater_mark: 1, n_free: 1, free_page_nos: [99; 1024-2] };
@@ -132,7 +130,7 @@ mod tests {
         // assert_eq!(table.free_page_nos[0], 1);
         // assert_eq!(table.free_page_nos[55], 63);
     }
-    
+
     #[test]
     fn test_free() {
         // let mut buffer = Table { highwater_mark: 1, n_free: 1, free_page_nos: [99; 1024-2] };
@@ -148,6 +146,6 @@ mod tests {
         // assert_eq!(table.free_page_nos[0], 1);
         // assert_eq!(table.free_page_nos[39], 0);
     }
-    
-    
+
+
 }

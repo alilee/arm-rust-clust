@@ -9,19 +9,17 @@ pub struct Entry {
 const FAULT_MASK: u32 = 0b11;
 
 impl Entry {
-    
     pub fn init(value: u32) -> Entry {
         Entry { value: value }
     }
 
     pub fn id_map(&mut self, page: u32, access: u32) {
-        self.value = page << 12 | access; 
+        self.value = page << 12 | access;
     }
-    
+
     pub fn is_fault(&self) -> bool {
         0 == self.value & FAULT_MASK
     }
-    
 }
 
 /// Set of 4096 level 2 page tables (covers entire 32-bit address range for 4k tables)
@@ -30,15 +28,13 @@ pub struct Table {
 }
 
 impl Table {
-
     pub fn init(value: u32) -> Table {
-        Table { entries: [ Entry { value: value }; 1024] }
+        Table { entries: [Entry { value: value }; 1024] }
     }
-    
+
     pub fn find_l2_entry(&mut self, page: u32) -> &mut Entry {
         &mut self.entries[0]
     }
-     
 }
 
 // impl Copy for Table {}
@@ -66,13 +62,17 @@ const B_BITS: u8 = 2;
 /// access  accessed flag
 /// xn      execute never
 ///
-pub fn build_access(ng: bool, s: bool, apx: bool, tex: u8, ap: bool, c: bool, b: bool, xn: bool) -> u32 {
-    (ng as u32) << NG_BITS |
-    (s as u32) << S_BITS |
-    (apx as u32) << APX_BITS |
-    (tex as u32) << TEX_BITS |
-    (ap as u32) << AP1_BITS |
-    (c as u32) << C_BITS |
-    (b as u32) << B_BITS |
-    (xn as u32)
+pub fn build_access(
+    ng: bool,
+    s: bool,
+    apx: bool,
+    tex: u8,
+    ap: bool,
+    c: bool,
+    b: bool,
+    xn: bool,
+) -> u32 {
+    (ng as u32) << NG_BITS | (s as u32) << S_BITS | (apx as u32) << APX_BITS |
+        (tex as u32) << TEX_BITS | (ap as u32) << AP1_BITS | (c as u32) << C_BITS |
+        (b as u32) << B_BITS | (xn as u32)
 }

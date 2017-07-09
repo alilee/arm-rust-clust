@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 
-//! Manages mapping virtual addresses to physical addresses 
+//! Manages mapping virtual addresses to physical addresses
 //!
 //! Populates the page translation tables walked by the TLB reload
-//! in the ARMv7 architecture.  
+//! in the ARMv7 architecture.
 
 use core::mem::transmute;
 
@@ -12,8 +12,8 @@ mod l2;
 
 /// The page translation tree is an l1 table and a memory-mapped array of l2 tables
 ///
-/// Having the array means we don't have to track a stack of the l2 tables, at the 
-/// expense of some virtual address range. They don't have to be provisioned as long 
+/// Having the array means we don't have to track a stack of the l2 tables, at the
+/// expense of some virtual address range. They don't have to be provisioned as long
 /// as they are zeroed when they are first accessed.
 pub struct Tree {
     l1_table: l1::Table,
@@ -21,24 +21,23 @@ pub struct Tree {
 }
 
 impl Tree {
-    
     /// Initialise a page translation tree at a specific physical address
     pub fn init<'a>(a: *mut u32) -> &'a mut Tree {
         unsafe {
-            let p_tree = transmute::<*mut u32, &mut Tree>(a); 
+            let p_tree = transmute::<*mut u32, &mut Tree>(a);
             p_tree.l1_table.reset();
             // Test buffers must simulate zeroing of the l2 tables
             p_tree
         }
     }
-    
+
     fn find_l2_table(&mut self, page: u32) -> &mut l2::Table {
         unsafe {
-            let table_base = transmute::<&l2::Table,*const u32>(&self.l2_tables[0]);
+            let table_base = transmute::<&l2::Table, *const u32>(&self.l2_tables[0]);
             &mut self.l2_tables[self.l1_table.entry(page as usize >> 20).offset(table_base)]
         }
     }
-    
+
     /// Identity-map the given number of pages starting at the base page
     /// to the same virtual addresses
     ///
@@ -47,10 +46,10 @@ impl Tree {
         for p in base_page..(base_page + n_pages as u32) {
             let l2_table = self.find_l2_table(p);
             l2_table.find_l2_entry(p).id_map(p, access);
-        } 
+        }
     }
 
-/*
+    /*
     /// Use virtual memory mapping according to the contents of the translation table.
     ///
     /// The translation table should be populated.
@@ -141,11 +140,11 @@ mod tests {
     #[test]
     fn test_init() {
         // let sandwich = [ [ 0u32; 1024 ]; 4096];
-        
+
         // let mut tree = Tree {   l1_table: l1::Table { entries: [ l1::Entry::init_fault(0xDEADBEEF); 1024] },
         //                         l2_tables: [ l2::Table { entries: [ l2::Entry::init(0xDEADBEEF); 1024] }; 4096] };
-         // { l1_table: l1::Table::init(0xDEADBEEF),
-         //                      l2_tables: [ l2::Table::init(0xDEADBEEF); 4096 ] };
+        // { l1_table: l1::Table::init(0xDEADBEEF),
+        //                      l2_tables: [ l2::Table::init(0xDEADBEEF); 4096 ] };
         // assert!(!tree.l1_table.entries[0].is_fault());
         // assert!(!tree.l2_tables[0].entries[0].is_fault());
         // unsafe {
@@ -159,5 +158,5 @@ mod tests {
         //     }
         // }
     }
- 
+
 }
