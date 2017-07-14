@@ -18,6 +18,9 @@ use archs::aarch64 as arch;
 #[cfg(target_arch = "arm")]
 use archs::arm as arch;
 
+// Causes this to be exported.
+pub use arch::handler::handler;
+
 mod dev;
 mod thread;
 mod vmm;
@@ -37,6 +40,7 @@ pub extern "C" fn boot2() -> ! {
     info!("starting");
 
     // assume we're starting our own cluster
+    arch::handler::init();
 
     // 1. set up scheduling
     //    boot2 is this thread, now EL0, must be cleaned up

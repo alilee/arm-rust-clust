@@ -74,3 +74,25 @@ frame table: track physical frames either in use or free
     page = page(a)
     word = word(page)
     bits(word)
+
+# Decay
+
+Bank of unsigned byte access histories, one per page frame
+on page access fault:
+  if access history == 0 then ensure not in warm pools (2nd chance)   
+  OR MSB on page access
+8 times each hot period length (eg. 8/s):
+  decay all access history by byte.SHR
+  clear all PTE.access bits and flush TSB
+after each hot period, add all unaccessed or warm-% of LRU pages to warm pool
+after each warm period (eg. 1/s):
+  take remaining dirty pages to dirty pool
+  take remaining clean pages to victims queue
+  zero oldest victims and mark as free at zero-rate if under free target
+  write oldest dirty pages and move to victims at write-rate if under victim target
+
+examine distribution of access history bytes and tune hot period
+tune (shorten and back-off) warm period to respond to change
+tune warm-% for residual warm based on zero-rate change
+dirty write-rate
+victims zero-rate

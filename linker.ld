@@ -2,24 +2,25 @@ ENTRY(_reset)
 SECTIONS
 {
 
-    /DISCARD/ : 
+    /DISCARD/ :
     {
         *(.ARM.exidx*)
     }
- 
+
     . = 0x40080000;
-    
-    .text : 
-    { 
-        *(.startup) 
-        *(.text*) 
+
+    .text :
+    {
+        *(.startup)
+        *(.handler)
+        *(.text*)
     }
 
     .rodata :
     {
         *(.rodata*)
     }
-    
+
     .data :
     ALIGN(0x1000)
     {
