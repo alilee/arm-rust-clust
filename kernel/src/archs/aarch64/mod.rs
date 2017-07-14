@@ -1,7 +1,6 @@
 
-pub mod vmm;
+pub mod pager;
 pub mod handler;
-
 
 pub fn drop_to_userspace() {
     // we need a stack

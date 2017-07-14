@@ -21,12 +21,12 @@ use archs::arm as arch;
 // Causes this to be exported.
 pub use arch::handler::handler;
 
-mod dev;
+mod device;
 mod thread;
-mod vmm;
+mod pager;
 
-mod dbg;
-use dbg::uart_logger;
+mod debug;
+use debug::uart_logger;
 
 #[macro_use]
 extern crate log;
@@ -58,13 +58,13 @@ fn init() -> () {
     //   map live kernel into fixed va
     //   vbar table
     //   exception handlers
-    vmm::init();
+    pager::init();
 
     // start device discovery
     //   blk: backing store
     //   con:
     //   start login task on consoles
-    dev::init();
+    device::init();
 
     thread::spawn(workload);
 }

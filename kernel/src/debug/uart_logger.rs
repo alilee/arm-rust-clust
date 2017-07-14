@@ -3,7 +3,7 @@
 extern crate log;
 
 use log::{LogRecord, LogLevel, LogLevelFilter, LogMetadata, SetLoggerError, ShutdownLoggerError};
-use dev::uart;
+use device::uart;
 
 use core::fmt::Write;
 
