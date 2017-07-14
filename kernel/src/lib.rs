@@ -18,12 +18,13 @@ use archs::aarch64 as arch;
 #[cfg(target_arch = "arm")]
 use archs::arm as arch;
 
-// Causes this to be exported.
+// Causes this to be exported to asm.
 pub use arch::handler::handler;
 
 mod device;
 mod thread;
 mod pager;
+mod handler;
 
 mod debug;
 use debug::uart_logger;
@@ -39,14 +40,21 @@ pub extern "C" fn boot2() -> ! {
 
     info!("starting");
 
-    // assume we're starting our own cluster
-    arch::handler::init();
-
-    // 1. set up scheduling
-    //    boot2 is this thread, now EL0, must be cleaned up
+    // take exceptions
+    handler::init();
+    // swap virtual memory
+    pager::init();
+    // enable multi-processing
     thread::init();
+    // establish io
+    device::init();
+
+    // start the first process
     thread::spawn(init);
-    thread::discard_boot();
+
+    // clean up boot process
+    arch::drop_to_userspace();
+    thread::exit();
 }
 
 fn init() -> () {
@@ -54,19 +62,9 @@ fn init() -> () {
     // test: should be able to get back to EL1 at this point
     // arch::svc(10);
 
-    // 2. start vmm
-    //   map live kernel into fixed va
-    //   vbar table
-    //   exception handlers
-    pager::init();
-
-    // start device discovery
-    //   blk: backing store
-    //   con:
-    //   start login task on consoles
-    device::init();
-
     thread::spawn(workload);
+
+    loop {}
 }
 
 #[doc(hidden)]

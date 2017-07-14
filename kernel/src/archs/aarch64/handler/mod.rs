@@ -1,10 +1,15 @@
+
 extern "C" {
     static vector_table_el1: *mut u64;
 }
 
 pub fn init() {
+    use core::ptr::read_volatile;
+
     unsafe {
         init_vbar(vector_table_el1);
+        // FIXME: ensures vector_table_el1 is linked
+        let _x = read_volatile(vector_table_el1);
     }
 }
 

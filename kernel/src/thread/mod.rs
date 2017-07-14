@@ -20,8 +20,8 @@ where
 /// Initialise the thread system on boot.
 pub fn init() -> () {}
 
-/// Safely discard the boot thread.
-pub fn discard_boot() -> ! {
+/// Shut down the running thread.
+pub fn exit() -> ! {
 
     unreachable!()
 }
