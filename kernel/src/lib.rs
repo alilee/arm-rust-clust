@@ -5,6 +5,7 @@
 #![warn(missing_docs)]
 #![feature(const_fn)]
 #![feature(asm)]
+#![feature(global_asm)]
 
 #![no_std]
 
@@ -39,6 +40,7 @@ pub extern "C" fn boot2() -> ! {
     uart_logger::init().unwrap();
 
     info!("starting");
+    arch::drop_to_userspace();
 
     // take exceptions
     handler::init();
