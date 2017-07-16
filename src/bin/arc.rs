@@ -5,7 +5,7 @@
 #![no_main]
 #![no_std]
 
-extern crate kernel;
+extern crate arc;
 
 #[doc(hidden)]
 #[cfg(not(test))]
