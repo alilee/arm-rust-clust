@@ -8,7 +8,7 @@ edition = "2018"
 kernel = { path = "./kernel" }
 
 [profile.dev]
-opt-level = 2
+opt-level = 1
 panic = 'abort'
 
 [profile.release]

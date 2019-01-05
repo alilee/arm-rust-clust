@@ -2,7 +2,7 @@
 
 extern crate log;
 
-use log::{Record, Level, Metadata, SetLoggerError};
+use log::{Record, Level, LevelFilter, Metadata, SetLoggerError};
 use crate::device::uart;
 
 use core::fmt::Write;
@@ -32,10 +32,5 @@ impl log::Log for uart::Uart {
 /// Doco
 pub fn init() -> Result<(), SetLoggerError> {
     log::set_logger(&uart::UART0)
-    // unsafe {
-    //     log::set_logger_raw(|max_log_level| {
-    //         max_log_level.set(LevelFilter::Info);
-    //         &uart::UART0
-    //     })
-    // }
+        .map(|()| log::set_max_level(LevelFilter::Info))
 }

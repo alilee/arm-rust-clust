@@ -42,14 +42,14 @@ pub unsafe extern "C" fn _reset() -> ! {
     use self::cortex_a::{asm, regs::*};
 
     extern {
-        static stack_top: *const usize; // defined in linker.ld
+        static stack_top: u64; // defined in linker.ld
     }
 
     const CORE_0: u64 = 0;
     const AFF0_CORE_MASK: u64 = 0xFF;
 
     if CORE_0 == MPIDR_EL1.get() & AFF0_CORE_MASK {
-        SP.set(stack_top as u64);
+        SP.set(&stack_top as *const u64 as u64);
         crate::boot2();
     }
 

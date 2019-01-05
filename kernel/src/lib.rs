@@ -31,17 +31,14 @@ mod device;
 mod debug;
 use debug::uart_logger;
 
-// #[macro_use]
-// extern crate log;
+use log::{info};
 
 /// Some documentation.
 pub fn boot2() -> ! {
 
     uart_logger::init().unwrap();
+    info!("starting");
 
-    // info!("starting");
-    // arch::drop_to_userspace();
-    //
     // // take exceptions
     // handler::init();
     // // swap virtual memory
