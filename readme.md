@@ -51,3 +51,4 @@ Builds the kernel and copies the u-boot ready image into the TFTPD server direct
 * [Philipp Oppermann](http://os.phil-opp.com/)
 * [Lucas Hartmann](http://interim-os.com/) We follow in his footsteps!
 * [Dawid Ciężarkiewicz](https://github.com/dpc/titanos) And Dawid's too!
+* [Andre Richter](https://github.com/rust-embedded/rust-raspi3-tutorial)
