@@ -2,14 +2,11 @@
 //!
 //! Responsible for booting the OS and establishing virtual memory and scheduler.
 
+#![no_std]
 #![feature(naked_functions)]
 #![feature(uniform_paths)]
-#![warn(missing_docs)]
-// #![feature(const_fn)]
-// #![feature(asm)]
-// #![feature(global_asm)]
 
-#![no_std]
+#![warn(missing_docs)]
 
 mod archs;
 
@@ -19,7 +16,7 @@ use archs::aarch64 as arch;
 #[cfg(target_arch = "arm")]
 use archs::arm as arch;
 
-// Causes this to be exported to asm.
+// Causes this to be exported for linking.
 // pub use arch::handler::handler;
 pub use arch::_reset;
 
@@ -27,7 +24,7 @@ mod device;
 // mod thread;
 // mod pager;
 // mod handler;
-//
+
 mod debug;
 use debug::uart_logger;
 
@@ -65,7 +62,7 @@ pub fn boot2() -> ! {
 //
 //     thread::spawn(workload);
 //
-//     loop {}
+//     arch::loop_forever()
 // }
 
 #[doc(hidden)]

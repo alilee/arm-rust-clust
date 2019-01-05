@@ -1,14 +1,13 @@
 
 
-extern crate cortex_a;
+// extern crate cortex_a;
+use cortex_a::{asm, regs::*};
 
 // pub mod pager;
 // pub mod handler;
 
 /// Loop forever, saving power
 pub fn loop_forever() -> ! {
-    use self::cortex_a::asm;
-
     loop {
         asm::wfe()
     }
@@ -39,8 +38,6 @@ pub fn loop_forever() -> ! {
 ///
 /// TODO: CPACR to enable FP in EL1
 pub unsafe extern "C" fn _reset() -> ! {
-    use self::cortex_a::{asm, regs::*};
-
     extern {
         static stack_top: u64; // defined in linker.ld
     }
