@@ -2,42 +2,40 @@
 
 extern crate log;
 
-use log::{LogRecord, LogLevel, LogLevelFilter, LogMetadata, SetLoggerError, ShutdownLoggerError};
-use device::uart;
+use log::{Record, Level, Metadata, SetLoggerError};
+use crate::device::uart;
 
 use core::fmt::Write;
 
 impl log::Log for uart::Uart {
-    fn enabled(&self, metadata: &LogMetadata) -> bool {
-        metadata.level() <= LogLevel::Info
+    fn enabled(&self, metadata: &Metadata) -> bool {
+        metadata.level() <= Level::Info
     }
 
-    fn log(&self, record: &LogRecord) {
+    fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
             writeln!(
                 uart::UART0,
                 "[{}] {}: [{}:{}] {}",
                 record.level(),
                 record.target(),
-                record.location().file(),
-                record.location().line(),
+                record.file().unwrap_or("<unknown>"),
+                record.line().unwrap_or(0),
                 record.args()
             ).unwrap_or(());
         }
     }
+
+    fn flush(&self) {}
 }
 
 /// Doco
 pub fn init() -> Result<(), SetLoggerError> {
-    unsafe {
-        log::set_logger_raw(|max_log_level| {
-            max_log_level.set(LogLevelFilter::Info);
-            &uart::UART0
-        })
-    }
-}
-
-/// Doco amore
-pub fn shutdown() -> Result<(), ShutdownLoggerError> {
-    log::shutdown_logger_raw().map(|_| { writeln!(uart::UART0, ".!").unwrap(); })
+    log::set_logger(&uart::UART0)
+    // unsafe {
+    //     log::set_logger_raw(|max_log_level| {
+    //         max_log_level.set(LevelFilter::Info);
+    //         &uart::UART0
+    //     })
+    // }
 }

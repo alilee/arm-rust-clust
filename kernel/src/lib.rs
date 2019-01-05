@@ -3,15 +3,13 @@
 //! Responsible for booting the OS and establishing virtual memory and scheduler.
 
 #![feature(naked_functions)]
+#![feature(uniform_paths)]
 #![warn(missing_docs)]
 // #![feature(const_fn)]
 // #![feature(asm)]
 // #![feature(global_asm)]
 
 #![no_std]
-
-// extern crate rlibc;
-extern crate cortex_a;
 
 mod archs;
 
@@ -25,13 +23,13 @@ use archs::arm as arch;
 // pub use arch::handler::handler;
 pub use arch::_reset;
 
-// mod device;
+mod device;
 // mod thread;
 // mod pager;
 // mod handler;
 //
-// mod debug;
-// use debug::uart_logger;
+mod debug;
+use debug::uart_logger;
 
 // #[macro_use]
 // extern crate log;
@@ -39,10 +37,8 @@ pub use arch::_reset;
 /// Some documentation.
 pub fn boot2() -> ! {
 
-    arch::loop_forever();
+    uart_logger::init().unwrap();
 
-    // uart_logger::init().unwrap();
-    //
     // info!("starting");
     // arch::drop_to_userspace();
     //
@@ -53,7 +49,7 @@ pub fn boot2() -> ! {
     // // enable multi-processing
     // thread::init();
     // // establish io
-    // device::init();
+    device::init();
     //
     // // start the first process
     // thread::spawn(init);
@@ -61,6 +57,8 @@ pub fn boot2() -> ! {
     // // clean up boot process
     // arch::drop_to_userspace();
     // thread::exit();
+
+    arch::loop_forever();
 }
 
 // fn init() -> () {

@@ -1,10 +1,13 @@
 
+
+extern crate cortex_a;
+
 // pub mod pager;
 // pub mod handler;
 
 /// Loop forever, saving power
 pub fn loop_forever() -> ! {
-    use cortex_a::asm;
+    use self::cortex_a::asm;
 
     loop {
         asm::wfe()
@@ -28,13 +31,15 @@ pub fn loop_forever() -> ! {
 #[naked]
 /// Entry point for OS
 ///
-/// Positioned at magic address in linker.ld.
+/// Positioned at magic address by linker.ld.
+///
+/// Gets a stack and calls boot2 for the first core, and parks the rest in a WFE loop.
 ///
 /// NOTE: must not use stack before SP set.
 ///
 /// TODO: CPACR to enable FP in EL1
 pub unsafe extern "C" fn _reset() -> ! {
-    use cortex_a::{asm, regs::*};
+    use self::cortex_a::{asm, regs::*};
 
     extern {
         static stack_top: *const usize; // defined in linker.ld
@@ -45,7 +50,7 @@ pub unsafe extern "C" fn _reset() -> ! {
 
     if CORE_0 == MPIDR_EL1.get() & AFF0_CORE_MASK {
         SP.set(stack_top as u64);
-        ::boot2();
+        crate::boot2();
     }
 
     loop {

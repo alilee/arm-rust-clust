@@ -1,13 +1,14 @@
-TARGET=aarch64-unknown-linux-gnu
-CURL=curl
-AS=$(TARGET)-as
-GCC=$(TARGET)-gcc
-LD=$(TARGET)-ld
-OBJCOPY=$(TARGET)-objcopy
-OBJDUMP=$(TARGET)-objdump
-MKIMAGE=mkimage
-QEMU=qemu-system-aarch64
-GDB=gdb
+TARGET = aarch64-unknown-none
+BINTOOLS = aarch64-unknown-linux-gnu
+CURL = curl
+AS = $(BINTOOLS)-as
+GCC = $(BINTOOLS)-gcc
+LD = $(BINTOOLS)-ld
+OBJCOPY = $(BINTOOLS)-objcopy
+OBJDUMP = $(BINTOOLS)-objdump
+MKIMAGE = mkimage
+QEMU = qemu-system-aarch64
+GDB = gdb
 
 BOARD=virt
 CPU=cortex-a53
@@ -15,6 +16,8 @@ CPU=cortex-a53
 ASFLAGS = -mcpu=$(CPU) -g -a
 CFLAGS = -mcpu=$(CPU) -g
 LDFLAGS = --gc-sections
+
+SOURCES := $(shell find . -name '*.rs') linker.ld
 
 %.bin: %
 	$(OBJCOPY) -O binary $< $@
@@ -46,8 +49,8 @@ $(image): $(kernel).bin
 	$(MKIMAGE) -A arm -C gzip -O linux -T kernel -d $< -a 0x10000 -e 0x10000 $@
 	@chmod 644 $@
 
-$(kernel):
-	cargo build
+$(kernel): $(SOURCES)
+	cargo xbuild
 
 qemu: $(kernel).bin
 	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -s -S -kernel $<
