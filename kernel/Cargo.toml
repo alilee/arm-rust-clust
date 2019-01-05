@@ -4,8 +4,9 @@ version = "0.1.0"
 authors = ["Alister Lee <alister@dev.shortepic.com>"]
 
 [dependencies]
-rlibc = "1.0.0"
-log = { version = "0.3.7", default-features = false }
+# rlibc = "1.0.0"
+log = { version = "0.4.6", default-features = false }
+cortex-a = "2.3.1"
 
-[build-dependencies]
-gcc = "0.3.51"
+# [build-dependencies]
+# gcc = "0.3.51"

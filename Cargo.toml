@@ -2,14 +2,13 @@
 name = "arc"
 version = "0.1.0"
 authors = ["Alister Lee <alister@dev.shortepic.com>"]
-
-[workspace]
+edition = "2018"
 
 [dependencies]
 kernel = { path = "./kernel" }
 
 [profile.dev]
-opt-level = 1
+opt-level = 2
 panic = 'abort'
 
 [profile.release]
