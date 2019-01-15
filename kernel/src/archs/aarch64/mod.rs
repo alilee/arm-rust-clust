@@ -1,13 +1,15 @@
 
 
-// extern crate cortex_a;
+use log::info;
 use cortex_a::{asm, regs::*};
 
+pub mod handler;
+pub mod thread;
 // pub mod pager;
-// pub mod handler;
 
 /// Loop forever, saving power
 pub fn loop_forever() -> ! {
+    info!("looping forever...");
     loop {
         asm::wfe()
     }

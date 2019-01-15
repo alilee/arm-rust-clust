@@ -4,24 +4,49 @@
 //! pass messages for IPC, and a stack.
 //!
 
-/// To enable waiting.
-pub struct JoinHandle<T>(T);
+use log::info;
+use super::arch;
 
-/// Start a new thread at an entry point.
-pub fn spawn<F, T>(f: F) -> JoinHandle<T>
-where
-    F: FnOnce() -> T,
-    F: Send + 'static,
-    T: Send + 'static,
-{
-    JoinHandle(f())
+
+struct ThreadID(u64);
+
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum State {
+    Terminated = 0,
+    Ready,
+    Running,
+    Blocked,
 }
 
+
+trait ControlBlock {
+
+    pub fn spawn(f: fn() -> ()) -> Result<&mut ControlBlock, u64> {
+        arch::thread::ControlBlock::spawn(f)
+    }
+    pub fn current() -> Result<&mut ControlBlock, u64> {
+        arch::thread::ControlBlock::current()
+    }
+    pub fn yield() -> ! {
+        arch::thread::ControlBlock::yield();
+    }
+
+    pub fn set_stack(self: &mut ControlBlock, stack: &[u64]) -> Result<&mut ControlBlock, u64>;
+
+    pub fn thread_id(self: &ControlBlock) -> ThreadID;
+
+    pub fn state(self: &ControlBlock) -> Result<State, u64>;
+    pub fn terminate(self: &mut ControlBlock) -> Result<State, u64>;
+    pub fn ready(self: &mut ControlBlock) -> Result<State, u64>;
+    pub fn block(self: &mut ControlBlock) -> Result<State, u64>;
+    pub fn run(self: &mut ControlBlock) -> Result<State, u64>;
+
+}
+
+
 /// Initialise the thread system on boot.
-pub fn init() -> () {}
-
-/// Shut down the running thread.
-pub fn exit() -> ! {
-
-    unreachable!()
+pub fn init() -> () {
+    info!("init");
+    arch::thread::init();
 }
