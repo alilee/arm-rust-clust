@@ -1,10 +1,11 @@
 //! This is the kernel crate.
 //!
-//! Responsible for booting the OS and establishing virtual memory and scheduler.
+//! Responsible for booting the OS, intialising the sub-systems.
+//! Also implements the kernel internal API which integrates the submodules.
+//! User level API (accessed by supervisor interrupts) is in a submodule.
 
 #![no_std]
 #![feature(naked_functions)]
-#![feature(uniform_paths)]
 #![feature(global_asm)]
 #![feature(asm)]
 
@@ -27,59 +28,78 @@ mod thread;
 // mod pager;
 mod handler;
 
+mod user;
+
 mod debug;
 use debug::uart_logger;
 
 use log::{info};
 
-/// Some documentation.
+
+use thread::ThreadID;
+
+
+/// Kernel API for spawning a new thread
+///
+/// Integrates the sub-modules.
+fn spawn(f: fn() -> ()) -> Result<ThreadID, u64> {
+    use thread::Thread;
+
+    let tcb: &mut Thread = Thread::spawn(f)?;
+    let stack: [u64; 10] = [0; 10]; // pager::alloc(thread_id, 10)?;
+    tcb.set_stack(&stack);
+    tcb.ready();
+    Ok(tcb.thread_id())
+}
+
+
+/// Kernel function which terminates current thread
+///
+/// This would be called by a kernel thread to terminate itself.
+fn terminate() -> ! {
+    use thread::Thread;
+    //
+    let t = Thread::current();
+    t.terminate();
+    // pager::free(thread_id); // what happens to the stack?
+    t.unused();
+
+    loop {}
+}
+
+
+/// Boot operating system from first core
 ///
 /// TODO: what happens if any of this code panics?
+/// TODO: switch to dedicated EL1 stack for this core
+/// TODO: enable other cores
 pub fn boot2() -> ! {
 
     uart_logger::init().unwrap();
     info!("starting");
 
-    // take exceptions
-    handler::init();
-    handler::supervisor();
-
-    // // swap virtual memory
-    // pager::init();
-
     // enable multi-processing
     thread::init();
+
+    // take exceptions
+    handler::init();
+
+    // enable virtual memory
+    // pager::init();
+
     // establish io
     device::init();
 
     // start the first process
     spawn(workload).unwrap();
 
-    // clean up boot process
-    // arch::drop_to_userspace();
+    // clean up boot thread
     terminate();
-    // thread is cleaned up and core should shift to other thread... until that terminates.
 }
 
 
-/// Kernel API for spawning a new thread
-///
-/// Integrates the sub-modules.
-fn spawn(f: fn() -> ()) -> Result<u64, u64> {
-    let tcb = thread::ControlBlock::spawn(f)?;
-    let stack: [u64; 10] = [0; 10]; // pager::alloc(thread_id, 10)?;
-    tcb.set_stack(stack)?;
-    tcb.ready()?;
-    Ok(tcb.thread_id())
-}
-
-
-fn terminate() -> ! {
-    //
-    let thread_id: thread::ThreadID = thread::current();
-    thread::terminate(thread_id);
-    // pager::free(thread_id); // what happens to the stack?
-    thread::yield();
+fn panic() -> ! {
+    loop {}
 }
 
 

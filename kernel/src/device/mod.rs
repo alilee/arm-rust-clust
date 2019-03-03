@@ -2,4 +2,6 @@
 
 pub mod uart;
 
-pub fn init() -> () {}
+pub fn init() -> () {
+    // eg. timer
+}

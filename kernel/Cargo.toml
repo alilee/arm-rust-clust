@@ -6,4 +6,4 @@ edition = "2018"
 
 [dependencies]
 log = { version = "0.4.6", default-features = false }
-cortex-a = { git = "https://github.com/alilee/cortex-a.git" }
+cortex-a = { path = "../../cortex-a" }

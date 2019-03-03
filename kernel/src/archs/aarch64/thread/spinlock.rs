@@ -1,9 +1,5 @@
 
-
-use log::info;
-
 use core::sync::atomic::{Ordering, AtomicBool};
-
 
 #[inline]
 fn acquire(spinlock: &mut AtomicBool) {
@@ -15,24 +11,26 @@ fn release(spinlock: &mut AtomicBool) {
     spinlock.store(false, Ordering::SeqCst);
 }
 
+// struct Critical<'a> {
+//     b: &'a mut AtomicBool,
+// }
+//
+// impl<'a> Critical<'a> {
+//     pub fn new(b: &'a mut AtomicBool) -> Critical {
+//         acquire(b);
+//         Critical { b: b }
+//     }
+// }
+//
+// impl<'a> Drop for Critical<'a> {
+//     fn drop(&mut self) {
+//         release(self.b);
+//     }
+// }
 
-struct Spinlock<'a> {
-    b: &'a mut AtomicBool,
+pub const fn new() -> AtomicBool {
+    AtomicBool::new(false)
 }
-
-impl<'a> Spinlock<'a> {
-    pub fn new(b: &'a mut AtomicBool) -> Spinlock {
-        acquire(b);
-        Spinlock { b: b }
-    }
-}
-
-impl<'a> Drop for Spinlock<'a> {
-    fn drop(&mut self) {
-        release(self.b);
-    }
-}
-
 
 pub fn exclusive<F, T>(b: &mut AtomicBool, closure: F) -> T
     where F: FnOnce() -> T {

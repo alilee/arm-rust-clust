@@ -8,8 +8,6 @@ pub fn init() {
     arch::handler::init();
 }
 
-macro_rules! supervisor
-    ($syndrome) => {
-        arch::handler::supervisor!(syndrome);
-    }
+pub fn supervisor(syndrome: u16) -> () {
+    arch::handler::supervisor(syndrome);
 }

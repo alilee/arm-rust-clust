@@ -16,7 +16,7 @@ pub fn loop_forever() -> ! {
 }
 
 
-// pub fn drop_to_userspace() {
+pub fn drop_to_userspace() -> Result<u64, u64> { Ok(0) }
 //     // we need a stack
 //     unsafe {
 //         asm!("      adr x0, foo

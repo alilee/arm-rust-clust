@@ -15,4 +15,4 @@ panic = 'abort'
 panic = 'abort'
 
 [package.metadata.cargo-xbuild]
-sysroot_path = "../xbuild_sysroot"
+sysroot_path = "target/xbuild_sysroot"

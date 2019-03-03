@@ -1,13 +1,21 @@
-use crate::handler::supervisor;
+/// kernel entry points from userspace.
+///
+/// TODO: needs to be linked in user-executable memory.
 
-mod thread {
-    pub fn spawn(f: fn() -> ()) -> Result<u64, u64> {
-        crate::handler::supervisor!(1);
+// use crate::handler::supervisor;
+
+pub mod thread {
+    use crate::arch::handler::supervisor;
+
+    pub fn spawn(_f: fn() -> ()) -> Result<u64, u64> {
+        supervisor(1);
+        Ok(1)
     }
 
     /// Shut down a user thread.
     pub fn terminate() -> ! {
-        crate::handler::supervisor!(99);
+        supervisor(99);
+        unreachable!()
     }
 }
 

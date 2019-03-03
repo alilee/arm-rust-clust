@@ -6,7 +6,6 @@ linker = "aarch64-unknown-linux-gnu-ld"
 rustflags = ["-Ctarget-cpu=cortex-a53",
              "-Ctarget-feature=-neon,-fp-armv8",
              "-Clink-arg=-Tlinker.ld",
-#            "-Zlinker-flavor=ld",
              "-Crelocation-model=pic"]
 
 [test]
