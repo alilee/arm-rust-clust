@@ -13,10 +13,13 @@
 
 mod archs;
 
-#[cfg(target_arch = "aarch64")]
+#[cfg(test)]
+use archs::test as arch;
+
+#[cfg(all(not(test), target_arch = "aarch64"))]
 use archs::aarch64 as arch;
 
-#[cfg(target_arch = "arm")]
+#[cfg(all(not(test), target_arch = "arm"))]
 use archs::arm as arch;
 
 // Causes this to be exported for linking.

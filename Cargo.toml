@@ -16,3 +16,6 @@ panic = 'abort'
 
 [package.metadata.cargo-xbuild]
 sysroot_path = "target/xbuild_sysroot"
+
+[workspace]
+members = ["kernel"]

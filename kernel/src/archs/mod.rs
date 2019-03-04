@@ -1,6 +1,8 @@
+#[cfg(test)]
+pub mod test;
 
-#[cfg(target_arch = "arm")]
+#[cfg(all(not(test), target_arch = "arm"))]
 pub mod arm;
 
-#[cfg(target_arch = "aarch64")]
+#[cfg(all(not(test), target_arch = "aarch64"))]
 pub mod aarch64;

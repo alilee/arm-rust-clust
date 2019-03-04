@@ -1,5 +1,6 @@
-TARGET = aarch64-unknown-none
-BINTOOLS = aarch64-unknown-linux-gnu
+HOST=x86_64-apple-darwin
+TARGET = aarch64-unknown-linux-gnu
+BINTOOLS = $(TARGET)
 CURL = curl
 AS = $(BINTOOLS)-as
 GCC = $(BINTOOLS)-gcc
@@ -40,7 +41,7 @@ clean:
 	@rm $(image)
 
 test:
-	@cargo test
+	@cargo test --target=$(HOST)
 
 doc:
 	@cargo doc --open
