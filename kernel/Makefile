@@ -1,4 +1,7 @@
-HOST=x86_64-apple-darwin
+TESTHOST=x86_64-apple-darwin
+
+build:
+	cargo xbuild
 
 test:
-	cargo test --target=$(HOST)
+	cargo test --target=$(TESTHOST)
