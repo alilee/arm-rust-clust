@@ -11,7 +11,7 @@ MKIMAGE = mkimage
 QEMU = qemu-system-aarch64
 GDB = gdb
 
-BOARD=virt
+BOARD=virt,gic_version=3
 CPU=cortex-a53
 
 ASFLAGS = -mcpu=$(CPU) -g -a
@@ -54,8 +54,8 @@ $(kernel): $(SOURCES)
 	cargo xbuild
 
 qemu: $(kernel).bin
-	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -s -S -kernel $<
-
+	$(QEMU) -M $(BOARD),dumpdtb=qemu.dtb -cpu $(CPU) -m 256M -nographic -s -S -dtb=qemu.dtb -kernel $<
+ 
 gdb: $(kernel)
 	$(GDB) -iex 'file $(kernel)' -iex 'target remote localhost:1234'
 
