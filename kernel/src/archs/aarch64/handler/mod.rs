@@ -2,6 +2,8 @@
 ///
 /// Requires TPIDRRO_EL0 to contain pointer to TCB where register state can be saved.
 
+pub mod gic;
+
 use log::info;
 
 
@@ -13,6 +15,8 @@ pub fn init() {
         use cortex_a::regs::*;
         VBAR_EL1.set(&vector_table_el1 as *const u64 as u64);
     };
+
+    gic::init();
 }
 
 

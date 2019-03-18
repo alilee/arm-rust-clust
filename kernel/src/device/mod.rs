@@ -3,6 +3,8 @@
 pub mod uart;
 pub mod timer;
 
+
 pub fn init() -> () {
+    info!("")
     // eg. timer
 }
