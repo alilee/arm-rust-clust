@@ -39,6 +39,7 @@ clean:
 	@cargo clean
 	@rm -rf $(sdimage_dir)
 	@rm $(image)
+	@rm *.dtb
 
 test:
 	@cargo test --target=$(HOST)
@@ -53,9 +54,15 @@ $(image): $(kernel).bin
 $(kernel): $(SOURCES)
 	cargo xbuild
 
-qemu: $(kernel).bin
-	$(QEMU) -M $(BOARD),dumpdtb=qemu.dtb -cpu $(CPU) -m 256M -nographic -s -S -dtb=qemu.dtb -kernel $<
- 
+qemu-raw.dtb:
+		$(QEMU) -M $(BOARD),dumpdtb=qemu-raw.dtb -cpu $(CPU) -m 256M
+
+qemu.dtb: qemu-raw.dtb
+		dtc -I dtb -O dtb qemu-raw.dtb > qemu.dtb
+
+qemu: $(kernel).bin qemu.dtb
+	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -s -S -dtb qemu.dtb -kernel $<
+
 gdb: $(kernel)
 	$(GDB) -iex 'file $(kernel)' -iex 'target remote localhost:1234'
 

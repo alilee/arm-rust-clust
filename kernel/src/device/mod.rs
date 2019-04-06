@@ -1,10 +1,12 @@
 //! A module for devices.
 
+use log::info;
+
 pub mod uart;
 pub mod timer;
 
 
 pub fn init() -> () {
-    info!("")
+    info!("initialising");
     // eg. timer
 }

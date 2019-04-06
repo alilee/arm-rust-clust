@@ -10,4 +10,4 @@ target
 build
 a.out
 sdimage
-qemu.dtb
+qemu*.dt*

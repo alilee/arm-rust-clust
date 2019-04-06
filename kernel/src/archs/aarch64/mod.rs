@@ -26,6 +26,22 @@ pub fn drop_to_userspace() -> Result<u64, u64> { Ok(0) }
 //     }
 // }
 
+#[derive(Debug)]
+#[repr(C)]
+pub struct DTBHeader {
+    magic: u32,
+    totalsize: u32,
+    off_dt_struct: u32,
+    off_dt_strings: u32,
+    off_mem_rsvmap: u32,
+    version: u32,
+    last_comp_version: u32,
+    boot_cpuid_phys: u32,
+    size_dt_strings: u32,
+    size_dt_struct: u32
+}
+
+static mut DTB: *mut DTBHeader = 0 as *mut DTBHeader;
 
 #[link_section = ".startup"]
 #[no_mangle]
@@ -39,7 +55,7 @@ pub fn drop_to_userspace() -> Result<u64, u64> { Ok(0) }
 /// NOTE: must not use stack before SP set.
 ///
 /// TODO: CPACR to enable FP in EL1
-pub unsafe extern "C" fn _reset() -> ! {
+pub unsafe extern "C" fn _reset(dtb: *const DTBHeader) -> ! {
     extern {
         static stack_top: u64; // defined in linker.ld
     }
@@ -49,6 +65,7 @@ pub unsafe extern "C" fn _reset() -> ! {
 
     if CORE_0 == MPIDR_EL1.get() & AFF0_CORE_MASK {
         SP.set(&stack_top as *const u64 as u64);
+        DTB = dtb;
         crate::boot2();
     }
 

@@ -16,7 +16,8 @@ pub fn init() {
         VBAR_EL1.set(&vector_table_el1 as *const u64 as u64);
     };
 
-    gic::init();
+    let mut gicd = gic::GICD::init(super::DTB);
+    gicd.enable();
 }
 
 
