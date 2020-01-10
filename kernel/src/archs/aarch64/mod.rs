@@ -1,11 +1,27 @@
-
-
-use log::info;
 use cortex_a::{asm, regs::*};
+use log::info;
 
 pub mod handler;
 pub mod thread;
+mod tree;
 // pub mod pager;
+
+use tree::DTBHeader;
+
+/// svc instruction, with syndrome
+//macro_rules! svc {
+//    ( $syndrome:expr ) => {
+//        match () {
+//            #[cfg(target_arch = "aarch64")]
+//            () => unsafe {
+//                asm!(concat!("svc ", stringify!($syndrome)) :::: "volatile");
+//            },
+//
+//            #[cfg(not(target_arch = "aarch64"))]
+//            () => unimplemented!(),
+//        }
+//    };
+//}
 
 /// Loop forever, saving power
 pub fn loop_forever() -> ! {
@@ -15,8 +31,9 @@ pub fn loop_forever() -> ! {
     }
 }
 
-
-pub fn drop_to_userspace() -> Result<u64, u64> { Ok(0) }
+pub fn drop_to_userspace() -> Result<u64, u64> {
+    Ok(0)
+}
 //     // we need a stack
 //     unsafe {
 //         asm!("      adr x0, foo
@@ -25,23 +42,6 @@ pub fn drop_to_userspace() -> Result<u64, u64> { Ok(0) }
 //               foo:  nop" ::: "x0");
 //     }
 // }
-
-#[derive(Debug)]
-#[repr(C)]
-pub struct DTBHeader {
-    magic: u32,
-    totalsize: u32,
-    off_dt_struct: u32,
-    off_dt_strings: u32,
-    off_mem_rsvmap: u32,
-    version: u32,
-    last_comp_version: u32,
-    boot_cpuid_phys: u32,
-    size_dt_strings: u32,
-    size_dt_struct: u32
-}
-
-static mut DTB: *mut DTBHeader = 0 as *mut DTBHeader;
 
 #[link_section = ".startup"]
 #[no_mangle]
@@ -55,17 +55,17 @@ static mut DTB: *mut DTBHeader = 0 as *mut DTBHeader;
 /// NOTE: must not use stack before SP set.
 ///
 /// TODO: CPACR to enable FP in EL1
-pub unsafe extern "C" fn _reset(dtb: *const DTBHeader) -> ! {
-    extern {
-        static stack_top: u64; // defined in linker.ld
+pub unsafe extern "C" fn _reset(pdtb: *const DTBHeader) -> ! {
+    extern "C" {
+        static STACK_TOP: u64; // defined in linker.ld
     }
 
     const CORE_0: u64 = 0;
     const AFF0_CORE_MASK: u64 = 0xFF;
 
     if CORE_0 == MPIDR_EL1.get() & AFF0_CORE_MASK {
-        SP.set(&stack_top as *const u64 as u64);
-        DTB = dtb;
+        SP.set(&STACK_TOP as *const u64 as u64);
+        tree::set(pdtb);
         crate::boot2();
     }
 

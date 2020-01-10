@@ -8,7 +8,6 @@
 #![feature(naked_functions)]
 #![feature(global_asm)]
 #![feature(asm)]
-
 #![warn(missing_docs)]
 
 mod archs;
@@ -36,11 +35,9 @@ mod user;
 mod debug;
 use debug::uart_logger;
 
-use log::{info};
-
+use log::info;
 
 use thread::ThreadID;
-
 
 /// Kernel API for spawning a new thread
 ///
@@ -54,7 +51,6 @@ fn spawn(f: fn() -> ()) -> Result<ThreadID, u64> {
     tcb.ready();
     Ok(tcb.thread_id())
 }
-
 
 /// Kernel function which terminates current thread
 ///
@@ -70,14 +66,12 @@ fn terminate() -> ! {
     loop {}
 }
 
-
 /// Boot operating system from first core
 ///
 /// TODO: what happens if any of this code panics?
 /// TODO: switch to dedicated EL1 stack for this core
 /// TODO: enable other cores
 pub fn boot2() -> ! {
-
     uart_logger::init().unwrap();
     info!("starting");
 
@@ -100,11 +94,9 @@ pub fn boot2() -> ! {
     terminate();
 }
 
-
 fn panic() -> ! {
     loop {}
 }
-
 
 // fn init() -> () {
 //

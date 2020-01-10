@@ -5,7 +5,7 @@ authors = ["Alister Lee <alister@dev.shortepic.com>"]
 edition = "2018"
 
 [dependencies]
-log = { version = "0.4.6", default-features = false }
+log = { version = "0.4.8", default-features = false }
 cortex-a = { path = "../../cortex-a" }
-register = "0.3.2"
-dtb = "0.1.2"
+register = "0.4.2"
+dtb = "0.2.0"

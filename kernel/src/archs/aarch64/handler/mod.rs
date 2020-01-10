@@ -1,11 +1,11 @@
 /// Exception handling and context switching between threads.
 ///
 /// Requires TPIDRRO_EL0 to contain pointer to TCB where register state can be saved.
+use super::tree;
 
 pub mod gic;
 
 use log::info;
-
 
 pub fn init() {
     extern "C" {
@@ -16,22 +16,20 @@ pub fn init() {
         VBAR_EL1.set(&vector_table_el1 as *const u64 as u64);
     };
 
-    let mut gicd = gic::GICD::init(super::DTB);
+    let dtb = tree::get_dtb();
+    let mut gicd = gic::GICD::init(dtb);
     gicd.enable();
 }
-
 
 #[no_mangle]
 fn el1_sp0_sync_handler() -> () {
     info!("SP0 Sync Exception!");
 }
 
-
 #[no_mangle]
 fn el1_sp1_sync_handler() -> () {
     info!("SP1 Sync Exception!");
 }
-
 
 #[no_mangle]
 fn el0_64_sync_handler() -> () {
@@ -39,9 +37,8 @@ fn el0_64_sync_handler() -> () {
     loop {}
 }
 
-
 enum IRQReason {
-    TimerSlice
+    TimerSlice,
 }
 
 #[no_mangle]
@@ -55,15 +52,12 @@ fn el0_64_irq_handler() -> () {
     }
 }
 
-
 pub fn supervisor(syndrome: u16) -> () {
-    use cortex_a::svc;
     match syndrome {
-        99 => svc!(99),
+        99 => unsafe { asm!("svc 99" :::: "volatile") },
         _ => {}
     }
 }
-
 
 global_asm!(
     r#"

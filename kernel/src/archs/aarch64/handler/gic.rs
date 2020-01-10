@@ -1,9 +1,8 @@
+use crate::arch::tree::DTBHeader;
 
+use dtb;
 use log::info;
 use register::{mmio::*, register_bitfields};
-use dtb;
-
-use super::super::DTBHeader;
 
 register_bitfields! {
     u32,
@@ -25,18 +24,18 @@ struct GICDRegisters {
 }
 
 pub struct GICD {
-    base: *mut GICDRegisters
+    base: *mut GICDRegisters,
 }
 
 unsafe impl Sync for GICD {}
 
 impl GICD {
-
     pub fn init(pdtb: *const DTBHeader) -> GICD {
         info!("initialising");
 
         unsafe {
-            let dtb_slice = core::slice::from_raw_parts(pdtb as *const u8, (*pdtb).totalsize.to_be() as usize);
+            let dtb_slice =
+                core::slice::from_raw_parts(pdtb as *const u8, (*pdtb).totalsize.to_be() as usize);
             let dtb = dtb::Reader::read(dtb_slice).unwrap();
             let root = dtb.struct_items();
             let (node, _) = root.path_struct_items("/intc").next().unwrap();
@@ -48,21 +47,21 @@ impl GICD {
             let address: usize = address_str.parse().unwrap();
             info!("address: {:?}", address);
             GICD {
-                base: address as *mut GICDRegisters
+                base: address as *mut GICDRegisters,
             }
         }
     }
 
     pub fn enable(self: &mut GICD) -> () {
         unsafe {
-            let regs = &mut(*self.base);
+            let regs = &mut (*self.base);
             let ctlr = regs.CTLR.get();
             info!("CTLR before: {:?}", ctlr);
 
             regs.CTLR.modify(
                 GICD_CTLR::ARE_NS::SET +
                 // GICD_CTLR::ARE_S::SET +
-                GICD_CTLR::EnableGrp0::SET
+                GICD_CTLR::EnableGrp0::SET,
             );
 
             // Clear GICR_WAKER.ProcessorSleep[1]

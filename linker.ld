@@ -30,7 +30,7 @@ SECTIONS
         . = . + 0x1000;
         stack = .;
         . = . + 0x1000;
-        stack_top = .;
+        STACK_TOP = .;
         . = . + 0x1000;
         data_gap = .;
         . = . + 0x1000; /* separates data and linker globals for debugging */
