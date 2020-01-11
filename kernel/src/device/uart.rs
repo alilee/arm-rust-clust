@@ -1,6 +1,6 @@
 //! A stream sink which writes to the serial port.
 
-use core::fmt::{Write, Result};
+use core::fmt::{write, Arguments, Result, Write};
 
 /// Represents a UART end-point.
 pub struct Uart {
@@ -10,7 +10,9 @@ pub struct Uart {
 impl Uart {
     /// Create a Uart structure for UART0.
     pub const fn uart0() -> Uart {
-        Uart { dr_addr: 0x09000000 as *mut u32 }
+        Uart {
+            dr_addr: 0x09000000 as *mut u32,
+        }
     }
 
     /// Write one byte to the Uart.
@@ -34,4 +36,8 @@ impl Write for Uart {
         }
         Ok(())
     }
+}
+
+pub fn _dbg_writer(args: Arguments) {
+    write(&mut UART0, args).unwrap();
 }

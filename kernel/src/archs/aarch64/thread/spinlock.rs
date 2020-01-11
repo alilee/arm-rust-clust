@@ -1,5 +1,6 @@
+use crate::arch::handler::{disable_irq, enable_irq};
 
-use core::sync::atomic::{Ordering, AtomicBool};
+use core::sync::atomic::{AtomicBool, Ordering};
 
 #[inline]
 fn acquire(spinlock: &mut AtomicBool) {
@@ -33,9 +34,13 @@ pub const fn new() -> AtomicBool {
 }
 
 pub fn exclusive<F, T>(b: &mut AtomicBool, closure: F) -> T
-    where F: FnOnce() -> T {
+where
+    F: FnOnce() -> T,
+{
+    disable_irq();
     acquire(b);
     let res = closure();
     release(b);
+    enable_irq();
     res
 }

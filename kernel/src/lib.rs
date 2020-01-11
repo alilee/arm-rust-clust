@@ -8,6 +8,7 @@
 #![feature(naked_functions)]
 #![feature(global_asm)]
 #![feature(asm)]
+#![feature(core_intrinsics)]
 #![warn(missing_docs)]
 
 mod archs;
@@ -32,6 +33,7 @@ mod handler;
 
 mod user;
 
+#[macro_use]
 mod debug;
 use debug::uart_logger;
 
@@ -88,10 +90,15 @@ pub fn boot2() -> ! {
     device::init();
 
     // start the first process
-    spawn(workload).unwrap();
+    info!("spawning workload {:?}", workload as *const ());
+    let t = spawn(workload).unwrap();
+
+    thread::resume(t);
 
     // clean up boot thread
-    terminate();
+    // info!("terminate boot2");
+    // thread::show_state();
+    // terminate();
 }
 
 fn panic() -> ! {
@@ -110,8 +117,10 @@ fn panic() -> ! {
 
 #[doc(hidden)]
 pub fn workload() -> () {
+    info!("starting workload");
+    info!("{}", arch::handler::current_el());
     loop {
-        // info!("working...");
+        info!("working...");
         let mut i = 1000000000u64;
         while i > 0 {
             i = i - 1;

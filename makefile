@@ -54,11 +54,14 @@ $(image): $(kernel).bin
 $(kernel): $(SOURCES)
 	cargo xbuild
 
-qemu-raw.dtb:
-		$(QEMU) -M $(BOARD),dumpdtb=qemu-raw.dtb -cpu $(CPU) -m 256M
+qemu.rawdtb:
+	$(QEMU) -M $(BOARD),dumpdtb=$@ -cpu $(CPU) -m 256M
 
-qemu.dtb: qemu-raw.dtb
-		dtc -I dtb -O dtb qemu-raw.dtb > qemu.dtb
+%.dtb: %.rawdtb
+	dtc -I dtb -O dtb $< > $@
+
+%.dts: %.dtb
+	dtc -I dtb -O dts $< -o $@
 
 qemu: $(kernel).bin qemu.dtb
 	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -s -S -dtb qemu.dtb -kernel $<

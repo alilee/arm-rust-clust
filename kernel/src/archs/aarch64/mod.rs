@@ -6,8 +6,6 @@ pub mod thread;
 mod tree;
 // pub mod pager;
 
-use tree::DTBHeader;
-
 /// svc instruction, with syndrome
 //macro_rules! svc {
 //    ( $syndrome:expr ) => {
@@ -55,7 +53,7 @@ pub fn drop_to_userspace() -> Result<u64, u64> {
 /// NOTE: must not use stack before SP set.
 ///
 /// TODO: CPACR to enable FP in EL1
-pub unsafe extern "C" fn _reset(pdtb: *const DTBHeader) -> ! {
+pub unsafe extern "C" fn _reset(pdtb: *const u8) -> ! {
     extern "C" {
         static STACK_TOP: u64; // defined in linker.ld
     }

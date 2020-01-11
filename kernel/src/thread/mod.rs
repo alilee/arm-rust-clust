@@ -5,17 +5,15 @@
 ///
 ///
 ///
-
 use log::info;
 
-use core::sync::atomic::{AtomicBool};
+use core::sync::atomic::AtomicBool;
 
 use super::arch;
+use crate::dbg;
 use arch::thread::spinlock;
 
-
 pub struct ThreadID(usize);
-
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum State {
@@ -23,7 +21,7 @@ pub enum State {
     Ready,
     Running,
     Blocked,
-    Terminated
+    Terminated,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -33,21 +31,24 @@ pub struct Thread {
     priority: i32,
 }
 
-const MAX_THREADS: usize = 10;
+const MAX_THREADS: usize = 4;
 
 static mut STATES: [State; MAX_THREADS] = [State::Unused; MAX_THREADS];
-static mut THREADS: [Thread; MAX_THREADS] =
-    [ Thread {
-        arch_tcb: arch::thread::ControlBlock::new(),
-        slot: 0,
-        priority: 0,
-      }; MAX_THREADS];
+static mut THREADS: [Thread; MAX_THREADS] = [Thread {
+    arch_tcb: arch::thread::ControlBlock::new(),
+    slot: 0,
+    priority: 0,
+}; MAX_THREADS];
 
 static mut THREADS_SL: AtomicBool = spinlock::new();
 
 impl Thread {
+    fn get_states() -> &'static [State] {
+        unsafe { &STATES[..] }
+    }
 
     pub fn spawn(f: fn() -> ()) -> Result<&'static mut Thread, u64> {
+        info!("current state of STATES: {:?}", Thread::get_states());
         unsafe {
             let maybe_slot: Option<usize> = spinlock::exclusive(&mut THREADS_SL, || {
                 find_state(&STATES[..], State::Unused).map(|slot| {
@@ -55,6 +56,8 @@ impl Thread {
                     slot
                 })
             });
+
+            info!("candidate slot: {:?}", maybe_slot);
 
             maybe_slot
                 .map(|slot| {
@@ -69,16 +72,12 @@ impl Thread {
         }
     }
 
-
     /// Find the TCB for the currently running user thread
     pub fn current() -> &'static mut Thread {
         let current = arch::thread::ControlBlock::current();
         let pt = current as *mut arch::thread::ControlBlock as *mut Thread;
-        unsafe {
-            &mut (*pt)
-        }
+        unsafe { &mut (*pt) }
     }
-
 
     /// Find the next thread which is ready to execute.
     ///
@@ -94,19 +93,17 @@ impl Thread {
                     STATES[slot] = State::Blocked;
                     slot
                 })
-            }).map(|slot| &mut THREADS[slot])
+            })
+            .map(|slot| &mut THREADS[slot])
         }
     }
-
 
     /// Return the TCB for the given ThreadID
     ///
     /// TODO: Error if ThreadID is unused
     pub fn find(tid: ThreadID) -> Option<&'static mut Thread> {
         let slot = tid.0;
-        unsafe {
-            Some(&mut THREADS[slot])
-        }
+        unsafe { Some(&mut THREADS[slot]) }
     }
 
     pub fn set_stack(self: &mut Thread, stack: &[u64]) -> () {
@@ -118,9 +115,7 @@ impl Thread {
     }
 
     pub fn state(self: &Thread) -> State {
-        unsafe {
-            STATES[self.slot]
-        }
+        unsafe { STATES[self.slot] }
     }
     pub fn terminate(self: &mut Thread) -> () {
         unsafe {
@@ -149,11 +144,9 @@ impl Thread {
     }
 }
 
-
 fn find_state(states: &[State], state: State) -> Option<usize> {
-    states.iter().position(|s| *s == state )
+    states.iter().position(|s| *s == state)
 }
-
 
 /// Initialise the thread system on boot.
 ///
@@ -163,7 +156,6 @@ fn find_state(states: &[State], state: State) -> Option<usize> {
 /// The thread would behave as if it called the supervisor exception.
 /// TODO: Instead, just find work as when thread yields.
 pub fn init() -> () {
-
     fn terminator() {
         crate::user::thread::terminate();
     }
@@ -173,15 +165,23 @@ pub fn init() -> () {
 
     let slot = 0;
     unsafe {
+        let arch_tcb = arch::thread::ControlBlock::spawn(terminator);
         STATES[slot] = State::Blocked;
         THREADS[slot] = Thread {
-            arch_tcb: arch::thread::ControlBlock::spawn(terminator),
+            arch_tcb,
             slot: 0,
             priority: 0,
         };
     }
 }
 
+/// Dump the state of the thread records for debugging.
+pub fn show_state() {
+    unsafe {
+        dbg!(STATES);
+        dbg!(THREADS);
+    }
+}
 
 /// Select next thread and context switch.
 pub fn yield_slice() -> () {
@@ -194,8 +194,17 @@ pub fn yield_slice() -> () {
                 next.running();
                 next
             })
-        }).map(|next| {
+        })
+        .map(|next| {
             next.arch_tcb.restore_cpu();
         });
+    }
+}
+
+pub fn resume(tid: ThreadID) -> ! {
+    let t = Thread::find(tid);
+    match t {
+        Some(t) => t.arch_tcb.resume(),
+        None => crate::panic(),
     }
 }

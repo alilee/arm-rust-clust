@@ -18,13 +18,20 @@ register_bitfields! {
     ]
 }
 
+#[allow(non_snake_case)]
 #[repr(C)]
 struct GICDRegisters {
-    CTLR: ReadWrite<u32, GICD_CTLR::Register>, // Distributor Control Register
+    GICD_CTLR: ReadWrite<u32, GICD_CTLR::Register>, // Distributor Control Register
 }
 
 pub struct GICD {
     base: *mut GICDRegisters,
+}
+
+impl GICD {
+    pub fn regs(self: &mut Self) -> &mut GICDRegisters {
+        unsafe { &mut (*self.base) }
+    }
 }
 
 unsafe impl Sync for GICD {}
@@ -34,9 +41,9 @@ impl GICD {
         info!("initialising");
 
         unsafe {
-            let dtb_slice =
-                core::slice::from_raw_parts(pdtb as *const u8, (*pdtb).totalsize.to_be() as usize);
-            let dtb = dtb::Reader::read(dtb_slice).unwrap();
+            // TODO: should be /interrupt-parent -> find(phandle)
+            // Address is node.path_struct_items("reg").value_u32_list()[2..3] as u64
+            let dtb = dtb::Reader::read_from_address(pdtb as usize).unwrap();
             let root = dtb.struct_items();
             let (node, _) = root.path_struct_items("/intc").next().unwrap();
             let node_name = node.name().unwrap();
@@ -44,7 +51,7 @@ impl GICD {
             let mut split = node_name.split('@');
             split.next();
             let address_str = split.next().unwrap();
-            let address: usize = address_str.parse().unwrap();
+            let address: usize = usize::from_str_radix(address_str, 16).unwrap();
             info!("address: {:?}", address);
             GICD {
                 base: address as *mut GICDRegisters,
@@ -53,28 +60,24 @@ impl GICD {
     }
 
     pub fn enable(self: &mut GICD) -> () {
-        unsafe {
-            let regs = &mut (*self.base);
-            let ctlr = regs.CTLR.get();
-            info!("CTLR before: {:?}", ctlr);
+        let regs = self.regs();
+        let ctlr = regs.GICD_CTLR.get();
+        info!("CTLR before: {:?}", ctlr);
 
-            regs.CTLR.modify(
-                GICD_CTLR::ARE_NS::SET +
-                // GICD_CTLR::ARE_S::SET +
-                GICD_CTLR::EnableGrp0::SET,
-            );
+        regs.GICD_CTLR.modify(
+            GICD_CTLR::ARE_NS::SET + GICD_CTLR::EnableGrp0::SET + GICD_CTLR::EnableGrp1NS::SET,
+        );
 
-            // Clear GICR_WAKER.ProcessorSleep[1]
-            // Poll GICR_WAKER.ChildrenAsleep[2] until it reads 0
-            // Set ICC_SRE_EL1.SRE[0]
-            // Set priority mask and binary point registers
-            // Set EOI mode
-            // Enable signalling of each interrupt group
+        // Clear GICR_WAKER.ProcessorSleep[1]
+        // Poll GICR_WAKER.ChildrenAsleep[2] until it reads 0
+        // Set ICC_SRE_EL1.SRE[0]
+        // Set priority mask and binary point registers
+        // Set EOI mode
+        // Enable signalling of each interrupt group
 
-            let ctlr = regs.CTLR.get();
-            info!("CTLR after: {:?}", ctlr);
+        let ctlr = regs.GICD_CTLR.get();
+        info!("CTLR after: {:?}", ctlr);
 
-            loop {}
-        }
+        //            loop {}
     }
 }

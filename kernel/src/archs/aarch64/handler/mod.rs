@@ -4,10 +4,13 @@
 use super::tree;
 
 pub mod gic;
+mod timer;
 
 use log::info;
 
-pub fn init() {
+use crate::dbg;
+
+pub fn init() -> Result<(), u64> {
     extern "C" {
         static vector_table_el1: u64;
     }
@@ -19,21 +22,84 @@ pub fn init() {
     let dtb = tree::get_dtb();
     let mut gicd = gic::GICD::init(dtb);
     gicd.enable();
+
+    timer::set(62500000)
 }
 
 #[no_mangle]
-fn el1_sp0_sync_handler() -> () {
+#[naked]
+fn el1_sp0_sync_handler() -> ! {
+    use cortex_a::regs::*;
+
     info!("SP0 Sync Exception!");
+    info!("SPSR_EL1: {:b}", SPSR_EL1.get());
+    info!("ESR_EL1: {:b}", ESR_EL1.get());
+    info!("ESR_EL1::EC {:b}", ESR_EL1.read(ESR_EL1::EC));
+    info!(
+        "{}",
+        match ESR_EL1.read(ESR_EL1::EC) {
+            0b010101 => "SVC64",
+            0b111100 => "BRK instruction execution in AArch64 state",
+            _ => "Unknown exception class",
+        }
+    );
+    info!("ESR_EL1::IL {:b}", ESR_EL1.read(ESR_EL1::IL));
+    info!("ESR_EL1::ISS {:b}", ESR_EL1.read(ESR_EL1::ISS));
+    info!("FAR_EL1: {:p}", FAR_EL1.get() as *const ());
+    info!("ELR_EL1: {:p}", ELR_EL1.get() as *const ());
+
+    info!("looping...");
+    loop {}
 }
 
 #[no_mangle]
-fn el1_sp1_sync_handler() -> () {
+#[naked]
+fn el1_sp1_sync_handler() -> ! {
+    use cortex_a::regs::*;
+
     info!("SP1 Sync Exception!");
+    info!("SPSR_EL1: {:b}", SPSR_EL1.get());
+    info!("ESR_EL1: {:b}", ESR_EL1.get());
+    info!("ESR_EL1::EC {:b}", ESR_EL1.read(ESR_EL1::EC));
+    info!(
+        "{}",
+        match ESR_EL1.read(ESR_EL1::EC) {
+            0b010101 => "SVC64",
+            0b111100 => "BRK instruction execution in AArch64 state",
+            _ => "Unknown exception class",
+        }
+    );
+    info!("ESR_EL1::IL {:b}", ESR_EL1.read(ESR_EL1::IL));
+    info!("ESR_EL1::ISS {:b}", ESR_EL1.read(ESR_EL1::ISS));
+    info!("FAR_EL1: {:p}", FAR_EL1.get() as *const ());
+    info!("ELR_EL1: {:p}", ELR_EL1.get() as *const ());
+
+    info!("looping...");
+    loop {}
 }
 
 #[no_mangle]
 fn el0_64_sync_handler() -> () {
+    use cortex_a::regs::*;
+
     info!("EL0 Synchronous Exception!");
+    info!("SPSR_EL1: {:b}", SPSR_EL1.get());
+    info!("ESR_EL1: {:b}", ESR_EL1.get());
+    info!("ESR_EL1::EC {:b}", ESR_EL1.read(ESR_EL1::EC));
+    info!(
+        "{}",
+        match ESR_EL1.read(ESR_EL1::EC) {
+            0b010101 => "SVC64",
+            0b111100 => "BRK instruction execution in AArch64 state",
+            _ => "Unknown exception class",
+        }
+    );
+    info!("ESR_EL1::IL {:b}", ESR_EL1.read(ESR_EL1::IL));
+    info!("ESR_EL1::ISS {:b}", ESR_EL1.read(ESR_EL1::ISS));
+    info!("FAR_EL1: {:p}", FAR_EL1.get() as *const ());
+    info!("ELR_EL1: {:p}", ELR_EL1.get() as *const ());
+
+    info!("looping...");
     loop {}
 }
 
@@ -59,10 +125,25 @@ pub fn supervisor(syndrome: u16) -> () {
     }
 }
 
+pub fn current_el() -> u32 {
+    use cortex_a::regs::{CurrentEL, RegisterReadOnly};
+    CurrentEL.get()
+}
+
+#[inline(always)]
+pub fn disable_irq() {
+    unsafe { asm!("msr DAIFSet, $0"::"i"(1<<1)) }
+}
+
+#[inline(always)]
+pub fn enable_irq() {
+    unsafe { asm!("msr DAIFClr, $0"::"i"(1<<1)) }
+}
+
 global_asm!(
     r#"
     .section        .handler
-    .global         vector_table_el1
+    .global         vector_table_el1, handler_return
 
     .balign         0x800
     vector_table_el1:

@@ -15,9 +15,9 @@ pub struct DTBHeader {
 
 static mut DTB: *const DTBHeader = 0 as *const DTBHeader;
 
-pub fn set(pdtb: *const DTBHeader) {
+pub fn set(pdtb: *const u8) {
     unsafe {
-        DTB = pdtb;
+        DTB = pdtb as *const DTBHeader;
     }
 }
 
