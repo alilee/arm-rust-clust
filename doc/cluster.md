@@ -22,9 +22,10 @@
 first thread is boot2 (brom, uboot)
 
 ## modules
-  vmm - memory manager
-  sched - task switcher
-  dev - io manager
+  pager - memory manager
+  thread - task switcher
+  handler - interrupts
+  device - io manager
 
   user1 - first new process
 

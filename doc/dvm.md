@@ -1,6 +1,6 @@
 
 # thesis
-1.  One shared view of virtual address space.
+1.  One shared view of virtual address space. Some pages are pinned to a node.
 
 2.  Local per-node view of page translation
     A VA will map to different physical pages on different nodes.
@@ -34,22 +34,23 @@
     Master = local is permanent copy, Copy = another node has permanent copy
 
     Read-only/Read-Write?
+    Pinned to node?
 
-VDEM = resident writeable unbacked (idle-> save:VCEM)
+VDEM = resident writeable unbacked (idle->save:VCEM)
 VCEM = resident writeable (write->unback:VDEM) backed
-VDSM = resident read-only (write->exclusive:VDEM) unbacked (idle->save:VCSM)
-VCSM = resident read-only (write->exclusive/unback:VDEM) backed
-VDSC = resident read-only (write->exclusive:VDEM) unbacked (idle->save:VCSC)
-VCSC = resident read-only (write->exclusive/unback:VDEM) backed
+VDSM = resident readable (write->exclusive:VDEM) unbacked (idle->save:VCSM)
+VCSM = resident readable (write->exclusive/unback:VDEM) backed
+VDSC = resident readable (write->exclusive:VDEM) unbacked (idle->save:VCSC)
+VCSC = resident readable (write->exclusive/unback:VDEM) backed
 ILEM = paged out exclusive (read->pagein:VCEM; write->exclusive/unback:VDEM) del-locked
 ILSM = paged out master (read->pagein:VCSM; write->exclusive/unback:VDEM) del-locked
 ILSC = paged out copy (read->pagein:VCSC; write-> exclusive/unback:VDEM)
   0b10
 IRSC = no record (read->fetch; write->fetch/exclusive:VDEM)
   encoding: 0
+IREM = remote pinned (read->migrate; write->migrate)
 // VDEC = invalid (E->M)
 // VCEC = invalid (E->M)
-// IREM = invalid (R->S, R->C)
 // IRSM = invalid (R->S, R->C)
 // ILEC = invalid (E->M)
 // IREC = invalid (R->S)
