@@ -2,14 +2,23 @@
 
 extern crate log;
 
-use log::{Record, Level, LevelFilter, Metadata, SetLoggerError};
 use crate::device::uart;
+use log::{Level, LevelFilter, Metadata, Record, SetLoggerError};
 
 use core::fmt::Write;
 
 impl log::Log for uart::Uart {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        metadata.level() <= Level::Info
+        use Level::*;
+        let levels = [("gic", Info), ("timer", Trace)];
+        let level = levels.into_iter().fold(Info, |base, (suffix, level)| {
+            if metadata.target().ends_with(suffix) {
+                *level
+            } else {
+                base
+            }
+        });
+        metadata.level() <= level
     }
 
     fn log(&self, record: &Record) {
@@ -22,7 +31,8 @@ impl log::Log for uart::Uart {
                 record.file().unwrap_or("<unknown>"),
                 record.line().unwrap_or(0),
                 record.args()
-            ).unwrap_or(());
+            )
+            .unwrap_or(());
         }
     }
 
@@ -31,6 +41,5 @@ impl log::Log for uart::Uart {
 
 /// Doco
 pub fn init() -> Result<(), SetLoggerError> {
-    log::set_logger(&uart::UART0)
-        .map(|()| log::set_max_level(LevelFilter::Info))
+    log::set_logger(&uart::UART0).map(|()| log::set_max_level(LevelFilter::Trace))
 }

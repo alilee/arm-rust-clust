@@ -118,12 +118,14 @@ fn panic() -> ! {
 #[doc(hidden)]
 pub fn workload() -> () {
     info!("starting workload");
-    info!("{}", arch::handler::current_el());
     loop {
         info!("working...");
         let mut i = 1000000000u64;
         while i > 0 {
             i = i - 1;
+            if i % 62500000 == 0 {
+                info!(".")
+            }
         }
     }
 }

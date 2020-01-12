@@ -20,7 +20,7 @@ pub fn init() -> Result<(), u64> {
     };
 
     let dtb = tree::get_dtb();
-    let mut gicd = gic::GICD::init(dtb);
+    let mut gicd = gic::GIC::init(dtb);
     gicd.enable();
 
     timer::set(62500000)
@@ -84,6 +84,7 @@ fn el0_64_sync_handler() -> () {
 
     info!("EL0 Synchronous Exception!");
     info!("SPSR_EL1: {:b}", SPSR_EL1.get());
+    info!("ESR_EL1: {:b}", ESR_EL1.get());
     info!("ESR_EL1: {:b}", ESR_EL1.get());
     info!("ESR_EL1::EC {:b}", ESR_EL1.read(ESR_EL1::EC));
     info!(
