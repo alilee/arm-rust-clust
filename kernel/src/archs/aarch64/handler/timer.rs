@@ -1,5 +1,8 @@
 use log::info;
 
+use super::gic;
+use gic::GIC;
+
 pub fn set(duration: i32) -> Result<(), u64> {
     use cortex_a::regs::*;
 
@@ -12,6 +15,10 @@ pub fn set(duration: i32) -> Result<(), u64> {
     CNTP_CTL_EL0.modify(
         CNTP_CTL_EL0::ISTATUS::CLEAR + CNTP_CTL_EL0::IMASK::CLEAR + CNTP_CTL_EL0::ENABLE::SET,
     );
+
+    // TODO: get the irq from dtb
+    let mut gic = gic::get_gic();
+    gic.enable_irq(30);
 
     Ok(())
 }

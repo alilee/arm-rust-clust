@@ -37,7 +37,7 @@ mod user;
 mod debug;
 use debug::uart_logger;
 
-use log::info;
+use log::{debug, info};
 
 use thread::ThreadID;
 
@@ -117,6 +117,9 @@ fn panic() -> ! {
 
 #[doc(hidden)]
 pub fn workload() -> () {
+    use crate::arch::handler::supervisor;
+    use cortex_a::regs::*;
+
     info!("starting workload");
     loop {
         info!("working...");
@@ -127,5 +130,6 @@ pub fn workload() -> () {
                 info!(".")
             }
         }
+        supervisor(99);
     }
 }

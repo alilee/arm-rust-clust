@@ -11,7 +11,7 @@ MKIMAGE = mkimage
 QEMU = qemu-system-aarch64
 GDB = gdb
 
-BOARD=virt,gic_version=3
+BOARD=virt,gic_version=2
 CPU=cortex-a53
 
 ASFLAGS = -mcpu=$(CPU) -g -a

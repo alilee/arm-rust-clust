@@ -6,9 +6,8 @@ use super::tree;
 pub mod gic;
 mod timer;
 
+use gic::GIC;
 use log::info;
-
-use crate::dbg;
 
 pub fn init() -> Result<(), u64> {
     extern "C" {
@@ -20,10 +19,22 @@ pub fn init() -> Result<(), u64> {
     };
 
     let dtb = tree::get_dtb();
-    let mut gicd = gic::GIC::init(dtb);
-    gicd.enable();
+    let mut gic = gic::init(dtb);
+    gic.reset();
 
-    timer::set(62500000)
+    timer::set(62500000 * 4);
+
+    unsafe {
+        unmask_interrupts();
+    }
+
+    Ok(())
+}
+
+pub unsafe fn unmask_interrupts() {
+    use cortex_a::regs::*;
+
+    DAIF.modify(DAIF::I::CLEAR);
 }
 
 #[no_mangle]
@@ -65,6 +76,7 @@ fn el1_sp1_sync_handler() -> ! {
         "{}",
         match ESR_EL1.read(ESR_EL1::EC) {
             0b010101 => "SVC64",
+            0b100101 => "Data Abort (from EL1)",
             0b111100 => "BRK instruction execution in AArch64 state",
             _ => "Unknown exception class",
         }
@@ -85,12 +97,12 @@ fn el0_64_sync_handler() -> () {
     info!("EL0 Synchronous Exception!");
     info!("SPSR_EL1: {:b}", SPSR_EL1.get());
     info!("ESR_EL1: {:b}", ESR_EL1.get());
-    info!("ESR_EL1: {:b}", ESR_EL1.get());
     info!("ESR_EL1::EC {:b}", ESR_EL1.read(ESR_EL1::EC));
     info!(
         "{}",
         match ESR_EL1.read(ESR_EL1::EC) {
             0b010101 => "SVC64",
+            0b011000 => "MSR, MRS, or System instruction execution",
             0b111100 => "BRK instruction execution in AArch64 state",
             _ => "Unknown exception class",
         }
@@ -99,6 +111,13 @@ fn el0_64_sync_handler() -> () {
     info!("ESR_EL1::ISS {:b}", ESR_EL1.read(ESR_EL1::ISS));
     info!("FAR_EL1: {:p}", FAR_EL1.get() as *const ());
     info!("ELR_EL1: {:p}", ELR_EL1.get() as *const ());
+
+    let mut gic = gic::get_gic();
+    gic.print_state();
+
+    info!("DAIF: 0b{:b}", DAIF.get());
+    info!("CNTP_TVAL_EL0: 0x{:x}", CNTP_TVAL_EL0.get());
+    info!("CNTP_CTL_EL0: 0b{:b}", CNTP_CTL_EL0.get());
 
     info!("looping...");
     loop {}
@@ -111,6 +130,7 @@ enum IRQReason {
 #[no_mangle]
 fn el0_64_irq_handler() -> () {
     info!("EL0 IRQ Exception!");
+    loop {}
     // what is reason
     let reason = IRQReason::TimerSlice;
     match reason {

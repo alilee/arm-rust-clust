@@ -1,3 +1,5 @@
+use core::ptr;
+
 #[derive(Debug)]
 #[repr(C)]
 pub struct DTBHeader {
@@ -13,7 +15,7 @@ pub struct DTBHeader {
     size_dt_struct: u32,
 }
 
-static mut DTB: *const DTBHeader = 0 as *const DTBHeader;
+static mut DTB: *const DTBHeader = ptr::null() as *const DTBHeader;
 
 pub fn set(pdtb: *const u8) {
     unsafe {

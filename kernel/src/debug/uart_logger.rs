@@ -10,7 +10,7 @@ use core::fmt::Write;
 impl log::Log for uart::Uart {
     fn enabled(&self, metadata: &Metadata) -> bool {
         use Level::*;
-        let levels = [("gic", Info), ("timer", Trace)];
+        let levels = [("gic", Trace), ("gicv2", Trace), ("timer", Trace)];
         let level = levels.into_iter().fold(Info, |base, (suffix, level)| {
             if metadata.target().ends_with(suffix) {
                 *level

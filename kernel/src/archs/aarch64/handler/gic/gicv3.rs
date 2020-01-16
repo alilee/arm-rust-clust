@@ -1,13 +1,9 @@
-use crate::arch::tree::DTBHeader;
-
-use crate::dbg;
-
 use dtb;
 use log::{debug, info, trace};
 use register::{mmio::*, register_bitfields, register_structs};
 
-use core::mem;
 use core::sync::atomic::{fence, Ordering};
+use core::{mem, ptr};
 
 register_bitfields! {
     u32,
@@ -35,33 +31,29 @@ register_structs! {
     #[allow(non_snake_case)]
     DistRegisters {
         (0x0000 => GICD_CTLR: ReadWrite<u32, GICD_CTLR::Register>),
-        (0x0004 => @END),
+        (0x0004 => _reserved),
+        (0x1000 => @END),
     }
 }
 
 register_structs! {
     #[allow(non_snake_case)]
-    LPIRedistRegisters {
-        (0x0000 => _reserved1),
-        (0x0014 => GICR_WAKER: ReadWrite<u32, GICR_WAKER::Register>),
-        (0x0018 => _reserved2),
-        (0x00C8 => @END),
-    }
-}
-
-register_structs! {
-    #[allow(non_snake_case)]
-    SGIRedistRegisters {
-        (0x0000 => _reserved),
-        (0x0084 => @END),
+    CPUInterfaceRegisters {
+        (0x0000 => GICC_CTLR: ReadWrite<u32>),
+        (0x0004 => _reserved),
+        (0x1004 => @END),
     }
 }
 
 pub struct GIC {
-    dist: *mut DistRegisters,
-    rd_base: *mut LPIRedistRegisters,
-    sgi_base: *mut SGIRedistRegisters,
+    dist_base: *mut DistRegisters,
+    cpu_intf_base: *mut CPUInterfaceRegisters,
 }
+
+static mut THE_GIC: GIC = GIC {
+    dist_base: 0 as *mut DistRegisters,
+    cpu_intf_base: 0 as *mut CPUInterfaceRegisters,
+};
 
 impl GIC {
     pub fn dist(self: &mut Self) -> &mut DistRegisters {
@@ -167,6 +159,11 @@ impl GIC {
             trace!("address: {:x?}", dist);
             let rd_base = 0x80a0000usize as *mut LPIRedistRegisters;
             let sgi_base = 0x80b0000usize as *mut SGIRedistRegisters;
+            THE_GIC = GIC {
+                dist,
+                rd_base,
+                sgi_base,
+            };
             GIC {
                 dist,
                 rd_base,
@@ -185,9 +182,7 @@ impl GIC {
             debug!("CTLR before: {:b}", ctlr);
 
             // GICv3_Software_Overview_Official_Release_B s4.1
-            dist.GICD_CTLR.modify(
-                GICD_CTLR::ARE_NS::SET + GICD_CTLR::EnableGrp0::SET + GICD_CTLR::EnableGrp1NS::SET,
-            );
+            dist.GICD_CTLR.modify(GICD_CTLR::EnableGrp1NS::SET);
         }
         {
             let rd_base = { self.rd_base() };
@@ -198,12 +193,22 @@ impl GIC {
                 fence(Ordering::SeqCst);
             }
 
-            // Set ICC_SRE_EL1.SRE[0]
-            ICC_SRE_EL1.modify(ICC_SRE_EL1::SRE::SET);
-            // Set priority mask and binary point registers
-            // Set EOI mode
-            // Enable signalling of each interrupt group
+            ICC_SRE_EL1.modify(ICC_SRE_EL1::SRE::SET); // system register enable
+            ICC_PMR_EL1.write(ICC_PMR_EL1::Priority.val(0xFF)); // all
+            ICC_BPR1_EL1.write(ICC_BPR1_EL1::BinaryPoint.val(4)); // gggg.pppp
+            ICC_CTLR_EL1.modify(ICC_CTLR_EL1::EOImode::CLEAR); // End of Intr = simple
+            ICC_IGRPEN1_EL1.write(ICC_IGRPEN1_EL1::Enable::SET); // Enable Group 1
         }
-        //            loop {}
+    }
+
+    pub fn enable_irq(self: &mut Self, irq: u32) {
+        use cortex_a::regs::*;
+
+        let sgi_base = { self.sgi_base() };
+        // IHI0069C_gic_architecture_specification s4.7.1
+        sgi_base.GICR_ISENABLER0.set(0xFFFF); // 1 << irq);
+
+        DAIF.modify(DAIF::I::CLEAR);
+        trace!("{:b}", DAIF.get());
     }
 }
