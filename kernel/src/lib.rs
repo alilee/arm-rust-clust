@@ -122,7 +122,6 @@ pub fn workload() -> () {
 
     info!("starting workload");
     loop {
-        info!("working...");
         let mut i = 1000000000u64;
         while i > 0 {
             i = i - 1;
@@ -130,6 +129,5 @@ pub fn workload() -> () {
                 info!(".")
             }
         }
-        supervisor(99);
     }
 }

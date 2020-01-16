@@ -9,6 +9,12 @@ mod timer;
 use gic::GIC;
 use log::info;
 
+fn tick(_irq: u32, duration: u64) {
+    use cortex_a::regs::*;
+    info!("tick!");
+    CNTP_TVAL_EL0.set(duration as u32);
+}
+
 pub fn init() -> Result<(), u64> {
     extern "C" {
         static vector_table_el1: u64;
@@ -21,8 +27,8 @@ pub fn init() -> Result<(), u64> {
     let dtb = tree::get_dtb();
     let mut gic = gic::init(dtb);
     gic.reset();
-
-    timer::set(62500000 * 4);
+    let timer_irq = timer::set(&mut gic, 62500000 * 4, tick).unwrap();
+    gic.enable_irq(timer_irq);
 
     unsafe {
         unmask_interrupts();
@@ -76,6 +82,7 @@ fn el1_sp1_sync_handler() -> ! {
         "{}",
         match ESR_EL1.read(ESR_EL1::EC) {
             0b010101 => "SVC64",
+            0b100001 => "Instruction Abort (from EL1)",
             0b100101 => "Data Abort (from EL1)",
             0b111100 => "BRK instruction execution in AArch64 state",
             _ => "Unknown exception class",
@@ -123,20 +130,13 @@ fn el0_64_sync_handler() -> () {
     loop {}
 }
 
-enum IRQReason {
-    TimerSlice,
-}
-
 #[no_mangle]
 fn el0_64_irq_handler() -> () {
     info!("EL0 IRQ Exception!");
-    loop {}
-    // what is reason
-    let reason = IRQReason::TimerSlice;
-    match reason {
-        IRQReason::TimerSlice => crate::thread::yield_slice(),
-        _ => crate::panic(),
-    }
+    let mut gic = gic::get_gic();
+    let int = gic.ack_int();
+    gic.dispatch(int); //d
+    gic.end_int(int);
 }
 
 pub fn supervisor(syndrome: u16) -> () {
@@ -230,7 +230,7 @@ global_asm!(
                     stp     x26, x27, [x2], #16
                     stp     x28, x29, [x2], #16
                     stp     x30, xzr, [x2], #16
-                    ldr     x30, handler_return
+                    adr     x30, handler_return
                     b       el0_64_sync_handler
 
     /* IRQ or vIRQ */
@@ -254,7 +254,7 @@ global_asm!(
                     stp     x26, x27, [x2], #16
                     stp     x28, x29, [x2], #16
                     stp     x30, xzr, [x2]
-                    ldr     x30, handler_return
+                    adr     x30, handler_return
                     b       el0_64_irq_handler
     /* FIQ or vFIQ */
     .balign         0x80
@@ -303,6 +303,5 @@ global_asm!(
                     ldp     x28, x29, [x30], #16
                     ldr     x30, [x30]
                     eret
-
     "#
 );

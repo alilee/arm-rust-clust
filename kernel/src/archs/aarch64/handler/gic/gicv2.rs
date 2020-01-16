@@ -89,7 +89,31 @@ register_bitfields! {
 
 register_bitfields! {
     u32,
+    GICC_IAR [
+        InterruptID OFFSET(0) NUMBITS(10) [],
+        CPUID OFFSET(10) NUMBITS(3) []
+    ]
+}
+
+register_bitfields! {
+    u32,
     GICC_HPPIR [
+        CPUID OFFSET(10) NUMBITS(3) [],
+        PENDINTID OFFSET(0) NUMBITS(10) []
+    ]
+}
+
+register_bitfields! {
+    u32,
+    GICC_AIAR [
+        InterruptID OFFSET(0) NUMBITS(10) [],
+        CPUID OFFSET(10) NUMBITS(3) []
+    ]
+}
+
+register_bitfields! {
+    u32,
+    GICC_AHPPIR [
         CPUID OFFSET(10) NUMBITS(3) [],
         PENDINTID OFFSET(0) NUMBITS(10) []
     ]
@@ -101,9 +125,15 @@ register_structs! {
         (0x0000 => GICC_CTLR: ReadWrite<u32, GICC_CTLR::Register>),
         (0x0004 => GICC_PMR: ReadWrite<u32, GICC_PMR::Register>),
         (0x0008 => GICC_BPR: ReadWrite<u32, GICC_BPR::Register>),
-        (0x000c => _reserved1),
+        (0x000c => GICC_IAR: ReadWrite<u32, GICC_IAR::Register>),
+        (0x0010 => GICC_EOIR: WriteOnly<u32>),
+        (0x0014 => _reserved1),
         (0x0018 => GICC_HPPIR: ReadWrite<u32, GICC_HPPIR::Register>),
         (0x001c => _reserved2),
+        (0x0020 => GICC_AIAR: ReadWrite<u32, GICC_AIAR::Register>),
+        (0x0024 => GICC_AEOIR: WriteOnly<u32>),
+        (0x0028 => GICC_AHPPIR: ReadWrite<u32, GICC_AHPPIR::Register>),
+        (0x002c => _reserved_to_end),
         (0x1004 => @END),
     }
 }
@@ -159,12 +189,15 @@ impl super::GIC for GICv2 {
             debug!("GICD_TYPER {:b}", dist.GICD_TYPER.get());
             dist.GICD_CTLR.modify(GICD_CTLR::EnableGrp1::SET);
             debug!("GICD_CTLR {:b}", dist.GICD_CTLR.get());
+            dist.GICD_IGROUPR0.set(0xFFFFFFFF);
         }
         {
             let cpu_intf = { self.cpu_intf() };
-            cpu_intf.GICC_CTLR.modify(GICC_CTLR::EnableGrp1::SET);
+            cpu_intf
+                .GICC_CTLR
+                .modify(GICC_CTLR::EnableGrp1::SET + GICC_CTLR::AckCtl::SET);
             cpu_intf.GICC_PMR.modify(GICC_PMR::Priority.val(0xFF));
-            cpu_intf.GICC_BPR.modify(GICC_BPR::BinaryPoint.val(4));
+            //            cpu_intf.GICC_BPR.modify(GICC_BPR::BinaryPoint.val(4));
             debug!("GICC_CTLR {:b}", cpu_intf.GICC_CTLR.get());
             debug!("GICC_PMR {:b}", cpu_intf.GICC_PMR.get());
             debug!("GICC_BPR {:b}", cpu_intf.GICC_BPR.get());
@@ -172,38 +205,29 @@ impl super::GIC for GICv2 {
     }
 
     fn enable_irq(self: &mut Self, irq: u32) {
-        use cortex_a::regs::*;
-
         assert!(irq < 32);
+        let dist = self.dist();
 
-        {
-            let dist = self.dist();
+        let igroupr0 = dist.GICD_IGROUPR0.get() | (1 << irq);
+        dist.GICD_IGROUPR0.set(igroupr0);
 
-            let igroupr0 = dist.GICD_IGROUPR0.get() | (1 << irq);
-            debug!("GICD_IGROUPR0 0b{:b}", igroupr0);
-            dist.GICD_IGROUPR0.set(igroupr0);
+        let ipriorityr7 = dist.GICD_IPRIORITYR7.get() | 0xFEFEFEFE;
+        dist.GICD_IPRIORITYR7.set(ipriorityr7);
 
-            let ienabler0 = dist.GICD_ISENABLER0.get() | (1 << irq);
-            debug!("GICD_ISENABLER0 0b{:b}", ienabler0);
-            dist.GICD_ISENABLER0.set(ienabler0);
-
-            dbg!(dist.GICD_ITARGETSR0.get());
-            dbg!(dist.GICD_IPRIORITYR2.get());
-            dbg!(dist.GICD_IPRIORITYR3.get());
-
-            //        dist.GICD_ITARGETSR0.set(0xFFFFFFFF);
-            //        dist.GICD_ITARGETSR1.set(0xFFFFFFFF);
-            //        dist.GICD_ITARGETSR2.set(0xFFFFFFFF);
-            //        dist.GICD_ITARGETSR3.set(0xFFFFFFFF);
-            //        dist.GICD_ITARGETSR4.set(0xFFFFFFFF);
-            //        dist.GICD_ITARGETSR5.set(0xFFFFFFFF);
-            //        dist.GICD_ITARGETSR6.set(0xFFFFFFFF);
-            //        dist.GICD_ITARGETSR7.set(0xFFFFFFFF);
-        }
-        {
-            let cpu_intf = self.cpu_intf();
-        }
+        let ienabler0 = dist.GICD_ISENABLER0.get() | (1 << irq);
+        dist.GICD_ISENABLER0.set(ienabler0);
     }
+
+    fn ack_int(self: &mut Self) -> u32 {
+        let cpu_intf = self.cpu_intf();
+        cpu_intf.GICC_IAR.get()
+    }
+
+    fn end_int(self: &mut Self, int: u32) {
+        let cpu_intf = self.cpu_intf();
+        cpu_intf.GICC_EOIR.set(int);
+    }
+
     fn print_state(self: &mut Self) {
         {
             let dist = self.dist();
@@ -225,6 +249,14 @@ impl super::GIC for GICv2 {
             info!(
                 "GICC_HPPIR.PENDINTID {:?}",
                 cpu_intf.GICC_HPPIR.read(GICC_HPPIR::PENDINTID)
+            );
+            info!(
+                "GICC_AHPPIR.CPUID {:?}",
+                cpu_intf.GICC_AHPPIR.read(GICC_AHPPIR::CPUID)
+            );
+            info!(
+                "GICC_AHPPIR.PENDINTID {:?}",
+                cpu_intf.GICC_AHPPIR.read(GICC_AHPPIR::PENDINTID)
             );
         }
     }
