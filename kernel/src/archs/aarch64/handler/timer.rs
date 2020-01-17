@@ -1,9 +1,9 @@
 use log::info;
 
 use super::gic;
-use gic::{IRQHandler, GIC};
+use gic::IRQHandler;
 
-pub fn set(gic: &mut dyn GIC, duration: i32, handler: IRQHandler) -> Result<u32, u64> {
+pub fn set(duration: i32, handler: IRQHandler) -> Result<u32, u64> {
     use cortex_a::regs::*;
 
     let freq = CNTFRQ_EL0.get();
@@ -12,11 +12,9 @@ pub fn set(gic: &mut dyn GIC, duration: i32, handler: IRQHandler) -> Result<u32,
     info!("  which is {} secs", duration as f32 / freq as f32);
 
     CNTP_TVAL_EL0.set(duration as u32);
-    CNTP_CTL_EL0.modify(
-        CNTP_CTL_EL0::ISTATUS::CLEAR + CNTP_CTL_EL0::IMASK::CLEAR + CNTP_CTL_EL0::ENABLE::SET,
-    );
+    CNTP_CTL_EL0.modify(CNTP_CTL_EL0::IMASK::CLEAR + CNTP_CTL_EL0::ENABLE::SET);
 
     let timer_irq = 30;
-    gic.request_irq(timer_irq, handler, duration as u64);
+    gic::request_irq(timer_irq, handler, duration as u64);
     Ok(timer_irq)
 }

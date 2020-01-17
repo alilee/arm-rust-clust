@@ -1,5 +1,4 @@
-use crate::dbg;
-use log::{debug, info, trace};
+use log::{debug, info};
 
 use super::super::tree::DTBHeader;
 use register::{mmio::*, register_bitfields, register_structs};

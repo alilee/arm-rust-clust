@@ -11,7 +11,7 @@ fn hang(int: u32, _data: u64) {
 
 static mut HANDLER_TABLE: [(IRQHandler, u64); 1024] = [(hang, 0); 1024];
 
-pub trait GIC {
+trait GIC {
     fn reset(self: &mut Self);
     fn request_irq(self: &mut Self, irq: u32, handler: IRQHandler, data: u64) {
         assert!(irq < 1024);
@@ -31,10 +31,45 @@ pub trait GIC {
     fn print_state(self: &mut Self);
 }
 
-pub fn init(pdtb: *const DTBHeader) -> impl GIC {
-    gicv2::init(pdtb)
+pub fn init(pdtb: *const DTBHeader) {
+    gicv2::init(pdtb);
 }
 
-pub fn get_gic() -> impl GIC {
+fn get_gic() -> impl GIC {
     gicv2::get_gic()
+}
+
+pub fn reset() {
+    let mut gic = get_gic();
+    gic.reset();
+}
+
+pub fn request_irq(irq: u32, handler: IRQHandler, data: u64) {
+    let mut gic = get_gic();
+    gic.request_irq(irq, handler, data);
+}
+
+pub fn enable_irq(irq: u32) {
+    let mut gic = get_gic();
+    gic.enable_irq(irq);
+}
+
+pub fn ack_int() -> u32 {
+    let mut gic = get_gic();
+    gic.ack_int()
+}
+
+pub fn dispatch(int: u32) {
+    let mut gic = get_gic();
+    gic.dispatch(int)
+}
+
+pub fn end_int(int: u32) {
+    let mut gic = get_gic();
+    gic.end_int(int);
+}
+
+pub fn print_state() {
+    let mut gic = get_gic();
+    gic.print_state();
 }

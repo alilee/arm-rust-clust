@@ -8,6 +8,7 @@ use log::{Level, LevelFilter, Metadata, Record, SetLoggerError};
 use core::fmt::Write;
 
 impl log::Log for uart::Uart {
+    #[allow(array_into_iter)]
     fn enabled(&self, metadata: &Metadata) -> bool {
         use Level::*;
         let levels = [("gic", Trace), ("gicv2", Trace), ("timer", Trace)];

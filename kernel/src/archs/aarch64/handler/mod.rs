@@ -6,7 +6,6 @@ use super::tree;
 pub mod gic;
 mod timer;
 
-use gic::GIC;
 use log::info;
 
 fn tick(_irq: u32, duration: u64) {
@@ -25,10 +24,10 @@ pub fn init() -> Result<(), u64> {
     };
 
     let dtb = tree::get_dtb();
-    let mut gic = gic::init(dtb);
-    gic.reset();
-    let timer_irq = timer::set(&mut gic, 62500000 * 4, tick).unwrap();
-    gic.enable_irq(timer_irq);
+    gic::init(dtb);
+    gic::reset();
+    let timer_irq = timer::set(62500000 * 4, tick).unwrap();
+    gic::enable_irq(timer_irq);
 
     unsafe {
         unmask_interrupts();
@@ -119,8 +118,7 @@ fn el0_64_sync_handler() -> () {
     info!("FAR_EL1: {:p}", FAR_EL1.get() as *const ());
     info!("ELR_EL1: {:p}", ELR_EL1.get() as *const ());
 
-    let mut gic = gic::get_gic();
-    gic.print_state();
+    gic::print_state();
 
     info!("DAIF: 0b{:b}", DAIF.get());
     info!("CNTP_TVAL_EL0: 0x{:x}", CNTP_TVAL_EL0.get());
@@ -133,10 +131,9 @@ fn el0_64_sync_handler() -> () {
 #[no_mangle]
 fn el0_64_irq_handler() -> () {
     info!("EL0 IRQ Exception!");
-    let mut gic = gic::get_gic();
-    let int = gic.ack_int();
-    gic.dispatch(int); //d
-    gic.end_int(int);
+    let int = gic::ack_int();
+    gic::dispatch(int);
+    gic::end_int(int);
 }
 
 pub fn supervisor(syndrome: u16) -> () {
