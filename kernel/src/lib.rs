@@ -9,6 +9,7 @@
 #![feature(global_asm)]
 #![feature(asm)]
 #![feature(core_intrinsics)]
+#![feature(ptr_offset_from)]
 #![warn(missing_docs)]
 
 mod archs;
@@ -27,9 +28,9 @@ use archs::arm as arch;
 pub use arch::_reset;
 
 mod device;
-mod thread;
-// mod pager;
 mod handler;
+mod pager;
+mod thread;
 
 mod user;
 
@@ -37,7 +38,7 @@ mod user;
 mod debug;
 use debug::uart_logger;
 
-use log::{debug, info};
+use log::info;
 
 use thread::ThreadID;
 
@@ -84,15 +85,13 @@ pub fn boot2() -> ! {
     handler::init();
 
     // enable virtual memory
-    // pager::init();
+    pager::init();
 
     // establish io
     device::init();
 
-    // start the first process
-    info!("spawning workload {:?}", workload as *const ());
-    let t = spawn(workload).unwrap();
-
+    spawn(workload_a).unwrap();
+    let t = spawn(workload_b).unwrap();
     thread::resume(t);
 
     // clean up boot thread
@@ -116,17 +115,28 @@ fn panic() -> ! {
 // }
 
 #[doc(hidden)]
-pub fn workload() -> () {
-    use crate::arch::handler::supervisor;
-    use cortex_a::regs::*;
+pub fn workload_a() -> () {
+    info!("starting workload A");
+    loop {
+        let mut i = 1000000000u64;
+        while i > 0 {
+            i = i - 1;
+            if i % 42500000 == 0 {
+                info!("A")
+            }
+        }
+    }
+}
 
-    info!("starting workload");
+#[doc(hidden)]
+pub fn workload_b() -> () {
+    info!("starting workload B");
     loop {
         let mut i = 1000000000u64;
         while i > 0 {
             i = i - 1;
             if i % 62500000 == 0 {
-                info!(".")
+                info!("B")
             }
         }
     }

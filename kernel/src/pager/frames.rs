@@ -1,156 +1,85 @@
-//! Manages a page frame table, which holds which pages of physical memory
+//! Manages a page frame table, which tracks which pages of physical memory
 //! have been allocated for virtual address ranges
 //!
 //! Pages which have not been allocated, are free memory. Since pages may
 //! be freed, there may be fragmentation, if multiple pages are required.
 
-use core::mem::transmute;
+use super::{PhysAddr, PhysAddrRange};
+
+const MAX_MEMORY: usize = (258 * 1024 * 1024);
+const PAGE_SIZE: usize = 4096;
+const MAX_FRAMES: usize = MAX_MEMORY / PAGE_SIZE;
 
 /// The frame table is the highest currently used page and a stack of the free pages
 /// residing under that mark
 pub struct FrameTable {
-    free_page_nos: [u32; 1024 - 2],
-    highwater_mark: u32, // page number of highest page previously allocated.
-    n_free: usize, // offset to empty position above the top of stack (ie. 0 when empty)
+    page_map: [u64; MAX_FRAMES / 64], // bitmap of pages where 0 is available and 1 is allocated
+    highwater_mark: usize,            // index of lowest page map entry that has any
+    range: PhysAddrRange,             // range of physical memory we can allocate
 }
 
 #[allow(dead_code)]
 impl FrameTable {
+    pub const fn init() -> Self {
+        FrameTable {
+            page_map: [0; MAX_FRAMES / 64],
+            highwater_mark: 0,
+            range: PhysAddrRange {
+                base: PhysAddr(0),
+                length: 0,
+            },
+        }
+    }
+
     /// Initialise the page frame data structure into a specific physical address
-    pub fn init<'a>(a: *mut usize) -> &'a mut FrameTable {
-        unsafe {
-            let p_table = transmute::<*mut usize, &mut FrameTable>(a);
-            p_table.n_free = 0;
-            p_table.highwater_mark = 0;
-            p_table
+    pub fn reset(self: &mut Self, range: PhysAddrRange) -> Result<(), u64> {
+        for x in self.page_map.iter_mut() {
+            *x = 0
         }
+        self.range = range;
+        self.highwater_mark = 0;
+        Ok(())
     }
 
-    fn raise_hwm(&mut self, page: u32, n_pages: u8) -> Option<u32> {
-        // TODO: find sequences not above current high-water mark
-        // TODO: out of range if (page + n_pages) > physical memory.
-        if (page + n_pages as u32) < self.highwater_mark {
-            None
-        } else {
-            // TODO: out of free list space if stack_top + (page - self.highwater_mark) > stack_entries.length()
-            for p in 0..(page - self.highwater_mark) {
-                self.free_page_nos[self.n_free + p as usize] = self.highwater_mark + p;
+    pub fn reserve(self: &mut Self, range: PhysAddrRange) -> Result<(), u64> {
+        if range.outside(&self.range) {
+            return Err(0);
+        }
+        let first_page = PhysAddrRange::bounded_by(self.range.base, range.base).pages(PAGE_SIZE);
+        let mut i = first_page / 64;
+        let mut offset = first_page % 64;
+        let mut n_pages_reqd = range.pages(PAGE_SIZE);
+        while n_pages_reqd > 0 {
+            let chunk = self.page_map[i];
+            let pages = core::cmp::min(n_pages_reqd, 64 - offset);
+            let reserve = ((1 << (pages + 1) - 1) << offset) as u64;
+            if chunk & reserve > 0 {
+                return Err(0);
             }
-            self.n_free += page as usize - self.highwater_mark as usize;
-            self.highwater_mark = page + n_pages as u32;
-            Some(page)
+            self.page_map[i] = chunk | reserve;
+            n_pages_reqd -= pages;
+            i += 1;
         }
+        Ok(())
     }
 
-    /// Set aside a number of pages starting at a specific offset
-    pub fn allocate_fixed(&mut self, page: u32, n_pages: u8) -> Option<u32> {
-        match self.raise_hwm(page, n_pages) {
-            None => None,
-            Some(_) => Some(page),
-        }
+    pub fn find_and_reserve(self: &mut Self, len: usize) -> Result<PhysAddr, u64> {
+        todo!()
     }
 
-    /// Set aside a number of contiguous pages
-    pub fn allocate(&mut self, n_pages: u8) -> Option<u32> {
-        // TODO: grab contiguous pages from freelist (just top?)
-        if n_pages == 1 && self.n_free > 0 {
-            self.n_free -= 1;
-            Some(self.free_page_nos[self.n_free])
-        } else {
-            let hwm = self.highwater_mark;
-            self.allocate_fixed(hwm, n_pages)
-        }
+    pub fn free(self: &mut Self, base: PhysAddr, len: usize) -> Result<(), u64> {
+        todo!()
     }
 
-    /// Return the contiguous sequence of pages starting at specific table address
-    pub fn free(&mut self, page: u32, n_pages: u8) {
-        for p in 0..n_pages {
-            self.free_page_nos[self.n_free + p as usize] = page + p as u32;
-        }
-        self.n_free += n_pages as usize;
-    }
-
-    /// Opportunity to use idle time for housekeeping and reconciliation
-    pub fn idle(&self) {
-        // TODO: detect duplicates and panic
-        // TODO: detect page_nos above high-water mark and panic
-        // TODO: sort the free page_nos and retract high-water mark
-    }
+    pub fn print_state(self: &mut Self) {}
 }
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
-    use core::mem::transmute;
 
     #[test]
     fn test_init() {
-        // let mut table = FrameTable {
-        //     highwater_mark: 1,
-        //     n_free: 1,
-        //     free_page_nos: [99; 1024 - 2],
-        // };
-        // assert_eq!(table.highwater_mark, 1);
-        // assert_eq!(table.n_free, 1);
-        // unsafe {
-        //     let buffer = transmute::<&mut FrameTable, *mut usize>(&mut table);
-        //     FrameTable::init(buffer);
-        // }
-        // assert_eq!(table.highwater_mark, 0);
-        // assert_eq!(table.n_free, 0);
-        assert_eq!(1, 2);
+        assert!(true);
     }
-
-    #[test]
-    fn test_allocation() {
-        // let mut buffer = Table { highwater_mark: 1, n_free: 1, free_page_nos: [99; 1024-2] };
-        // let table = unsafe {
-        //                     let p_buffer = transmute::<&mut Table, *mut u32>(&mut buffer);
-        //                     Table::init(p_buffer)
-        //                 };
-        // assert_eq!(table.allocate(1), Some(0));
-        // assert_eq!(table.highwater_mark, 1);
-        // assert_eq!(table.n_free, 0);
-        // assert_eq!(table.allocate_fixed(40, 3), Some(40));
-        // assert_eq!(table.highwater_mark, 43);
-        // assert_eq!(table.n_free, 39);
-        // assert_eq!(table.free_page_nos[0], 1);
-        // assert_eq!(table.free_page_nos[38], 39);
-        // assert_eq!(table.allocate(1), Some(39));
-        // assert_eq!(table.highwater_mark, 43);
-        // assert_eq!(table.n_free, 38);
-        // assert_eq!(table.free_page_nos[0], 1);
-        // assert_eq!(table.free_page_nos[37], 38);
-        // assert_eq!(table.allocate(3), Some(43));
-        // assert_eq!(table.highwater_mark, 46);
-        // assert_eq!(table.n_free, 38);
-        // assert_eq!(table.free_page_nos[0], 1);
-        // assert_eq!(table.free_page_nos[37], 38);
-        // assert_eq!(table.allocate_fixed(64, 1), Some(64));
-        // assert_eq!(table.allocate_fixed(65, 1), Some(65));
-        // assert_eq!(table.allocate_fixed(66, 1), Some(66));
-        // assert_eq!(table.highwater_mark, 67);
-        // assert_eq!(table.n_free, 56);
-        // assert_eq!(table.free_page_nos[0], 1);
-        // assert_eq!(table.free_page_nos[55], 63);
-    }
-
-    #[test]
-    fn test_free() {
-        // let mut buffer = Table { highwater_mark: 1, n_free: 1, free_page_nos: [99; 1024-2] };
-        // let table = unsafe {
-        //                     let p_buffer = transmute::<&mut Table, *mut u32>(&mut buffer);
-        //                     Table::init(p_buffer)
-        //                 };
-        // assert_eq!(table.allocate(1), Some(0));
-        // assert_eq!(table.allocate_fixed(40, 3), Some(40));
-        // table.free(0, 1);
-        // assert_eq!(table.highwater_mark, 43);
-        // assert_eq!(table.n_free, 40);
-        // assert_eq!(table.free_page_nos[0], 1);
-        // assert_eq!(table.free_page_nos[39], 0);
-    }
-
-
 }
