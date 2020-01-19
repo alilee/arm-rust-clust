@@ -33,23 +33,9 @@ register_structs! {
         (0x0104 => _reserved3),
         (0x0200 => GICD_ISPENDR0: ReadWrite<u32>),
         (0x0104 => _reserved4),
-        (0x0400 => GICD_IPRIORITYR0: ReadWrite<u32>),
-        (0x0404 => GICD_IPRIORITYR1: ReadWrite<u32>),
-        (0x0408 => GICD_IPRIORITYR2: ReadWrite<u32>),
-        (0x040c => GICD_IPRIORITYR3: ReadWrite<u32>),
-        (0x0410 => GICD_IPRIORITYR4: ReadWrite<u32>),
-        (0x0414 => GICD_IPRIORITYR5: ReadWrite<u32>),
-        (0x0418 => GICD_IPRIORITYR6: ReadWrite<u32>),
-        (0x041c => GICD_IPRIORITYR7: ReadWrite<u32>),
+        (0x0400 => GICD_IPRIORITYR: [ReadWrite<u8>;32]),
         (0x0420 => _reserved5),
-        (0x0800 => GICD_ITARGETSR0: ReadWrite<u32>),
-        (0x0804 => GICD_ITARGETSR1: ReadWrite<u32>),
-        (0x0808 => GICD_ITARGETSR2: ReadWrite<u32>),
-        (0x080c => GICD_ITARGETSR3: ReadWrite<u32>),
-        (0x0810 => GICD_ITARGETSR4: ReadWrite<u32>),
-        (0x0804 => GICD_ITARGETSR5: ReadWrite<u32>),
-        (0x0818 => GICD_ITARGETSR6: ReadWrite<u32>),
-        (0x081c => GICD_ITARGETSR7: ReadWrite<u32>),
+        (0x0800 => GICD_ITARGETSR: [ReadWrite<u8>;32]),
         (0x0820 => _reserved_to_end),
         (0x1000 => @END),
     }
@@ -210,8 +196,8 @@ impl super::GIC for GICv2 {
         let igroupr0 = dist.GICD_IGROUPR0.get() | (1 << irq);
         dist.GICD_IGROUPR0.set(igroupr0);
 
-        let ipriorityr7 = dist.GICD_IPRIORITYR7.get() | 0xFEFEFEFE;
-        dist.GICD_IPRIORITYR7.set(ipriorityr7);
+        let ipriority = dist.GICD_IPRIORITYR[irq as usize].get() | 0xFE;
+        dist.GICD_IPRIORITYR[irq as usize].set(ipriority);
 
         let ienabler0 = dist.GICD_ISENABLER0.get() | (1 << irq);
         dist.GICD_ISENABLER0.set(ienabler0);
@@ -234,8 +220,8 @@ impl super::GIC for GICv2 {
             info!("GICD_ISPENDR0    0b{:32b}", dist.GICD_ISPENDR0.get());
             info!("GICD_IGROUPR0    0b{:32b}", dist.GICD_IGROUPR0.get());
             info!("GICD_ISENABLER0  0b{:32b}", dist.GICD_ISENABLER0.get());
-            info!("GICD_ITARGETSR7  0x{:x}", dist.GICD_ITARGETSR7.get());
-            info!("GICD_IPRIORITYR7 0x{:x}", dist.GICD_IPRIORITYR7.get());
+            info!("GICD_ITARGETS30  0x{:x}", dist.GICD_ITARGETSR[30].get());
+            info!("GICD_IPRIORITY30 0x{:x}", dist.GICD_IPRIORITYR[30].get());
         }
         {
             let cpu_intf = self.cpu_intf();

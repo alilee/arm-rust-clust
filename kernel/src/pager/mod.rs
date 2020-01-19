@@ -1,21 +1,77 @@
 mod frames;
-mod page;
-mod range;
-
-use frames::FrameTable;
+mod trans;
 
 use log::info;
 
-const PAGESIZE_BYTES: u32 = 4096;
-const PAGESIZE_WORDS: u32 = PAGESIZE_BYTES / 4;
+use core::cmp::{max, min};
+use core::fmt::{Debug, Error, Formatter};
+use core::ops::Range;
+
+const PAGESIZE_BYTES: usize = 4096;
+const PAGESIZE_WORDS: usize = PAGESIZE_BYTES / 4;
 
 /// A cluster-wide virtual address
 #[derive(Debug)]
 pub struct VirtAddr(u64);
 
+impl VirtAddr {
+    pub fn id_map(pa: PhysAddr) -> VirtAddr {
+        VirtAddr(pa.0)
+    }
+    pub fn forward(self: &Self, step: u64) -> VirtAddr {
+        VirtAddr(*self.0 + step)
+    }
+    pub fn addr(self: &Self) -> u64 {
+        self.0
+    }
+}
+
+/// A range in the VA space
+#[derive(Copy, Clone)]
+pub struct VirtAddrRange {
+    pub base: VirtAddr,
+    pub length: usize,
+}
+
+impl VirtAddrRange {
+    pub fn id_map(range: PhysAddrRange) -> VirtAddrRange {
+        VirtAddrRange {
+            base: VirtAddr::id_map(range.base),
+            length: range.length,
+        }
+    }
+
+    pub fn step(self: &Self) -> VirtAddrRange {
+        VirtAddrRange {
+            base: self.base.forward(self.length as u64),
+            length: self.length,
+        }
+    }
+
+    pub fn top(self: &Self) -> VirtAddr {
+        VirtAddr(self.base.0 + self.length as u64)
+    }
+
+    pub fn intersection(self: &Self, other: &Self) -> VirtAddrRange {
+        assert!(self.top().0 >= other.base.0 || self.base.0 <= other.top().0);
+        let base = max(self.base.0, other.base.0);
+        let top = min(self.top().0, other.top().0);
+        VirtAddrRange {
+            base: VirtAddr(base),
+            length: (top - base) as usize,
+        }
+    }
+}
+
 /// A local physical address
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Copy, Clone, PartialOrd, PartialEq)]
 pub struct PhysAddr(u64);
+
+impl Debug for PhysAddr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(f, "PhysAddr(0x{:08x})", self.0)
+    }
+}
 
 impl PhysAddr {
     pub fn from_linker_symbol(sym: &u8) -> Self {
@@ -30,6 +86,10 @@ impl PhysAddr {
     pub fn as_ptr(self: &Self) -> *const u8 {
         self.0 as *const u8
     }
+
+    pub fn offset(self: &Self, distance: u64) -> Self {
+        Self(self.0 + distance)
+    }
 }
 
 impl From<*const u8> for PhysAddr {
@@ -39,7 +99,7 @@ impl From<*const u8> for PhysAddr {
 }
 
 /// A range in the VA space
-#[derive(Debug, Copy, Clone)]
+#[derive(Copy, Clone)]
 pub struct PhysAddrRange {
     base: PhysAddr,
     length: usize,
@@ -68,38 +128,19 @@ impl PhysAddrRange {
     }
 }
 
-static mut FRAME_TABLE: FrameTable = FrameTable::init();
+impl Debug for PhysAddrRange {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(
+            f,
+            "PhysAddr(0x{:08x}..0x{:08x}, 0x{:08x})",
+            self.base.0,
+            self.top().0,
+            self.length
+        )
+    }
+}
 
 /// Initialise the system by initialising the submodules and mapping initial memory contents.
 pub fn init() {
     info!("initialising");
-
-    unsafe {
-        let ram = PhysAddrRange {
-            base: PhysAddr(0x40000000),
-            length: 0x10000000,
-        };
-        FRAME_TABLE.reset(ram);
-    }
-
-    // pages::PageTree::init(unsafe { page_table });
-
-    extern "C" {
-        static image_base: u8;
-        static image_end: u8;
-    }
-
-    unsafe {
-        let base = PhysAddr::from_linker_symbol(&image_base);
-        let top = PhysAddr::from_linker_symbol(&image_end);
-
-        let range = PhysAddrRange::bounded_by(base, top);
-        info!("image: {:?}", range);
-
-        // identity-map ram for kernel
-        FRAME_TABLE.reserve(range).unwrap();
-        // kernel_page_table.id_map(range).unwrap();
-    }
-
-    // switch on VM
 }

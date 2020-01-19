@@ -11,8 +11,8 @@ impl log::Log for uart::Uart {
     #[allow(array_into_iter)]
     fn enabled(&self, metadata: &Metadata) -> bool {
         use Level::*;
-        let levels = [("gic", Trace), ("gicv2", Trace), ("timer", Trace)];
-        let level = levels.into_iter().fold(Info, |base, (suffix, level)| {
+        let levels = [("gic", Info), ("gicv2", Trace), ("timer", Info)];
+        let level = levels.into_iter().fold(Trace, |base, (suffix, level)| {
             if metadata.target().ends_with(suffix) {
                 *level
             } else {

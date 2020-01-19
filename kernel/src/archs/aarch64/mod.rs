@@ -2,9 +2,9 @@ use cortex_a::{asm, regs::*};
 use log::info;
 
 pub mod handler;
+pub mod pager;
 pub mod thread;
 mod tree;
-// pub mod pager;
 
 /// svc instruction, with syndrome
 //macro_rules! svc {
