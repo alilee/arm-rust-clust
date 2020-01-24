@@ -208,3 +208,12 @@ pub fn resume(tid: ThreadID) -> ! {
         None => crate::panic(),
     }
 }
+
+/// Declare a thread ready
+pub fn ready(tid: ThreadID) -> () {
+    let t = Thread::find(tid);
+    match t {
+        Some(t) => t.ready(),
+        None => crate::panic(),
+    }
+}

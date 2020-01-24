@@ -1,4 +1,4 @@
-use super::{PhysAddrRange, VirtAddr, VirtAddrRange};
+use super::PhysAddrRange;
 use crate::arch;
 
 pub fn init() {

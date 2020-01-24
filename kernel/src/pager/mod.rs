@@ -1,28 +1,40 @@
 mod frames;
 mod trans;
 
+use crate::arch;
 use log::info;
 
 use core::cmp::{max, min};
 use core::fmt::{Debug, Error, Formatter};
-use core::ops::Range;
 
 const PAGESIZE_BYTES: usize = 4096;
 const PAGESIZE_WORDS: usize = PAGESIZE_BYTES / 4;
 
 /// A cluster-wide virtual address
-#[derive(Debug)]
+#[derive(Copy, Clone)]
 pub struct VirtAddr(u64);
 
 impl VirtAddr {
+    pub fn init(i: u64) -> VirtAddr {
+        VirtAddr(i)
+    }
     pub fn id_map(pa: PhysAddr) -> VirtAddr {
         VirtAddr(pa.0)
     }
-    pub fn forward(self: &Self, step: u64) -> VirtAddr {
-        VirtAddr(*self.0 + step)
+    pub fn forward(&self, step: u64) -> VirtAddr {
+        VirtAddr(self.0 + step)
     }
-    pub fn addr(self: &Self) -> u64 {
+    pub fn addr(&self) -> u64 {
         self.0
+    }
+    pub fn offset(&self, offset: u64) -> VirtAddr {
+        VirtAddr(self.0 + offset)
+    }
+}
+
+impl Debug for VirtAddr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(f, "VirtAddr(0x{:08x})", self.0)
     }
 }
 
@@ -60,6 +72,18 @@ impl VirtAddrRange {
             base: VirtAddr(base),
             length: (top - base) as usize,
         }
+    }
+}
+
+impl Debug for VirtAddrRange {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(
+            f,
+            "VirtAddr(0x{:08x}..0x{:08x}, 0x{:08x})",
+            self.base.0,
+            self.top().0,
+            self.length
+        )
     }
 }
 
@@ -106,7 +130,7 @@ pub struct PhysAddrRange {
 }
 
 impl PhysAddrRange {
-    fn bounded_by(base: PhysAddr, top: PhysAddr) -> Self {
+    pub fn bounded_by(base: PhysAddr, top: PhysAddr) -> Self {
         assert!(base.0 < top.0);
         unsafe {
             let length = top.as_ptr().offset_from(base.as_ptr()) as usize;
@@ -143,4 +167,5 @@ impl Debug for PhysAddrRange {
 /// Initialise the system by initialising the submodules and mapping initial memory contents.
 pub fn init() {
     info!("initialising");
+    arch::pager::init();
 }

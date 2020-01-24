@@ -90,9 +90,10 @@ pub fn boot2() -> ! {
     // establish io
     device::init();
 
-    spawn(workload_a).unwrap();
-    let t = spawn(workload_b).unwrap();
-    thread::resume(t);
+    let ta = spawn(workload_a).unwrap();
+    thread::ready(ta);
+    let tb = spawn(workload_b).unwrap();
+    thread::resume(tb);
 
     // clean up boot thread
     // info!("terminate boot2");

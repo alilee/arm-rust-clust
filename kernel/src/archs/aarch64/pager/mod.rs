@@ -1,7 +1,11 @@
-use crate::pager::{PhysAddrRange, VirtAddr, VirtAddrRange};
-use core::ops::Range;
-use core::slice::Iter;
+use crate::dbg;
+use crate::pager::{PhysAddr, PhysAddrRange, VirtAddr, VirtAddrRange};
+use log::{debug, trace};
+
 use register::{mmio::*, register_bitfields, LocalRegisterCopy};
+use spin::{Mutex, MutexGuard};
+
+use core::mem;
 
 register_bitfields! {
     u64,
@@ -45,44 +49,52 @@ register_bitfields! {
     ]
 }
 
+const TABLE_ENTRIES: usize = 512;
+
+#[derive(Copy, Clone)]
 #[repr(align(4096))]
-struct PageTable([u64; 512]);
+struct PageTable([u64; TABLE_ENTRIES]);
 
-struct PageTableBranch([ReadWrite<u64, TableDescriptor::Register>; 512]);
+struct PageTableBranch([ReadWrite<u64, TableDescriptor::Register>; TABLE_ENTRIES]);
 
-struct PageTableLeaf([ReadWrite<u64, PageDescriptor::Register>; 512]);
+struct PageTableLeaf([ReadWrite<u64, PageDescriptor::Register>; TABLE_ENTRIES]);
 
 impl PageTable {
     const fn init() -> Self {
-        PageTable([0u64; 512])
+        PageTable([0u64; TABLE_ENTRIES])
+    }
+
+    fn to_branch(self: &mut Self) -> &mut PageTableBranch {
+        unsafe { mem::transmute::<&mut Self, &mut PageTableBranch>(self) }
+    }
+
+    fn to_leaf(self: &mut Self) -> &mut PageTableLeaf {
+        unsafe { mem::transmute::<&mut Self, &mut PageTableLeaf>(self) }
     }
 }
 
-const MAX_TABLES: usize = 4;
-static mut PAGE_TABLES: [PageTable; MAX_TABLES] = [PageTable([0; 512]); MAX_TABLES];
-static mut NEXT_TABLE: usize = 1usize;
-
 fn table_entry(
-    pt: &PageTable,
+    pt: *const PageTable,
     attributes: u64,
 ) -> LocalRegisterCopy<u64, TableDescriptor::Register> {
     use TableDescriptor::*;
 
-    let nlta = pt as *const PageTable as u64;
-    let pte = LocalRegisterCopy::<u64, VirtualAddress::Register>::new(attributes);
-    pte.modify(Valid::SET + Type::SET + NextLevelTableAddress.val(nlta >> 12));
-    pte
+    let nlta = pt as u64;
+    let field = Valid::SET + Type::SET + NextLevelTableAddress.val(nlta >> 12);
+    let value = (attributes & !field.mask) | field.value;
+    LocalRegisterCopy::<u64, Register>::new(value)
 }
 
 fn page_entry(base: VirtAddr, attributes: u64) -> LocalRegisterCopy<u64, PageDescriptor::Register> {
     use PageDescriptor::*;
 
     let offset = base.addr();
-    let pte = LocalRegisterCopy::<u64, PageDescriptor::Register>::new(attributes);
-    pte.modify(Valid::SET + Type::SET + OutputAddress.val(offset >> 12));
-    pte
+    let field = Valid::SET + Type::SET + OutputAddress.val(offset >> 12);
+    let value = (attributes & !field.mask) | field.value;
+    LocalRegisterCopy::<u64, Register>::new(value)
 }
 
+#[derive(Debug)]
 struct PageTableEntries {
     bounds: VirtAddrRange,
     index: usize,
@@ -91,11 +103,15 @@ struct PageTableEntries {
 }
 
 impl Iterator for PageTableEntries {
-    type Item = (usize, VirtAddrRange);
+    type Item = (usize, VirtAddrRange, VirtAddr);
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index < self.top {
-            let result = (self.index, self.span.intersection(&self.bounds));
+            let result = (
+                self.index,
+                self.span.intersection(&self.bounds),
+                self.span.base,
+            );
             self.index += 1;
             self.span = self.span.step();
             Some(result)
@@ -109,73 +125,178 @@ fn extract_bitslice(base: u64, offset: usize, width: usize) -> u64 {
     (base >> (offset as u64)) & ((1 << (width as u64)) - 1)
 }
 
-fn table_entries(range: VirtAddrRange, level: usize) -> PageTableEntries {
+/// Generate an iterator for the page table at specific level covering from a specific base
+/// where it overlaps with target range
+fn table_entries(range: VirtAddrRange, level: usize, base: VirtAddr) -> PageTableEntries {
     const LEVEL_OFFSETS: [usize; 4] = [39, 30, 21, 12];
     const LEVEL_WIDTH: usize = 9;
     let level_offset = LEVEL_OFFSETS[level];
 
+    trace!("table_entries:");
+    trace!("range: {:?}", range);
+    trace!("level: {}", level);
+    trace!("base: {:?}", base);
+    trace!("level_offset: {}", level_offset);
+
     let first = extract_bitslice(range.base.addr(), level_offset, LEVEL_WIDTH);
+    trace!("first: {}", first);
     let entries = if range.length > 0 {
-        extract_bitslice(range.length as u64, level_offset, LEVEL_WIDTH)
+        extract_bitslice(range.length as u64, level_offset, LEVEL_WIDTH) + 1
     } else {
         0
     };
+    trace!("entries: {}", entries);
 
     let span = VirtAddrRange {
-        base: VirtAddr(first << (level_offset as u64)),
+        base: base.offset(first << (level_offset as u64)),
         length: 1usize << level_offset,
     };
+    trace!("span {:?}", span);
 
-    PageTableEntries {
+    let result = PageTableEntries {
         bounds: range.clone(),
         index: first as usize,
         top: (first + entries) as usize,
         span,
+    };
+    trace!("result: {:?}", result);
+    result
+}
+
+pub fn init() {
+    let ram = unsafe {
+        extern "C" {
+            static image_base: u8;
+            static image_end: u8;
+        }
+        PhysAddrRange::bounded_by(
+            PhysAddr::from_linker_symbol(&image_base),
+            PhysAddr::from_linker_symbol(&image_end),
+        )
+    };
+    id_map(ram);
+    print_state();
+}
+
+const MAX_TABLES: usize = 4;
+
+#[repr(align(4096))]
+#[repr(C)]
+struct Allocator {
+    tables: [PageTable; MAX_TABLES],
+    next: usize,
+    top: usize,
+}
+
+struct Locked<A> {
+    inner: Mutex<A>,
+}
+
+impl<A> Locked<A> {
+    pub const fn new(inner: A) -> Self {
+        Locked {
+            inner: Mutex::new(inner),
+        }
+    }
+
+    pub fn lock(&self) -> MutexGuard<A> {
+        self.inner.lock()
     }
 }
 
-pub fn init() {}
+impl Locked<Allocator> {
+    pub fn get_page(&self) -> Result<*mut PageTable, u64> {
+        let mut lock = self.lock();
 
-fn id_map_level(level: usize, pt: &mut PageTable, range: VirtAddrRange, attributes: u64) {
-    for (index, range) in table_entries(range, level) {
+        if lock.next >= lock.top {
+            return Err(0);
+        }
+        let next = lock.next;
+        let result = &mut lock.tables[next] as *mut PageTable;
+        lock.next += 1;
+        Ok(result)
+    }
+}
+
+static STATIC_ALLOCATOR: Locked<Allocator> = Locked::<Allocator>::new(Allocator {
+    tables: [PageTable([0; TABLE_ENTRIES]); MAX_TABLES],
+    next: 0,
+    top: MAX_TABLES,
+});
+
+fn id_map_level(
+    level: usize,
+    pt: *mut PageTable,
+    table_base: VirtAddr,
+    range: VirtAddrRange,
+    attributes: u64,
+    allocator: &Locked<Allocator>,
+) -> Result<(), u64> {
+    debug!("id_map_level");
+    trace!("{}, 0x{:08x}, {:?}", level, pt as u64, range);
+    for (index, range, table_base) in table_entries(range, level, table_base) {
         if level != 3 {
-            let table = pt as &mut PageTableBranch;
-            let pte = table[index].extract();
+            let table = pt as *mut PageTableBranch;
+            let pte = unsafe { &(*table).0[index] };
             let pt = if !pte.is_set(TableDescriptor::Valid) {
                 // need a new table
-                unsafe {
-                    let pt = unsafe { &mut PAGE_TABLES[NEXT_TABLE] };
-                    NEXT_TABLE += 1;
-                    let table_entry = table_entry(pt, attributes);
-                    pt[index].set(table_entry.get());
-                    pt
-                }
+                let pt = allocator.get_page()?;
+                let table_entry = table_entry(pt, attributes);
+                unsafe { (*table).0[index].set(table_entry.get()) };
+                pt
             } else {
                 let pt = pte.read(TableDescriptor::NextLevelTableAddress) << 12u64;
-                pt as &mut PageTable
+                unsafe { mem::transmute::<u64, &mut PageTable>(pt) }
             };
-            id_map_level(level + 1, pt, range, attributes)
+            id_map_level(level + 1, pt, table_base, range, attributes, allocator)?;
         } else {
-            let table = pt as &mut PageTableLeaf;
-            let pte = table[index].extract();
+            let table = pt as *mut PageTableLeaf;
+            let pte = unsafe { &(*table).0[index] };
             assert!(!pte.is_set(PageDescriptor::Valid));
             let page_entry = page_entry(range.base, attributes);
-            pt[index].set(page_entry.get());
+            unsafe { (*pt).0[index] = page_entry.get() };
         }
     }
+    Ok(())
 }
 
 pub fn id_map(range: PhysAddrRange) {
     let range = VirtAddrRange::id_map(range);
-    let l0 = unsafe { &mut PAGE_TABLES[0] };
-
-    id_map_level(0, l0, range, 0u64);
+    let pt = STATIC_ALLOCATOR.get_page().unwrap();
+    id_map_level(0, pt, VirtAddr::init(0), range, 0u64, &STATIC_ALLOCATOR);
 }
 
 pub fn enable_paging() {
-    use cortex_a::regs::*;
+    // use cortex_a::regs::*;
 
     // TCR_EL1.modify(TCR_EL1::IPS.val(0b101) + TCR_EL1::TG1.val(0b10) + TCR_EL1::)
 }
 
-pub fn print_state() {}
+pub fn print_state() {
+    fn print_level(level: usize, pt: *const PageTable, table_base: VirtAddr) {
+        const LEVEL_OFFSETS: [usize; 4] = [39, 30, 21, 12];
+        const LEVEL_WIDTH: usize = 9;
+        const LEVEL_BUFFERS: [&str; 4] = ["", " ", "  ", "   "];
+        debug!(
+            "{:?}: level {} ============================= (0x{:8x})",
+            table_base, level, pt as u64
+        );
+        for (i, pte) in unsafe { (*pt).0.iter().enumerate() } {
+            if *pte != 0 {
+                if level != 3 {
+                    debug!("{}{:03}: 0b{:064b}", LEVEL_BUFFERS[level], i, pte);
+                    let pte = LocalRegisterCopy::<u64, TableDescriptor::Register>::new(*pte);
+                    let pt = pte.read(TableDescriptor::NextLevelTableAddress) << 12u64;
+                    let pt = unsafe { mem::transmute::<u64, *const PageTable>(pt) };
+                    let table_base = table_base.offset((i << LEVEL_OFFSETS[level]) as u64);
+                    print_level(level + 1, pt, table_base);
+                } else {
+                    debug!("{}{:03}: 0b{:064b}", LEVEL_BUFFERS[level], i, pte);
+                }
+            }
+        }
+    }
+
+    let tables = &STATIC_ALLOCATOR.lock().tables;
+    print_level(0, &tables[0], VirtAddr::init(0));
+}

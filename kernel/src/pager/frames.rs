@@ -50,7 +50,7 @@ impl FrameMap {
 
         let first_page = PhysAddrRange::bounded_by(self.range.base, range.base).pages(PAGE_SIZE);
         let mut i = first_page / 64;
-        let mut offset = first_page % 64;
+        let offset = first_page % 64;
         let mut n_pages_reqd = range.pages(PAGE_SIZE);
         while n_pages_reqd > 0 {
             let chunk = self.page_map[i];
@@ -88,7 +88,6 @@ impl FrameMap {
             if *chunk > 0 {
                 if gap_i > 0 {
                     debug!("... 0x{:08x}", addr - last_printed_addr);
-                    last_printed_addr = addr;
                     gap_i = 0;
                 }
                 //                let mut chunk_image = ['.' as u8; 64];
