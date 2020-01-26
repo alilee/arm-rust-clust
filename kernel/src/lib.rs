@@ -25,7 +25,6 @@ use archs::aarch64 as arch;
 use archs::arm as arch;
 
 // Causes this to be exported for linking.
-// pub use arch::handler::handler;
 pub use arch::_reset;
 
 mod device;

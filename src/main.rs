@@ -1,6 +1,5 @@
 //! A proxy to build the library with particular link settings.
 
-#![no_main]
 #![no_std]
 
 extern crate kernel;
@@ -12,4 +11,9 @@ pub mod lang_items {
     fn panic(_info: &core::panic::PanicInfo) -> ! {
         loop {}
     }
+}
+
+#[test]
+pub fn test_one() {
+    assert!(false);
 }

@@ -157,14 +157,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_init() {
-        let ft = FrameMap::init();
-        let ram = PhysAddrRange(0x40_000_000, 0x10_000_000);
-        ft.reset(ram);
-        ft.print_state();
-        let range = PhysAddrRange(0x40_000_000, 0x1);
-        ft.reserve(range);
-        ft.print_state();
+    fn test_test() {
         assert!(true);
     }
 }

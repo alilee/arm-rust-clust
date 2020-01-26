@@ -31,7 +31,7 @@ image := $(tftpboot_rpi)/uImage
 
 sdimage_dir := deploy/sdimage
 
-.PHONY: all clean qemu update-rust tftpd sdimage gdb test doc
+.PHONY: all clean qemu update-rust tftpd sdimage gdb test doc run
 
 all: $(kernel).bin
 
@@ -41,8 +41,9 @@ clean:
 	@rm $(image)
 	@rm *.dtb
 
+test: export RUSTFLAGS = --cfg test
 test:
-	@cargo test --target=$(HOST)
+	cd kernel && cargo test --color=always --target=$(HOST)
 
 doc:
 	@cargo doc --open
@@ -51,7 +52,7 @@ $(image): $(kernel).bin
 	$(MKIMAGE) -A arm -C gzip -O linux -T kernel -d $< -a 0x10000 -e 0x10000 $@
 	@chmod 644 $@
 
-$(kernel): $(SOURCES)
+$(kernel): test $(SOURCES)
 	cargo xbuild
 
 qemu.rawdtb:
@@ -65,6 +66,9 @@ qemu.rawdtb:
 
 qemu: $(kernel).bin qemu.dtb
 	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -s -S -dtb qemu.dtb -kernel $<
+
+run: $(kernel).bin qemu.dtb
+	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -dtb qemu.dtb -kernel $<
 
 gdb: $(kernel)
 	$(GDB) -iex 'file $(kernel)' -iex 'target remote localhost:1234'

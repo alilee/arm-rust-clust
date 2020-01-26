@@ -34,13 +34,14 @@ pub const fn user_va_bits() -> u32 {
 pub struct TranslationAttributes(PageTableEntry);
 
 pub struct Translation {
+    /// Bottom of table's VA range
     va_range_base: VirtAddr,
-    // Bottom of table's VA range
+    /// Which table level address translation starts from (normally 0)
     first_level: u8,
-    // Which table level address translation starts from (normally 0)
+    /// PA of first-level page table
     page_table: PhysAddr,
-    // PA of first-level page table
-    ram_offset: VirtOffset, // Offset for pointer to table base
+    /// Offset for pointer to table base
+    ram_offset: VirtOffset,
 }
 
 impl Translation {
@@ -293,16 +294,16 @@ impl Iterator for PageTableEntries {
     }
 }
 
-fn extract_va_index(base: usize, offset: u8, width: usize) -> usize {
-    (base >> (offset as usize)) & ((1 << width) - 1)
+fn extract_va_index(base: usize, offset: usize, width: usize) -> usize {
+    (base >> offset) & ((1 << width) - 1)
 }
 
 /// Generate an iterator for the page table at specific level covering from a specific base
 /// where it overlaps with target range
-fn table_entries(range: VirtAddrRange, level: u8, base: VirtAddr) -> PageTableEntries {
-    const LEVEL_OFFSETS: [u8; 4] = [39, 30, 21, 12];
+fn table_entries(range: VirtAddrRange, level: usize, base: VirtAddr) -> PageTableEntries {
+    const LEVEL_OFFSETS: [usize; 4] = [39, 30, 21, 12];
     const LEVEL_WIDTH: usize = 9;
-    let level_offset = LEVEL_OFFSETS[level as usize];
+    let level_offset = LEVEL_OFFSETS[level];
 
     trace!("table_entries:");
     trace!("range: {:?}", range);
@@ -320,7 +321,7 @@ fn table_entries(range: VirtAddrRange, level: u8, base: VirtAddr) -> PageTableEn
     trace!("entries: {}", entries);
 
     let span = VirtAddrRange {
-        base: base.offset(first << (level_offset as u64)),
+        base: base.offset(first << level_offset),
         length: 1usize << level_offset,
     };
     trace!("span {:?}", span);
@@ -383,9 +384,17 @@ impl Debug for Translation {
     }
 }
 
-//assert_eq!(TABLE_ENTRIES, 512);
-//assert_eq!(LOWER_VA_BITS, 48);
-//assert_eq!(UPPER_VA_BITS, 43);
-//assert_eq!(UPPER_VA_BASE, 0xFFFF_FE00_0000_0000);
-//assert_eq!(UPPER_TABLE_LEVEL, 1);
-//assert_eq!(LOWER_TABLE_LEVEL, 0);
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_consts() {
+        assert_eq!(TABLE_ENTRIES, 512);
+        assert_eq!(LOWER_VA_BITS, 48);
+        assert_eq!(UPPER_VA_BITS, 43);
+        assert_eq!(UPPER_VA_BASE, 0xFFFF_FE00_0000_0000);
+        assert_eq!(UPPER_TABLE_LEVEL, 1);
+        assert_eq!(LOWER_TABLE_LEVEL, 0);
+    }
+}
