@@ -59,7 +59,7 @@ fn spawn(f: fn() -> ()) -> Result<ThreadID, u64> {
 /// Kernel function which terminates current thread
 ///
 /// This would be called by a kernel thread to terminate itself.
-fn terminate() -> ! {
+fn _terminate() -> ! {
     use thread::Thread;
     //
     let t = Thread::current();

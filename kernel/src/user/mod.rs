@@ -7,7 +7,7 @@
 pub mod thread {
     use crate::arch::handler::supervisor;
 
-    pub fn spawn(_f: fn() -> ()) -> Result<u64, u64> {
+    pub fn _spawn(_f: fn() -> ()) -> Result<u64, u64> {
         supervisor(1);
         Ok(1)
     }
@@ -18,7 +18,6 @@ pub mod thread {
         unreachable!()
     }
 }
-
 
 // 1: ssel el0
 //    mrs elr_el1, x30
