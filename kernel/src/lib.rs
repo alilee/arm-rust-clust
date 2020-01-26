@@ -10,6 +10,7 @@
 #![feature(asm)]
 #![feature(core_intrinsics)]
 #![feature(ptr_offset_from)]
+#![feature(never_type)]
 #![warn(missing_docs)]
 
 mod archs;
@@ -31,6 +32,7 @@ mod device;
 mod handler;
 mod pager;
 mod thread;
+mod util;
 
 mod user;
 
@@ -78,14 +80,17 @@ pub fn boot2() -> ! {
     uart_logger::init().unwrap();
     info!("starting");
 
-    // enable multi-processing
+    // enable virtual memory and map image to kernel virtual range and jump to boot3
+    pager::init(boot3)
+}
+
+/// Kernel in upper VA
+pub fn boot3() -> ! {
+    // enable multi-processing and kernel thread
     thread::init();
 
     // take exceptions
     handler::init();
-
-    // enable virtual memory
-    pager::init();
 
     // establish io
     device::init();
@@ -93,27 +98,15 @@ pub fn boot2() -> ! {
     let ta = spawn(workload_a).unwrap();
     thread::ready(ta);
     let tb = spawn(workload_b).unwrap();
-    thread::resume(tb);
+    thread::ready(tb);
 
     // clean up boot thread
-    // info!("terminate boot2");
-    // thread::show_state();
-    // terminate();
+    thread::terminate()
 }
 
 fn panic() -> ! {
     loop {}
 }
-
-// fn init() -> () {
-//
-//     // test: should be able to get back to EL1 at this point
-//     // arch::svc(10);
-//
-//     thread::spawn(workload);
-//
-//     arch::loop_forever()
-// }
 
 #[doc(hidden)]
 pub fn workload_a() -> () {

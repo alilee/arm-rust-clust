@@ -117,6 +117,7 @@ impl Thread {
     pub fn state(self: &Thread) -> State {
         unsafe { STATES[self.slot] }
     }
+
     pub fn terminate(self: &mut Thread) -> () {
         unsafe {
             STATES[self.slot] = State::Terminated;
@@ -216,4 +217,21 @@ pub fn ready(tid: ThreadID) -> () {
         Some(t) => t.ready(),
         None => crate::panic(),
     }
+}
+
+pub fn terminate() -> ! {
+    let current = Thread::current();
+    unsafe {
+        spinlock::exclusive(&mut THREADS_SL, || {
+            current.terminate();
+            Thread::next_ready().map(|next| {
+                next.running();
+                next
+            })
+        })
+        .map(|next| {
+            next.arch_tcb.restore_cpu();
+        });
+    }
+    arch::handler::resume()
 }

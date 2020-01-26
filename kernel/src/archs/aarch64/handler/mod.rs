@@ -143,10 +143,17 @@ pub fn supervisor(syndrome: u16) -> () {
     }
 }
 
-pub fn current_el() -> u32 {
-    use cortex_a::regs::{CurrentEL, RegisterReadOnly};
-    CurrentEL.get()
+pub fn resume() -> ! {
+    unsafe {
+        asm!("b handler_return");
+    }
+    unreachable!()
 }
+
+//pub fn current_el() -> u32 {
+//    use cortex_a::regs::*;
+//    CurrentEL.get()
+//}
 
 #[inline(always)]
 pub fn disable_irq() {

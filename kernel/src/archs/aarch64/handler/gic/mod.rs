@@ -12,7 +12,7 @@ fn hang(int: u32, _data: u64) {
 static mut HANDLER_TABLE: [(IRQHandler, u64); 1024] = [(hang, 0); 1024];
 
 // FIXME: Remove trait
-trait GIC {
+pub trait GIC {
     fn reset(self: &mut Self);
     fn request_irq(self: &mut Self, irq: u32, handler: IRQHandler, data: u64) {
         assert!(irq < 1024);
