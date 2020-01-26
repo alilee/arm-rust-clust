@@ -43,7 +43,7 @@ clean:
 
 test: export RUSTFLAGS = --cfg test
 test:
-	cd kernel && cargo test --color=always --target=$(HOST)
+	cd kernel && cargo test --all-targets --color=always --target=$(HOST)
 
 doc:
 	@cargo doc --open
