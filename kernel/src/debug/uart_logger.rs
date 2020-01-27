@@ -12,10 +12,12 @@ impl log::Log for uart::Uart {
     fn enabled(&self, metadata: &Metadata) -> bool {
         use Level::*;
         let levels = [
+            ("frames", Info),
             ("gic", Info),
             ("gicv2", Trace),
             ("timer", Info),
             ("aarch64::pager", Debug),
+            ("pager::table", Debug),
         ];
         let level = levels.into_iter().fold(Trace, |base, (suffix, level)| {
             if metadata.target().ends_with(suffix) {
@@ -29,13 +31,14 @@ impl log::Log for uart::Uart {
 
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
+            const BUFFER: [&str; 6] = ["", "!", "*", " ", "  ", "  "];
             writeln!(
                 uart::UART0,
-                "[{}] {}: [{}:{}] {}",
+                "{:5} [{:>50} {:3}] {}{}",
                 record.level(),
                 record.target(),
-                record.file().unwrap_or("<unknown>"),
                 record.line().unwrap_or(0),
+                BUFFER[record.level() as usize],
                 record.args()
             )
             .unwrap_or(());

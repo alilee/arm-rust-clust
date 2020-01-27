@@ -33,7 +33,7 @@ sdimage_dir := deploy/sdimage
 
 .PHONY: all clean qemu update-rust tftpd sdimage gdb test doc run
 
-all: $(kernel).bin
+all: test $(kernel).bin
 
 clean:
 	@cargo clean
@@ -52,7 +52,7 @@ $(image): $(kernel).bin
 	$(MKIMAGE) -A arm -C gzip -O linux -T kernel -d $< -a 0x10000 -e 0x10000 $@
 	@chmod 644 $@
 
-$(kernel): test $(SOURCES)
+$(kernel): $(SOURCES)
 	cargo xbuild
 
 qemu.rawdtb:
@@ -65,10 +65,10 @@ qemu.rawdtb:
 	dtc -I dtb -O dts $< -o $@
 
 qemu: $(kernel).bin qemu.dtb
-	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -s -S -dtb qemu.dtb -kernel $<
+	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -semihosting -s -S -dtb qemu.dtb -kernel $<
 
 run: $(kernel).bin qemu.dtb
-	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -dtb qemu.dtb -kernel $<
+	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -semihosting -dtb qemu.dtb -kernel $<
 
 gdb: $(kernel)
 	$(GDB) -iex 'file $(kernel)' -iex 'target remote localhost:1234'

@@ -1,11 +1,11 @@
 mod table;
 mod virt_addr;
 
-use crate::pager::{PhysAddr, PhysAddrRange, PAGESIZE_BYTES};
+use crate::pager::{frames, PhysAddr, PhysAddrRange, PAGESIZE_BYTES};
 use table::Translation;
-use virt_addr::VirtOffset;
+use virt_addr::{VirtAddr, VirtOffset};
 
-use log::debug;
+use log::{debug, info};
 
 use core::mem;
 
@@ -15,10 +15,12 @@ fn get_ram() -> Result<PhysAddrRange, u64> {
 }
 
 pub fn init() -> Result<PhysAddrRange, u64> {
+    info!("init");
     get_ram()
 }
 
 pub fn enable(boot3: fn() -> !) -> ! {
+    info!("enable {:?}", boot3);
     fn translate_fn(a: fn() -> !, offset: VirtOffset) -> fn() -> ! {
         let pa = PhysAddr::from_fn(a);
         let va = offset.offset(pa);
@@ -44,24 +46,29 @@ pub fn enable(boot3: fn() -> !) -> ! {
         )
     };
 
+    frames::reserve(range).unwrap();
+    let kernel_mem_offset = table::kernel_mem_offset();
+
     {
         let attributes = Translation::kernel_attributes();
-        let ram_offset = VirtOffset::init(0);
-
-        let mut tt1 = Translation::new_upper(ram_offset).unwrap();
-        tt1.id_map(range, attributes).unwrap();
-        debug!("ttbr1: {:?}", tt1);
+        let ram_offset = VirtOffset::new(0);
 
         let mut tt0 = Translation::new_lower(ram_offset).unwrap();
-        tt0.id_map(range, attributes).unwrap();
+        tt0.identity_map(range, attributes).unwrap();
         debug!("ttbr0: {:?}", tt0);
+
+        let mut tt1 = Translation::new_upper(ram_offset).unwrap();
+        let reserved_for_ram: usize = 4 * 1024 * 1024 * 1024;
+        let kernel_image_location = VirtAddr::new(reserved_for_ram).offset(kernel_mem_offset);
+        tt1.absolute_map(range, kernel_image_location, attributes)
+            .unwrap();
+        debug!("ttbr1: {:?}", tt1);
 
         enable_paging(tt1.base_register(), tt0.base_register(), 0);
     }
 
-    let offset = table::kernel_mem_offset();
-    move_registers(offset);
-    let boot3 = translate_fn(boot3, offset);
+    move_registers(kernel_mem_offset);
+    let boot3 = translate_fn(boot3, kernel_mem_offset);
     boot3()
 }
 

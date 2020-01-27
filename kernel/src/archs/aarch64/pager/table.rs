@@ -1,12 +1,15 @@
-use super::virt_addr::{VirtAddr, VirtAddrRange, VirtOffset};
+use super::virt_addr::{PhysOffset, VirtAddr, VirtAddrRange, VirtOffset};
 use crate::pager::{frames, PhysAddr, PhysAddrRange, PAGESIZE_BYTES};
 use crate::util::set_above_bits;
 
-use log::{debug, trace};
+#[allow(unused_imports)]
+use log::{debug, info, trace};
 use register::{register_bitfields, LocalRegisterCopy};
 
 use core::fmt::{Debug, Error, Formatter};
+use core::intrinsics::{offset, volatile_set_memory};
 use core::mem;
+use core::mem::size_of;
 use core::slice::Iter;
 
 type PageTableEntry = u64;
@@ -17,9 +20,11 @@ const UPPER_VA_BITS: u32 = 43;
 const UPPER_VA_BASE: usize = set_above_bits(UPPER_VA_BITS);
 const UPPER_TABLE_LEVEL: u8 = 1;
 const LOWER_TABLE_LEVEL: u8 = 0;
+const LEVEL_OFFSETS: [usize; 4] = [39, 30, 21, 12];
+const LEVEL_WIDTH: usize = 9;
 
 pub const fn kernel_mem_offset() -> VirtOffset {
-    VirtOffset::init_const(UPPER_VA_BASE)
+    VirtOffset::new_const(UPPER_VA_BASE)
 }
 
 pub const fn kernel_va_bits() -> u32 {
@@ -30,8 +35,20 @@ pub const fn user_va_bits() -> u32 {
     LOWER_VA_BITS
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct TranslationAttributes(PageTableEntry);
+
+impl From<&TableDescriptor> for TranslationAttributes {
+    fn from(pte: &TableDescriptor) -> Self {
+        Self(pte.0)
+    }
+}
+
+impl From<&PageDescriptor> for TranslationAttributes {
+    fn from(pte: &PageDescriptor) -> Self {
+        Self(pte.0)
+    }
+}
 
 pub struct Translation {
     /// Bottom of table's VA range
@@ -50,19 +67,25 @@ impl Translation {
     }
 
     pub fn new_upper(ram_offset: VirtOffset) -> Result<Translation, u64> {
+        debug!("Translation::new_upper(ram_offset: {:?})", ram_offset);
+        let page_table = frames::find()?;
+        clear_page_table(page_table, ram_offset);
         Ok(Translation {
-            va_range_base: VirtAddr::init(UPPER_VA_BASE),
+            va_range_base: VirtAddr::new(UPPER_VA_BASE),
             first_level: UPPER_TABLE_LEVEL,
-            page_table: frames::find()?,
+            page_table,
             ram_offset,
         })
     }
 
     pub fn new_lower(ram_offset: VirtOffset) -> Result<Translation, u64> {
+        debug!("Translation::new_lower(ram_offset: {:?})", ram_offset);
+        let page_table = frames::find()?;
+        clear_page_table(page_table, ram_offset);
         Ok(Translation {
-            va_range_base: VirtAddr::init(0),
+            va_range_base: VirtAddr::new(0),
             first_level: LOWER_TABLE_LEVEL,
-            page_table: frames::find()?,
+            page_table,
             ram_offset,
         })
     }
@@ -76,16 +99,46 @@ impl Translation {
         self.page_table.get() as u64
     }
 
-    pub fn id_map(
+    pub fn identity_map(
         &mut self,
-        range: PhysAddrRange,
+        phys_range: PhysAddrRange,
         attributes: TranslationAttributes,
     ) -> Result<(), u64> {
+        debug!(
+            "Translation::identity_map(&mut self, phys_range: {:?}, attributes: {:?})",
+            phys_range, attributes
+        );
         let va_range_base = self.va_range_base;
         let pt = self.page_table();
-        let range = VirtAddrRange::id_map(range);
-        id_map_level(
-            range,
+        let virt_range = VirtAddrRange::id_map(phys_range);
+        let phys_offset = PhysOffset::id_map();
+        map_level(
+            virt_range,
+            phys_offset,
+            self.first_level,
+            pt,
+            va_range_base,
+            attributes,
+            self.ram_offset,
+        )
+    }
+
+    pub fn absolute_map(
+        &mut self,
+        phys_range: PhysAddrRange,
+        virt_base: VirtAddr,
+        attributes: TranslationAttributes,
+    ) -> Result<(), u64> {
+        debug!(
+            "Translation::absolute_map(&mut self, phys_range: {:?}, virt_base: {:?}, attributes: {:?})",
+            phys_range, virt_base, attributes
+        );
+        let va_range_base = self.va_range_base;
+        let pt = self.page_table();
+        let (virt_range, phys_offset) = VirtAddrRange::target_map(phys_range, virt_base);
+        map_level(
+            virt_range,
+            phys_offset,
             self.first_level,
             pt,
             va_range_base,
@@ -95,17 +148,36 @@ impl Translation {
     }
 }
 
-fn id_map_level(
-    range: VirtAddrRange,
+fn clear_page_table(page_table: PhysAddr, ram_offset: VirtOffset) {
+    let pt = ram_offset.offset(page_table).as_ptr() as *mut PageTable;
+    unsafe { volatile_set_memory(pt, 0, 1) };
+}
+
+fn map_level(
+    virt_range: VirtAddrRange,
+    phys_offset: PhysOffset,
     level: u8,
     pt: *mut PageTable,
     va_range_base: VirtAddr,
     attributes: TranslationAttributes,
-    offset: VirtOffset,
+    ram_offset: VirtOffset,
 ) -> Result<(), u64> {
-    debug!("id_map_level");
-    trace!("{}, 0x{:08x}, {:?}", level, pt as u64, range);
-    for (index, range, va_range_base) in table_entries(range, level, va_range_base) {
+    trace!(
+        "id_map_level(virt_range: {:?}, phys_offset: {:?}, level: {}, pt: 0x{:08x}, va_range_base: {:?}, _, ram_offset: {:?})",
+        virt_range,
+        phys_offset,
+        level,
+        pt as u64,
+        va_range_base,
+        ram_offset
+    );
+    for (index, virt_range, va_range_base) in table_entries(virt_range, level, va_range_base) {
+        trace!(
+            "  index: {}, virt_range: {:?}, va_range_base: {:?}",
+            index,
+            virt_range,
+            va_range_base
+        );
         if level != 3 {
             let table = PageTableBranch::from_page_table(pt);
             let pte = table[index];
@@ -116,19 +188,110 @@ fn id_map_level(
                 let pt = frames::find()?;
                 let table_entry = TableDescriptor::new_entry(pt, attributes);
                 table[index] = table_entry;
+                let ppt = ram_offset.offset(pt).as_ptr() as *mut PageTable;
+                unsafe { volatile_set_memory(ppt, 0, 1) };
                 pt
             };
-            let pt = offset.offset(pt).as_ptr() as *mut PageTable;
-            id_map_level(range, level + 1, pt, va_range_base, attributes, offset)?;
+            let pt = ram_offset.offset(pt).as_ptr() as *mut PageTable;
+            map_level(
+                virt_range,
+                phys_offset,
+                level + 1,
+                pt,
+                va_range_base,
+                attributes,
+                ram_offset,
+            )?;
         } else {
             let table = PageTableLeaf::from_page_table(pt);
             let pte = table[index];
             assert!(!pte.is_valid());
-            let pte = PageDescriptor::new_entry(PhysAddr::new(range.base.addr()), attributes);
+            let output_addr = phys_offset.translate(virt_range.base());
+            let pte = PageDescriptor::new_entry(output_addr, attributes);
             table[index] = pte;
         }
     }
     Ok(())
+}
+
+#[derive(Debug)]
+struct PageTableEntries {
+    bounds: VirtAddrRange,
+    index: usize,
+    top: usize,
+    entry_span: VirtAddrRange,
+}
+
+impl Iterator for PageTableEntries {
+    type Item = (usize, VirtAddrRange, VirtAddr); // (index, va_sub_range, pt_entry_base)
+
+    fn next(&mut self) -> Option<Self::Item> {
+        trace!("PageTableEntries::next(&mut self) {:?}", self);
+        if self.index < self.top {
+            let result = (
+                self.index,
+                self.entry_span.intersection(&self.bounds),
+                self.entry_span.base,
+            );
+            self.index += 1;
+            self.entry_span = self.entry_span.step();
+            Some(result)
+        } else {
+            None
+        }
+    }
+}
+
+fn extract_va_index(base: usize, offset: usize, width: usize) -> usize {
+    (base >> offset) & ((1 << width) - 1)
+}
+
+/// Generate an iterator for the page table at specific level covering from a specific base
+/// where it overlaps with target range
+fn table_entries(virt_range: VirtAddrRange, level: u8, base: VirtAddr) -> PageTableEntries {
+    trace!(
+        "table_entries(virt_range: {:?}), level: {}, base: {:?})",
+        virt_range,
+        level,
+        base,
+    );
+
+    let level = level as usize;
+    let level_offset = LEVEL_OFFSETS[level];
+
+    trace!(
+        "  index@level: bits[{}..{}] mask: 0x{:08x}",
+        level_offset,
+        level_offset + LEVEL_WIDTH,
+        ((1usize << (LEVEL_WIDTH + 1usize)) - 1usize) << level_offset,
+    );
+
+    let first = extract_va_index(virt_range.base.addr(), level_offset, LEVEL_WIDTH);
+
+    let entries = if virt_range.length > 0 {
+        extract_va_index(virt_range.length, level_offset, LEVEL_WIDTH) + 1
+    } else {
+        0
+    };
+
+    let span = VirtAddrRange {
+        base: base.increment(first << level_offset),
+        length: 1usize << level_offset,
+    };
+
+    let result = PageTableEntries {
+        bounds: virt_range,
+        index: first as usize,
+        top: (first + entries) as usize,
+        entry_span: span,
+    };
+    trace!(
+        "  result: {}..{} starting: {:?}",
+        result.index,
+        result.top,
+        result.entry_span
+    );
+    result
 }
 
 register_bitfields! {
@@ -186,6 +349,21 @@ impl TableDescriptor {
         let field = TableDescriptorBits::NextLevelTableAddress;
         PhysAddr::new((self.0 & (field.mask << field.shift)) as usize)
     }
+
+    pub fn attributes(&self) -> TranslationAttributes {
+        TranslationAttributes::from(self)
+    }
+}
+
+impl Debug for TableDescriptor {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(
+            f,
+            "Next-level table physical address: {:?} ({:?})",
+            self.next_level_table_address(),
+            self.attributes()
+        )
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -204,6 +382,28 @@ impl PageDescriptor {
     pub fn is_valid(&self) -> bool {
         let field = PageDescriptorBits::Valid;
         0 != self.0 & (field.mask << field.shift)
+    }
+
+    pub fn output_address(&self) -> PhysAddr {
+        use PageDescriptorBits::*;
+
+        let field = OutputAddress;
+        PhysAddr::new((self.0 & (field.mask << field.shift)) as usize)
+    }
+
+    pub fn attributes(&self) -> TranslationAttributes {
+        TranslationAttributes::from(self)
+    }
+}
+
+impl Debug for PageDescriptor {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(
+            f,
+            "OA: {:?} ({:?})",
+            self.output_address(),
+            self.attributes()
+        )
     }
 }
 
@@ -267,75 +467,6 @@ impl core::ops::IndexMut<usize> for PageTableLeaf {
     }
 }
 
-#[derive(Debug)]
-struct PageTableEntries {
-    bounds: VirtAddrRange,
-    index: usize,
-    top: usize,
-    span: VirtAddrRange,
-}
-
-impl Iterator for PageTableEntries {
-    type Item = (usize, VirtAddrRange, VirtAddr);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index < self.top {
-            let result = (
-                self.index,
-                self.span.intersection(&self.bounds),
-                self.span.base,
-            );
-            self.index += 1;
-            self.span = self.span.step();
-            Some(result)
-        } else {
-            None
-        }
-    }
-}
-
-fn extract_va_index(base: usize, offset: usize, width: usize) -> usize {
-    (base >> offset) & ((1 << width) - 1)
-}
-
-/// Generate an iterator for the page table at specific level covering from a specific base
-/// where it overlaps with target range
-fn table_entries(range: VirtAddrRange, level: usize, base: VirtAddr) -> PageTableEntries {
-    const LEVEL_OFFSETS: [usize; 4] = [39, 30, 21, 12];
-    const LEVEL_WIDTH: usize = 9;
-    let level_offset = LEVEL_OFFSETS[level];
-
-    trace!("table_entries:");
-    trace!("range: {:?}", range);
-    trace!("level: {}", level);
-    trace!("base: {:?}", base);
-    trace!("level_offset: {}", level_offset);
-
-    let first = extract_va_index(range.base.addr(), level_offset, LEVEL_WIDTH);
-    trace!("first: {}", first);
-    let entries = if range.length > 0 {
-        extract_va_index(range.length, level_offset, LEVEL_WIDTH) + 1
-    } else {
-        0
-    };
-    trace!("entries: {}", entries);
-
-    let span = VirtAddrRange {
-        base: base.offset(first << level_offset),
-        length: 1usize << level_offset,
-    };
-    trace!("span {:?}", span);
-
-    let result = PageTableEntries {
-        bounds: range.clone(),
-        index: first as usize,
-        top: (first + entries) as usize,
-        span,
-    };
-    trace!("result: {:?}", result);
-    result
-}
-
 impl Debug for Translation {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         fn print_level(
@@ -345,20 +476,19 @@ impl Debug for Translation {
             offset: VirtOffset,
             f: &mut Formatter<'_>,
         ) -> Result<(), Error> {
-            const LEVEL_OFFSETS: [usize; 4] = [39, 30, 21, 12];
             const LEVEL_BUFFERS: [&str; 4] = ["", " ", "  ", "   "];
-            write!(
+            writeln!(
                 f,
-                "{:?}: level {} ============================= (0x{:8x})",
-                table_base, level, pt as u64
+                "      {}{:?}: level {} ============================= (0x{:8x})",
+                LEVEL_BUFFERS[level], table_base, level, pt as u64
             )?;
             if level != 3 {
                 let table = PageTableBranch::from_page_table_const(pt);
                 for (i, pte) in table.entries().enumerate() {
                     if pte.0 != 0 {
-                        write!(f, "{}{:03}: 0b{:064b}", LEVEL_BUFFERS[level], i, pte.0)?;
+                        writeln!(f, "      {}{:03}: {:?}", LEVEL_BUFFERS[level], i, pte)?;
                         let pt = pte.next_level_table_address();
-                        let table_base = table_base.offset(i << LEVEL_OFFSETS[level]);
+                        let table_base = table_base.increment(i << LEVEL_OFFSETS[level]);
                         let pt = offset.offset(pt).as_ptr() as *const PageTable;
                         print_level(level + 1, pt, table_base, offset, f)?;
                     }
@@ -367,20 +497,34 @@ impl Debug for Translation {
                 let table = PageTableLeaf::from_page_table_const(pt);
                 for (i, pte) in table.entries().enumerate() {
                     if pte.0 != 0 {
-                        write!(f, "{}{:03}: 0b{:064b}", LEVEL_BUFFERS[level], i, pte.0)?;
+                        writeln!(
+                            f,
+                            "                    {}{:05x}: {:?}",
+                            LEVEL_BUFFERS[level],
+                            i * PAGESIZE_BYTES,
+                            pte
+                        )?;
                     }
                 }
             }
             Ok(())
         }
 
-        print_level(
+        writeln!(
+            f,
+            "Translation: based at {:?} starting level {} (accessing ram through {:?})",
+            self.va_range_base, self.first_level, self.ram_offset
+        )?;
+        writeln!(f, "      ######")?;
+        let result = print_level(
             self.first_level as usize,
             self.page_table(),
             self.va_range_base,
             self.ram_offset,
             f,
-        )
+        );
+        write!(f, "      ######")?;
+        result
     }
 }
 

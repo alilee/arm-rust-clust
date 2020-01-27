@@ -8,8 +8,9 @@ use super::PAGESIZE_BYTES;
 use super::{PhysAddr, PhysAddrRange};
 
 use crate::util::{locked::Locked, set_below_bits};
-use log::{debug, info};
+use log::{debug, info, trace};
 
+use core::fmt::{Debug, Error, Formatter};
 use core::mem;
 
 const MAX_MEMORY: usize = (256 * 1024 * 1024);
@@ -40,6 +41,7 @@ impl FrameMap {
 
     /// Initialise the page frame data structure into a specific physical address
     pub fn reset(self: &mut Self, range: PhysAddrRange) -> Result<(), u64> {
+        debug!("FrameMap::reset(&mut self, {:?})", range);
         for x in self.page_map.iter_mut() {
             *x = 0
         }
@@ -56,10 +58,11 @@ impl FrameMap {
     }
 
     pub fn reserve(self: &mut Self, range: PhysAddrRange) -> Result<(), u64> {
+        debug!("FrameMap::reserve(&mut self, range: {:?})", range);
+
         if range.outside(&self.range) {
             return Err(0);
         }
-        info!("reserving: {:?}", range);
 
         let first_page = PhysAddrRange::bounded_by(self.range.base(), range.base()).pages();
         let mut i = first_page / Self::CHUNK_BITS;
@@ -81,6 +84,11 @@ impl FrameMap {
     }
 
     pub fn find_contiguous(&mut self, n_pages: u32) -> Result<PhysAddrRange, u64> {
+        debug!(
+            "FrameMap::find_contiguous(&mut self, n_pages: {:?})",
+            n_pages
+        );
+
         for i in self.highwater_mark..MAP_ENTRIES {
             let chunk = self.page_map[i];
             if chunk.count_zeros() > n_pages {
@@ -105,51 +113,58 @@ impl FrameMap {
         self.raise_highwater_mark();
         Err(0)
     }
+}
 
-    pub fn print_state(self: &mut Self) {
-        debug!("Frame map covering: {:?}", self.range);
-
+impl Debug for FrameMap {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        writeln!(f, "FrameMap: {:?}", self.range)?;
+        writeln!(f, "      ######")?;
         let mut gap_i = 0usize;
         let mut last_printed_addr = 0usize;
         for (i, chunk) in self.page_map.iter().enumerate() {
             let addr = self.range.base().offset(i * PAGESIZE_BYTES).get();
             if i == self.highwater_mark {
-                debug!("0x{:08x} ====================== highwater", addr);
+                writeln!(f, "      0x{:08x} ====================== highwater", addr)?;
                 last_printed_addr = addr;
             }
             if *chunk > 0 {
                 if gap_i > 0 {
-                    debug!("... 0x{:08x}", addr - last_printed_addr);
+                    writeln!(f, "      ... 0x{:08x}", addr - last_printed_addr)?;
                     gap_i = 0;
                 }
-                debug!("0x{:08x}: {:064b}", addr, chunk.reverse_bits());
+                writeln!(f, "      0x{:08x}: {:064b}", addr, chunk.reverse_bits())?;
                 last_printed_addr = addr;
             } else {
                 gap_i += 1;
             }
         }
         let addr = self.range.top().get();
-        debug!("... 0x{:08x}", addr - last_printed_addr);
+        writeln!(f, "      ... 0x{:08x}", addr - last_printed_addr)?;
+        write!(f, "      ######")?;
+        Ok(())
     }
 }
 
 static FRAME_MAP: Locked<FrameMap> = Locked::<FrameMap>::new(FrameMap::init());
 
 pub fn reset(map_range: PhysAddrRange) -> Result<(), u64> {
+    info!("reset {:?} -> ()", map_range);
     FRAME_MAP.lock().reset(map_range)
 }
 
 pub fn reserve(range: PhysAddrRange) -> Result<(), u64> {
-    FRAME_MAP.lock().reserve(range)
+    info!("reserve {:?} -> ()", range);
+    let result = FRAME_MAP.lock().reserve(range)?;
+    debug!("{:?}", *FRAME_MAP.lock());
+    Ok(result)
 }
 
 pub fn find() -> Result<PhysAddr, u64> {
+    debug!("find");
     let par = FRAME_MAP.lock().find_contiguous(1)?;
+    info!("find -> {:?}", par.base());
+    trace!("{:?}", *FRAME_MAP.lock());
     Ok(par.base())
-}
-
-pub fn print_state() {
-    FRAME_MAP.lock().print_state();
 }
 
 #[cfg(test)]

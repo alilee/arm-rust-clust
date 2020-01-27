@@ -9,7 +9,7 @@ pub const PAGESIZE_BYTES: usize = 4096;
 
 /// Initialise the system by initialising the submodules and mapping initial memory contents.
 pub fn init(boot3: fn() -> !) -> ! {
-    info!("initialising");
+    info!("init");
     let ram = arch::pager::init().unwrap();
     frames::reset(ram).unwrap();
     arch::pager::enable(boot3)

@@ -18,14 +18,20 @@ use core::fmt::{Debug, Error, Formatter};
 pub struct VirtOffset(usize);
 
 impl VirtOffset {
-    pub fn init(offset: usize) -> VirtOffset {
+    pub fn new(offset: usize) -> VirtOffset {
         VirtOffset(offset)
     }
-    pub const fn init_const(offset: usize) -> VirtOffset {
+    pub const fn new_const(offset: usize) -> VirtOffset {
         VirtOffset(offset)
     }
     pub fn offset(&self, pa: PhysAddr) -> VirtAddr {
-        VirtAddr::init(pa.get() + self.0)
+        VirtAddr::new(pa.get() + self.0)
+    }
+}
+
+impl Debug for VirtOffset {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(f, "+0x{:08x}", self.0)
     }
 }
 
@@ -34,8 +40,8 @@ impl VirtOffset {
 pub struct VirtAddr(usize);
 
 impl VirtAddr {
-    pub fn init(i: usize) -> VirtAddr {
-        VirtAddr(i)
+    pub fn new(addr: usize) -> VirtAddr {
+        VirtAddr(addr)
     }
     pub fn id_map(pa: PhysAddr, offset: VirtOffset) -> VirtAddr {
         offset.offset(pa)
@@ -46,8 +52,11 @@ impl VirtAddr {
     pub fn addr(&self) -> usize {
         self.0
     }
-    pub fn offset(&self, offset: usize) -> VirtAddr {
-        VirtAddr(self.0 + offset)
+    pub fn increment(&self, incr: usize) -> VirtAddr {
+        VirtAddr(self.0 + incr)
+    }
+    pub fn offset(&self, offset: VirtOffset) -> VirtAddr {
+        VirtAddr(self.0 + offset.0)
     }
     pub fn as_ptr(&self) -> *const () {
         self.0 as *const ()
@@ -57,6 +66,12 @@ impl VirtAddr {
 impl Debug for VirtAddr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         write!(f, "VirtAddr(0x{:08x})", self.0)
+    }
+}
+
+impl From<*const ()> for VirtAddr {
+    fn from(p: *const ()) -> Self {
+        Self::new(p as usize)
     }
 }
 
@@ -75,6 +90,18 @@ impl VirtAddrRange {
         }
     }
 
+    pub fn target_map(
+        phys_range: PhysAddrRange,
+        virt_base: VirtAddr,
+    ) -> (VirtAddrRange, PhysOffset) {
+        let virt_range = VirtAddrRange {
+            base: virt_base,
+            length: phys_range.length(),
+        };
+        let phys_offset = PhysOffset::new(virt_base, phys_range.base());
+        (virt_range, phys_offset)
+    }
+
     pub fn step(self: &Self) -> VirtAddrRange {
         VirtAddrRange {
             base: self.base.forward(self.length),
@@ -84,6 +111,9 @@ impl VirtAddrRange {
 
     pub fn top(self: &Self) -> VirtAddr {
         VirtAddr(self.base.0 + self.length)
+    }
+    pub fn base(&self) -> VirtAddr {
+        self.base
     }
 
     pub fn intersection(self: &Self, other: &Self) -> VirtAddrRange {
@@ -108,5 +138,29 @@ impl Debug for VirtAddrRange {
             self.top().0,
             self.length
         )
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct PhysOffset {
+    delta: isize,
+}
+
+impl PhysOffset {
+    pub fn id_map() -> Self {
+        Self { delta: 0 }
+    }
+    pub fn new(va: VirtAddr, pa: PhysAddr) -> Self {
+        let delta = (pa.get() as isize) - (va.0 as isize);
+        Self { delta }
+    }
+    pub fn translate(&self, va: VirtAddr) -> PhysAddr {
+        PhysAddr::new((va.addr() as isize + self.delta) as usize)
+    }
+}
+
+impl Debug for PhysOffset {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(f, "VA {:#x} PA", self.delta)
     }
 }
