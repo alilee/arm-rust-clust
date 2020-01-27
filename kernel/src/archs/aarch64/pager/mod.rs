@@ -78,14 +78,22 @@ fn enable_paging(ttbr1: u64, ttbr0: u64, asid: u16) {
         regs::{SCTLR_EL1::*, TCR_EL1::*, *},
     };
 
+    debug!(
+        "enable_paging(ttrb1: {:#x}, ttbr0: {:#x}, asid: {:#x})",
+        ttbr1, ttbr0, asid
+    );
+
     let ttbr0: u64 = ttbr0 | ((asid as u64) << 48);
     TTBR0_EL1.set(ttbr0);
     TTBR1_EL1.set(ttbr1);
 
     assert!(PAGESIZE_BYTES == 4096);
+    //
+    // TODO: nTWE, nTWI
+    //
     TCR_EL1.modify(
         AS::Bits_16    // 16 bit ASID 
-            + IPS::Bits_36  // 36 bits of physical address space
+            + IPS::Bits_36  // 36 bits/64GB of physical address space
             + TG1::KiB_4
             + SH1::Outer
             + ORGN1::WriteThrough_ReadAlloc_NoWriteAlloc_Cacheable
