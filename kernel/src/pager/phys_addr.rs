@@ -26,11 +26,23 @@ impl PhysAddr {
         Self(sym as *const u8 as usize)
     }
 
-    pub fn align_down(self: &Self, align: usize) -> Self {
+    pub fn align_down(self: &Self, align: usize) -> (Self, MemOffset) {
         assert!(align.is_power_of_two(), "`align` must be a power of two");
-        Self(self.0 & !(align - 1))
+        let result = self.0 & !(align - 1);
+        (Self(result), MemOffset((self.0 - result) as isize))
+    }
+    pub fn align_up(self: &Self, align: usize) -> Self {
+        assert!(align.is_power_of_two(), "`align` must be a power of two");
+        let result = (self.0 + align - 1) & !(align - 1);
+        Self(result)
     }
 
+    pub fn identity_map(&self) -> *const () {
+        self.0 as *const ()
+    }
+    pub const fn identity_map_mut(&self) -> *mut () {
+        self.0 as *mut ()
+    }
     fn as_ptr(self: &Self) -> *const u8 {
         self.0 as *const u8
     }
@@ -50,6 +62,19 @@ impl From<*const u8> for PhysAddr {
     }
 }
 
+pub struct MemOffset(isize);
+
+impl MemOffset {
+    pub fn offset(&self, virt_addr: *const ()) -> *const () {
+        let pb = virt_addr as *const u8;
+        unsafe { pb.offset(self.0) as *const () }
+    }
+    pub fn offset_mut(&self, virt_addr: *mut ()) -> *mut () {
+        let pb = virt_addr as *mut u8;
+        unsafe { pb.offset(self.0) as *mut () }
+    }
+}
+
 /// A range in the VA space
 #[derive(Copy, Clone)]
 pub struct PhysAddrRange {
@@ -66,6 +91,7 @@ impl PhysAddrRange {
     }
     pub fn bounded_by(base: PhysAddr, top: PhysAddr) -> Self {
         assert!(base.0 < top.0);
+        let top = top.align_up(PAGESIZE_BYTES);
         unsafe {
             let length = top.as_ptr().offset_from(base.as_ptr()) as usize;
             Self { base, length }

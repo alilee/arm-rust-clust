@@ -18,14 +18,23 @@ use core::fmt::{Debug, Error, Formatter};
 pub struct VirtOffset(usize);
 
 impl VirtOffset {
-    pub fn new(offset: usize) -> VirtOffset {
-        VirtOffset(offset)
+    pub fn new(offset: usize) -> Self {
+        Self(offset)
     }
-    pub const fn new_const(offset: usize) -> VirtOffset {
-        VirtOffset(offset)
+    pub const fn new_const(offset: usize) -> Self {
+        Self(offset)
     }
-    pub fn offset(&self, pa: PhysAddr) -> VirtAddr {
+    pub fn between(pa: PhysAddr, va: VirtAddr) -> Self {
+        Self(va.0 - pa.get())
+    }
+    pub fn increment(&self, pa: PhysAddr) -> VirtAddr {
         VirtAddr::new(pa.get() + self.0)
+    }
+    pub fn decrement(&self, va: VirtAddr) -> VirtAddr {
+        VirtAddr::new(va.0 - self.0)
+    }
+    pub fn get(&self) -> usize {
+        self.0
     }
 }
 
@@ -36,15 +45,18 @@ impl Debug for VirtOffset {
 }
 
 /// A cluster-wide virtual address
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, PartialOrd)]
 pub struct VirtAddr(usize);
 
 impl VirtAddr {
     pub fn new(addr: usize) -> VirtAddr {
         VirtAddr(addr)
     }
+    pub const fn new_const(addr: usize) -> VirtAddr {
+        VirtAddr(addr)
+    }
     pub fn id_map(pa: PhysAddr, offset: VirtOffset) -> VirtAddr {
-        offset.offset(pa)
+        offset.increment(pa)
     }
     pub fn forward(&self, step: usize) -> VirtAddr {
         VirtAddr(self.0 + step)
@@ -61,11 +73,14 @@ impl VirtAddr {
     pub fn as_ptr(&self) -> *const () {
         self.0 as *const ()
     }
+    pub fn as_mut_ptr(&self) -> *mut () {
+        self.0 as *mut ()
+    }
 }
 
 impl Debug for VirtAddr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "VirtAddr(0x{:08x})", self.0)
+        write!(f, "VirtAddr(0x{:016x})", self.0)
     }
 }
 
@@ -90,6 +105,17 @@ impl VirtAddrRange {
         }
     }
 
+    pub const fn new_const(base: VirtAddr, length: usize) -> Self {
+        Self { base, length }
+    }
+
+    pub const fn after(range: VirtAddrRange, length: usize) -> Self {
+        Self {
+            base: range.top(),
+            length,
+        }
+    }
+
     pub fn target_map(
         phys_range: PhysAddrRange,
         virt_base: VirtAddr,
@@ -109,7 +135,7 @@ impl VirtAddrRange {
         }
     }
 
-    pub fn top(self: &Self) -> VirtAddr {
+    pub const fn top(self: &Self) -> VirtAddr {
         VirtAddr(self.base.0 + self.length)
     }
     pub fn base(&self) -> VirtAddr {

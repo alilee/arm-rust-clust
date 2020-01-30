@@ -68,4 +68,7 @@ pub mod pager {
     pub fn enable(boot3: fn() -> !) -> ! {
         boot3()
     }
+    pub fn device_map(range: PhysAddrRange) -> Result<*mut (), u64> {
+        Err(0)
+    }
 }

@@ -1,23 +1,27 @@
+pub mod entry;
+
+use super::layout;
 use super::virt_addr::{PhysOffset, VirtAddr, VirtAddrRange, VirtOffset};
+use crate::device;
 use crate::pager::{frames, PhysAddr, PhysAddrRange, PAGESIZE_BYTES};
 use crate::util::set_above_bits;
+use entry::{PageDescriptor, TableDescriptor};
 
 #[allow(unused_imports)]
 use log::{debug, info, trace};
-use register::{register_bitfields, LocalRegisterCopy};
 
+use core::cmp::max;
 use core::fmt::{Debug, Error, Formatter};
-use core::intrinsics::{offset, volatile_set_memory};
+use core::intrinsics::volatile_set_memory;
 use core::mem;
-use core::mem::size_of;
 use core::slice::Iter;
 
 type PageTableEntry = u64;
 
 const TABLE_ENTRIES: usize = PAGESIZE_BYTES / mem::size_of::<PageTableEntry>();
-const LOWER_VA_BITS: u32 = 48;
-const UPPER_VA_BITS: u32 = 43;
-const UPPER_VA_BASE: usize = set_above_bits(UPPER_VA_BITS);
+const LOWER_VA_BITS: u32 = 48; // 256 TB
+const UPPER_VA_BITS: u32 = 39; // 512 GB
+pub const UPPER_VA_BASE: usize = set_above_bits(UPPER_VA_BITS);
 const UPPER_TABLE_LEVEL: u8 = 1;
 const LOWER_TABLE_LEVEL: u8 = 0;
 const LEVEL_OFFSETS: [usize; 4] = [39, 30, 21, 12];
@@ -35,18 +39,41 @@ pub const fn user_va_bits() -> u32 {
     LOWER_VA_BITS
 }
 
-#[derive(Copy, Clone, Debug)]
-pub struct TranslationAttributes(PageTableEntry);
+#[derive(Copy, Clone)]
+pub struct TranslationAttributes(TableDescriptor, PageDescriptor);
+
+impl TranslationAttributes {
+    pub const fn new(table_desc: TableDescriptor, page_desc: PageDescriptor) -> Self {
+        Self(table_desc, page_desc)
+    }
+
+    pub fn table(&self) -> TableDescriptor {
+        self.0
+    }
+
+    pub fn page(&self) -> PageDescriptor {
+        self.1
+    }
+}
 
 impl From<&TableDescriptor> for TranslationAttributes {
     fn from(pte: &TableDescriptor) -> Self {
-        Self(pte.0)
+        use entry::PageDescriptorFields::Valid;
+        Self(*pte, PageDescriptor::new_bitfield(Valid::CLEAR))
     }
 }
 
 impl From<&PageDescriptor> for TranslationAttributes {
     fn from(pte: &PageDescriptor) -> Self {
-        Self(pte.0)
+        use entry::TableDescriptorFields::Valid;
+        Self(TableDescriptor::new_bitfield(Valid::CLEAR), *pte)
+    }
+}
+
+impl Debug for TranslationAttributes {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(f, "{:?}/{:?}", self.0, self.1)?;
+        Ok(())
     }
 }
 
@@ -62,10 +89,6 @@ pub struct Translation {
 }
 
 impl Translation {
-    pub fn kernel_attributes() -> TranslationAttributes {
-        TranslationAttributes(0)
-    }
-
     pub fn new_upper(ram_offset: VirtOffset) -> Result<Translation, u64> {
         debug!("Translation::new_upper(ram_offset: {:?})", ram_offset);
         let page_table = frames::find()?;
@@ -90,6 +113,32 @@ impl Translation {
         })
     }
 
+    pub fn ttbr1() -> Result<Translation, u64> {
+        use cortex_a::regs::{RegisterReadWrite, TTBR1_EL1};
+        debug!("Translation::ttbr1()");
+        let page_table = PhysAddr::new(TTBR1_EL1.get() as usize);
+        let ram_offset = VirtOffset::between(device::ram::range().base(), layout::RAM.base());
+        Ok(Translation {
+            va_range_base: VirtAddr::new(UPPER_VA_BASE),
+            first_level: UPPER_TABLE_LEVEL,
+            page_table,
+            ram_offset,
+        })
+    }
+
+    pub fn _ttbr0() -> Result<Translation, u64> {
+        use cortex_a::regs::{RegisterReadWrite, TTBR0_EL1};
+        debug!("Translation::ttbr0()");
+        let page_table = PhysAddr::new(TTBR0_EL1.get() as usize);
+        let ram_offset = VirtOffset::between(device::ram::range().base(), layout::RAM.base());
+        Ok(Translation {
+            va_range_base: VirtAddr::new(0),
+            first_level: LOWER_TABLE_LEVEL,
+            page_table,
+            ram_offset,
+        })
+    }
+
     pub fn page_table(&self) -> *mut PageTable {
         let p = VirtAddr::id_map(self.page_table, self.ram_offset).as_ptr();
         p as *mut PageTable
@@ -105,7 +154,7 @@ impl Translation {
         attributes: TranslationAttributes,
     ) -> Result<(), u64> {
         debug!(
-            "Translation::identity_map(&mut self, phys_range: {:?}, attributes: {:?})",
+            "Translation::identity_map(&mut self, phys_range: {:?}, attributes: <{:?}>)",
             phys_range, attributes
         );
         let va_range_base = self.va_range_base;
@@ -130,7 +179,7 @@ impl Translation {
         attributes: TranslationAttributes,
     ) -> Result<(), u64> {
         debug!(
-            "Translation::absolute_map(&mut self, phys_range: {:?}, virt_base: {:?}, attributes: {:?})",
+            "Translation::absolute_map(&mut self, phys_range: {:?}, virt_base: {:?}, attributes: <{:?}>)",
             phys_range, virt_base, attributes
         );
         let va_range_base = self.va_range_base;
@@ -149,7 +198,7 @@ impl Translation {
 }
 
 fn clear_page_table(page_table: PhysAddr, ram_offset: VirtOffset) {
-    let pt = ram_offset.offset(page_table).as_ptr() as *mut PageTable;
+    let pt = ram_offset.increment(page_table).as_ptr() as *mut PageTable;
     unsafe { volatile_set_memory(pt, 0, 1) };
 }
 
@@ -188,11 +237,11 @@ fn map_level(
                 let pt = frames::find()?;
                 let table_entry = TableDescriptor::new_entry(pt, attributes);
                 table[index] = table_entry;
-                let ppt = ram_offset.offset(pt).as_ptr() as *mut PageTable;
+                let ppt = ram_offset.increment(pt).as_ptr() as *mut PageTable;
                 unsafe { volatile_set_memory(ppt, 0, 1) };
                 pt
             };
-            let pt = ram_offset.offset(pt).as_ptr() as *mut PageTable;
+            let pt = ram_offset.increment(pt).as_ptr() as *mut PageTable;
             map_level(
                 virt_range,
                 phys_offset,
@@ -243,6 +292,9 @@ impl Iterator for PageTableEntries {
 }
 
 fn extract_va_index(base: usize, offset: usize, width: usize) -> usize {
+    trace!("{:#b}", base >> offset);
+    trace!("{:#b}", (1 << width) - 1);
+    trace!("{:#b}", (base >> offset) & ((1 << width) - 1));
     (base >> offset) & ((1 << width) - 1)
 }
 
@@ -263,16 +315,21 @@ fn table_entries(virt_range: VirtAddrRange, level: u8, base: VirtAddr) -> PageTa
         "  index@level: bits[{}..{}] mask: 0x{:08x}",
         level_offset,
         level_offset + LEVEL_WIDTH,
-        ((1usize << (LEVEL_WIDTH + 1usize)) - 1usize) << level_offset,
+        0, //((1usize << (LEVEL_WIDTH + 1usize)) - 1usize) << level_offset,
     );
 
     let first = extract_va_index(virt_range.base.addr(), level_offset, LEVEL_WIDTH);
 
-    let entries = if virt_range.length > 0 {
-        extract_va_index(virt_range.length, level_offset, LEVEL_WIDTH) + 1
-    } else {
-        0
-    };
+    let entries = (virt_range.length + ((1 << level_offset) - 1)) >> level_offset;
+
+    //    let entries = if virt_range.length > 0 {
+    //        max(
+    //            1,
+    //            extract_va_index(virt_range.length, level_offset, LEVEL_WIDTH),
+    //        )
+    //    } else {
+    //        0
+    //    };
 
     let span = VirtAddrRange {
         base: base.increment(first << level_offset),
@@ -292,119 +349,6 @@ fn table_entries(virt_range: VirtAddrRange, level: u8, base: VirtAddr) -> PageTa
         result.entry_span
     );
     result
-}
-
-register_bitfields! {
-    u64,
-    TableDescriptorBits [
-        NSTable OFFSET(63) NUMBITS(1) [],
-        APTable OFFSET(61) NUMBITS(2) [],
-        XNTable OFFSET(60) NUMBITS(1) [],
-        PXNTable OFFSET(59) NUMBITS(1) [],
-        NextLevelTableAddress OFFSET(12) NUMBITS(35) [],
-        Type OFFSET(1) NUMBITS(1) [],
-        Valid OFFSET(0) NUMBITS(1) []
-    ]
-}
-
-register_bitfields! {
-    u64,
-    PageDescriptorBits [
-        Available OFFSET(55) NUMBITS(9) [],
-        UXN OFFSET(54) NUMBITS(1) [],                      // Unprivileged Execute Never
-        PXN OFFSET(53) NUMBITS(1) [],                      // Privileged Execute Never
-        Contiguous OFFSET(52) NUMBITS(1) [],               // One of a contiguous set of entries
-        OutputAddress OFFSET(12) NUMBITS(35) [],
-        nG OFFSET(11) NUMBITS(1) [],                       // Not Global - all or current ASID
-        AF OFFSET(10) NUMBITS(1) [],                       // Access flag
-        SH OFFSET(8) NUMBITS(2) [],                        // Shareability
-        AP OFFSET(6) NUMBITS(2) [],                        // Data access permissions
-        AttrIndx OFFSET(2) NUMBITS(3) [],                  // Memory attributes index for MAIR_ELx
-        Type OFFSET(1) NUMBITS(1) [],
-        Valid OFFSET(0) NUMBITS(1) []
-    ]
-}
-
-#[derive(Copy, Clone)]
-struct TableDescriptor(PageTableEntry);
-
-type TableDescReg = LocalRegisterCopy<PageTableEntry, TableDescriptorBits::Register>;
-
-impl TableDescriptor {
-    pub fn new_entry(pt: PhysAddr, attributes: TranslationAttributes) -> Self {
-        use TableDescriptorBits::*;
-
-        let nlta = pt.get() >> 12;
-        let field = Valid::SET + Type::SET + NextLevelTableAddress.val(nlta as u64);
-        let value = (attributes.0 & !field.mask) | field.value;
-        Self(value)
-    }
-
-    pub fn is_valid(&self) -> bool {
-        let r = TableDescReg::new(self.0);
-        r.is_set(TableDescriptorBits::Valid)
-    }
-
-    pub fn next_level_table_address(&self) -> PhysAddr {
-        let field = TableDescriptorBits::NextLevelTableAddress;
-        PhysAddr::new((self.0 & (field.mask << field.shift)) as usize)
-    }
-
-    pub fn attributes(&self) -> TranslationAttributes {
-        TranslationAttributes::from(self)
-    }
-}
-
-impl Debug for TableDescriptor {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(
-            f,
-            "Next-level table physical address: {:?} ({:?})",
-            self.next_level_table_address(),
-            self.attributes()
-        )
-    }
-}
-
-#[derive(Copy, Clone)]
-struct PageDescriptor(PageTableEntry);
-// type PageDescReg = LocalRegisterCopy<u64, PageDescriptorBits::Register>;
-
-impl PageDescriptor {
-    pub fn new_entry(output_addr: PhysAddr, attributes: TranslationAttributes) -> Self {
-        use PageDescriptorBits::*;
-
-        let field = Valid::SET + Type::SET + OutputAddress.val(output_addr.get() as u64 >> 12);
-        let value = (attributes.0 & !field.mask) | field.value;
-        Self(value)
-    }
-
-    pub fn is_valid(&self) -> bool {
-        let field = PageDescriptorBits::Valid;
-        0 != self.0 & (field.mask << field.shift)
-    }
-
-    pub fn output_address(&self) -> PhysAddr {
-        use PageDescriptorBits::*;
-
-        let field = OutputAddress;
-        PhysAddr::new((self.0 & (field.mask << field.shift)) as usize)
-    }
-
-    pub fn attributes(&self) -> TranslationAttributes {
-        TranslationAttributes::from(self)
-    }
-}
-
-impl Debug for PageDescriptor {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(
-            f,
-            "OA: {:?} ({:?})",
-            self.output_address(),
-            self.attributes()
-        )
-    }
 }
 
 #[derive(Copy, Clone)]
@@ -485,21 +429,21 @@ impl Debug for Translation {
             if level != 3 {
                 let table = PageTableBranch::from_page_table_const(pt);
                 for (i, pte) in table.entries().enumerate() {
-                    if pte.0 != 0 {
+                    if pte.is_valid() {
                         writeln!(f, "      {}{:03}: {:?}", LEVEL_BUFFERS[level], i, pte)?;
                         let pt = pte.next_level_table_address();
                         let table_base = table_base.increment(i << LEVEL_OFFSETS[level]);
-                        let pt = offset.offset(pt).as_ptr() as *const PageTable;
+                        let pt = offset.increment(pt).as_ptr() as *const PageTable;
                         print_level(level + 1, pt, table_base, offset, f)?;
                     }
                 }
             } else {
                 let table = PageTableLeaf::from_page_table_const(pt);
                 for (i, pte) in table.entries().enumerate() {
-                    if pte.0 != 0 {
+                    if pte.is_valid() {
                         writeln!(
                             f,
-                            "                    {}{:05x}: {:?}",
+                            "                            {}{:05x}: {:?}",
                             LEVEL_BUFFERS[level],
                             i * PAGESIZE_BYTES,
                             pte

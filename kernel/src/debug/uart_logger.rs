@@ -3,11 +3,13 @@
 extern crate log;
 
 use crate::device::uart;
+use crate::util::locked::Locked;
+
 use log::{Level, LevelFilter, Metadata, Record, SetLoggerError};
 
 use core::fmt::Write;
 
-impl log::Log for uart::Uart {
+impl log::Log for Locked<uart::Uart> {
     #[allow(array_into_iter)]
     fn enabled(&self, metadata: &Metadata) -> bool {
         use Level::*;
@@ -16,8 +18,8 @@ impl log::Log for uart::Uart {
             ("gic", Info),
             ("gicv2", Trace),
             ("timer", Info),
-            ("aarch64::pager", Debug),
-            ("pager::table", Debug),
+            ("aarch64::pager", Trace),
+            ("pager::table", Trace),
         ];
         let level = levels.into_iter().fold(Trace, |base, (suffix, level)| {
             if metadata.target().ends_with(suffix) {
@@ -32,8 +34,9 @@ impl log::Log for uart::Uart {
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
             const BUFFER: [&str; 6] = ["", "!", "*", " ", "  ", "  "];
+            let mut locked = self.lock();
             writeln!(
-                uart::UART0,
+                locked,
                 "{:5} [{:>50} {:3}] {}{}",
                 record.level(),
                 record.target(),
@@ -51,4 +54,8 @@ impl log::Log for uart::Uart {
 /// Doco
 pub fn init() -> Result<(), SetLoggerError> {
     log::set_logger(&uart::UART0).map(|()| log::set_max_level(LevelFilter::Trace))
+}
+
+pub fn reset() -> Result<(), u64> {
+    uart::UART0.lock().reset()
 }

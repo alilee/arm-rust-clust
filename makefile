@@ -20,7 +20,7 @@ LDFLAGS = --gc-sections
 
 SOURCES := $(shell find . -name '*.rs') linker.ld
 
-%.bin: %
+%.bin: % linker.ld
 	$(OBJCOPY) -O binary $< $@
 	$(OBJDUMP) -dS $< > $*.code
 	$(OBJDUMP) -d $< > $*.s

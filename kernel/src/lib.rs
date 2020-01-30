@@ -85,6 +85,8 @@ pub fn boot2() -> ! {
 
 /// Kernel in upper VA
 pub fn boot3() -> ! {
+    info!("boot3");
+
     // enable multi-processing and kernel thread
     thread::init();
 

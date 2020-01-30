@@ -33,5 +33,10 @@ SECTIONS
         . = . + 0x1000;    /* separates data and linker globals for debugging */
     }
 
-    image_end = .;
+    .bss :
+    {
+        *(.bss*)
+    }
+
+    image_end = ALIGN(4096);
 }
