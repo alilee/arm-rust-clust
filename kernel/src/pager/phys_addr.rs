@@ -65,7 +65,7 @@ impl From<*const u8> for PhysAddr {
 pub struct MemOffset(isize);
 
 impl MemOffset {
-    pub fn offset(&self, virt_addr: *const ()) -> *const () {
+    pub fn _offset(&self, virt_addr: *const ()) -> *const () {
         let pb = virt_addr as *const u8;
         unsafe { pb.offset(self.0) as *const () }
     }

@@ -57,5 +57,7 @@ pub fn init() -> Result<(), SetLoggerError> {
 }
 
 pub fn reset() -> Result<(), u64> {
-    uart::UART0.lock().reset()
+    let result = uart::UART0.lock().reset();
+    log::info!("uart_logger reset");
+    result
 }

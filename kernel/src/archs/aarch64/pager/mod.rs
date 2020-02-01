@@ -1,17 +1,18 @@
 mod table;
 mod virt_addr;
 
-use crate::debug;
-use crate::device;
-use crate::pager::{range::attrs, frames, range::layout, range, Page, PhysAddr, PhysAddrRange, PAGESIZE_BYTES};
 use table::{Translation, TranslationAttributes};
 use virt_addr::{VirtAddr, VirtOffset};
 
-pub const KERNEL_BASE: *const Page = table::UPPER_VA_BASE as *const Page;
+use crate::debug;
+use crate::device;
+use crate::pager::{range::attrs, frames, range::layout, range, Page, PhysAddr, PhysAddrRange, PAGESIZE_BYTES};
 
 use log::{debug, info};
 
 use core::mem;
+
+pub const KERNEL_BASE: *const Page = table::UPPER_VA_BASE as *const Page;
 
 pub fn init() -> Result<(), u64> {
     info!("init");
@@ -66,17 +67,13 @@ pub fn enable(boot3: fn() -> !) -> ! {
             .unwrap();
         debug!("ttbr1: {:?}", tt1);
 
-        fn sandwich() {
-            info!("sandwich");
-        }
-        sandwich();
-
         tt1.absolute_map(
             device::ram::range(),
             VirtAddr::from(layout::ram().base()),
             TranslationAttributes::from(attrs::ram()),
         )
         .unwrap();
+        debug!("ttbr1: {:?}", tt1);
 
         enable_paging(tt1.base_register(), tt0.base_register(), 0);
 
@@ -88,6 +85,20 @@ pub fn enable(boot3: fn() -> !) -> ! {
     move_registers(image_offset);
     let boot3 = translate_fn(boot3, image_offset);
     boot3()
+}
+
+pub fn device_map(range: PhysAddrRange) -> Result<*mut (), u64> {
+    let (base, offset) = range.base().align_down(PAGESIZE_BYTES);
+    let top = range.top().align_up(PAGESIZE_BYTES);
+    let range = PhysAddrRange::bounded_by(base, top);
+    let page_addr = VirtAddr::from(range::device(range.pages())?);
+    let mut tt1 = Translation::ttbr1()?;
+    tt1.absolute_map(
+        range,
+        page_addr,
+        TranslationAttributes::from(attrs::device()),
+    )?;
+    Ok(offset.offset_mut(page_addr.as_mut_ptr()))
 }
 
 fn enable_paging(ttbr1: u64, ttbr0: u64, asid: u16) {
@@ -131,18 +142,4 @@ fn enable_paging(ttbr1: u64, ttbr0: u64, asid: u16) {
     unsafe {
         barrier::isb(barrier::SY);
     }
-}
-
-pub fn device_map(range: PhysAddrRange) -> Result<*mut (), u64> {
-    let (base, offset) = range.base().align_down(PAGESIZE_BYTES);
-    let top = range.top().align_up(PAGESIZE_BYTES);
-    let range = PhysAddrRange::bounded_by(base, top);
-    let page_addr = VirtAddr::from(range::device(range.pages())?);
-    let mut tt1 = Translation::ttbr1()?;
-    tt1.absolute_map(
-        range,
-        page_addr,
-        TranslationAttributes::from(attrs::device()),
-    )?;
-    Ok(offset.offset_mut(page_addr.as_mut_ptr()))
 }

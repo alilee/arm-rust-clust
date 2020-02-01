@@ -1,5 +1,9 @@
-use super::mair::MAIR;
-use super::*;
+use super::attrs;
+use super::mair;
+use super::PageTableEntry;
+use attrs::TranslationAttributes;
+use mair::MAIR;
+
 use crate::pager::PhysAddr;
 
 use core::fmt::{Debug, Error, Formatter};
@@ -65,7 +69,7 @@ impl TableDescriptor {
 
         let nlta = pt.get() >> 12;
         let field = Valid::SET + Type::SET + NextLevelTableAddress.val(nlta as u64);
-        let value = ((attributes.0).0 & !field.mask) | field.value;
+        let value = (attributes.table_desc().0 & !field.mask) | field.value;
         Self(value)
     }
 
@@ -121,7 +125,7 @@ impl PageDescriptor {
         use PageDescriptorFields::*;
 
         let field = Valid::SET + Type::SET + OutputAddress.val(output_addr.get() as u64 >> 12);
-        let value = ((attributes.1).0 & !field.mask) | field.value;
+        let value = (attributes.page_desc().0 & !field.mask) | field.value;
         Self(value)
     }
 
