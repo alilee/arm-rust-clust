@@ -1,4 +1,4 @@
-use crate::arch::tree::DTBHeader;
+use crate::arch::device_tree::DTBHeader;
 
 mod gicv2;
 

@@ -1,4 +1,4 @@
-use crate::pager::{PhysAddr, PhysAddrRange};
+use crate::pager::{Page, PhysAddr, PhysAddrRange};
 
 use core::fmt::{Debug, Error, Formatter};
 
@@ -30,9 +30,6 @@ impl VirtOffset {
     pub fn increment(&self, pa: PhysAddr) -> VirtAddr {
         VirtAddr::new(pa.get() + self.0)
     }
-    pub fn decrement(&self, va: VirtAddr) -> VirtAddr {
-        VirtAddr::new(va.0 - self.0)
-    }
     pub fn get(&self) -> usize {
         self.0
     }
@@ -50,9 +47,6 @@ pub struct VirtAddr(usize);
 
 impl VirtAddr {
     pub fn new(addr: usize) -> VirtAddr {
-        VirtAddr(addr)
-    }
-    pub const fn new_const(addr: usize) -> VirtAddr {
         VirtAddr(addr)
     }
     pub fn id_map(pa: PhysAddr, offset: VirtOffset) -> VirtAddr {
@@ -90,6 +84,12 @@ impl From<*const ()> for VirtAddr {
     }
 }
 
+impl From<*const Page> for VirtAddr {
+    fn from(p: *const Page) -> Self {
+        Self::new(p as usize)
+    }
+}
+
 /// A range in the VA space
 #[derive(Copy, Clone)]
 pub struct VirtAddrRange {
@@ -102,17 +102,6 @@ impl VirtAddrRange {
         VirtAddrRange {
             base: VirtAddr::id_map(range.base(), VirtOffset(0)),
             length: range.length(),
-        }
-    }
-
-    pub const fn new_const(base: VirtAddr, length: usize) -> Self {
-        Self { base, length }
-    }
-
-    pub const fn after(range: VirtAddrRange, length: usize) -> Self {
-        Self {
-            base: range.top(),
-            length,
         }
     }
 

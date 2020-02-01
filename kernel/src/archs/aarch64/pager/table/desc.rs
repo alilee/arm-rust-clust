@@ -1,5 +1,5 @@
+use super::mair::MAIR;
 use super::*;
-use crate::arch::pager::mair::MAIR;
 use crate::pager::PhysAddr;
 
 use core::fmt::{Debug, Error, Formatter};
@@ -73,10 +73,6 @@ impl TableDescriptor {
         Self(field_value.value)
     }
 
-    pub const fn new(entry: PageTableEntry) -> Self {
-        Self(entry)
-    }
-
     pub fn is_valid(&self) -> bool {
         let r = TableDescLocal::new(self.0);
         r.is_set(TableDescriptorFields::Valid)
@@ -131,10 +127,6 @@ impl PageDescriptor {
 
     pub const fn new_bitfield(field_value: FieldValue<u64, PageDescReg>) -> Self {
         Self(field_value.value)
-    }
-
-    pub const fn new(entry: PageTableEntry) -> Self {
-        Self(entry)
     }
 
     pub fn is_valid(&self) -> bool {

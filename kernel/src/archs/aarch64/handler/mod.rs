@@ -1,7 +1,7 @@
 /// Exception handling and context switching between threads.
 ///
 /// Requires TPIDRRO_EL0 to contain pointer to TCB where register state can be saved.
-use super::tree;
+use super::device_tree;
 
 pub mod gic;
 mod timer;
@@ -23,7 +23,7 @@ pub fn init() -> Result<(), u64> {
         VBAR_EL1.set(&vector_table_el1 as *const u64 as u64);
     };
 
-    let dtb = tree::get_dtb();
+    let dtb = device_tree::get_dtb();
     gic::init(dtb);
     gic::reset();
     let timer_irq = timer::set(62500000 * 4, tick).unwrap();

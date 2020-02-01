@@ -1,10 +1,10 @@
 use cortex_a::{asm, regs::*};
 use log::info;
 
+mod device_tree;
 pub mod handler;
 pub mod pager;
 pub mod thread;
-mod tree;
 
 /// svc instruction, with syndrome
 //macro_rules! svc {
@@ -63,7 +63,7 @@ pub unsafe extern "C" fn _reset(pdtb: *const u8) -> ! {
 
     if CORE_0 == MPIDR_EL1.get() & AFF0_CORE_MASK {
         SP.set(&STACK_TOP as *const u64 as u64);
-        tree::set(pdtb);
+        device_tree::set(pdtb);
         crate::boot2();
     }
 

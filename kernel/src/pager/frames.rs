@@ -169,10 +169,12 @@ pub fn find() -> Result<PhysAddr, u64> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[test]
     fn test_test() {
+        use log::info;
+
+        info!("hello from pager::frame tests");
         assert!(true);
     }
 }

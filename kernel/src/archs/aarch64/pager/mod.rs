@@ -1,33 +1,21 @@
-mod layout;
-mod mair;
-mod page_bump;
 mod table;
 mod virt_addr;
 
 use crate::debug;
 use crate::device;
-use crate::pager::{frames, PhysAddr, PhysAddrRange, PAGESIZE_BYTES};
-use crate::util::locked::Locked;
-use page_bump::PageBump;
-use table::Translation;
-use virt_addr::{VirtAddr, VirtAddrRange, VirtOffset};
+use crate::pager::{range::attrs, frames, range::layout, range, Page, PhysAddr, PhysAddrRange, PAGESIZE_BYTES};
+use table::{Translation, TranslationAttributes};
+use virt_addr::{VirtAddr, VirtOffset};
 
-use log::{debug, info, trace};
+pub const KERNEL_BASE: *const Page = table::UPPER_VA_BASE as *const Page;
 
-use core::intrinsics::breakpoint;
+use log::{debug, info};
+
 use core::mem;
 
 pub fn init() -> Result<(), u64> {
-    use cortex_a::regs::{RegisterReadWrite, MAIR_EL1, MAIR_EL1::*};
-
     info!("init");
-
-    MAIR_EL1.modify(
-        Attr0_Device::nGnRnE
-            + Attr1_Outer::WriteThrough_NonTransient_AllocRW
-            + Attr1_Inner::WriteThrough_NonTransient_AllocRW,
-    );
-    trace!("MAIR_EL1 {:#b}", MAIR_EL1.get());
+    table::init();
 
     Ok(())
 }
@@ -65,16 +53,16 @@ pub fn enable(boot3: fn() -> !) -> ! {
 
     let image_offset = {
         let ram_offset = VirtOffset::new(0);
+        let kernel_attrs = TranslationAttributes::from(attrs::kernel());
 
         let mut tt0 = Translation::new_lower(ram_offset).unwrap();
-        tt0.identity_map(range, layout::kernel_attributes())
-            .unwrap();
+        tt0.identity_map(range, kernel_attrs).unwrap();
         debug!("ttbr0: {:?}", tt0);
 
         let mut tt1 = Translation::new_upper(ram_offset).unwrap();
         let reserved_for_ram: usize = 4 * 1024 * 1024 * 1024;
         let kernel_image_location = VirtAddr::new(reserved_for_ram).offset(kernel_mem_offset);
-        tt1.absolute_map(range, kernel_image_location, layout::kernel_attributes())
+        tt1.absolute_map(range, kernel_image_location, kernel_attrs)
             .unwrap();
         debug!("ttbr1: {:?}", tt1);
 
@@ -85,8 +73,8 @@ pub fn enable(boot3: fn() -> !) -> ! {
 
         tt1.absolute_map(
             device::ram::range(),
-            layout::RAM.base(),
-            layout::ram_attributes(),
+            VirtAddr::from(layout::ram().base()),
+            TranslationAttributes::from(attrs::ram()),
         )
         .unwrap();
 
@@ -117,7 +105,7 @@ fn enable_paging(ttbr1: u64, ttbr0: u64, asid: u16) {
     TTBR0_EL1.set(ttbr0);
     TTBR1_EL1.set(ttbr1);
 
-    assert!(PAGESIZE_BYTES == 4096);
+    assert_eq!(crate::pager::PAGESIZE_BYTES, 4096);
     //
     // TODO: nTWE, nTWI
     //
@@ -145,14 +133,16 @@ fn enable_paging(ttbr1: u64, ttbr0: u64, asid: u16) {
     }
 }
 
-static DEVICE_ALLOC: Locked<PageBump> = Locked::new(PageBump::new(layout::DEVICE));
-
 pub fn device_map(range: PhysAddrRange) -> Result<*mut (), u64> {
     let (base, offset) = range.base().align_down(PAGESIZE_BYTES);
     let top = range.top().align_up(PAGESIZE_BYTES);
     let range = PhysAddrRange::bounded_by(base, top);
-    let page_addr = DEVICE_ALLOC.lock().alloc(range.pages())?;
+    let page_addr = VirtAddr::from(range::device(range.pages())?);
     let mut tt1 = Translation::ttbr1()?;
-    tt1.absolute_map(range, page_addr, layout::device_attributes())?;
+    tt1.absolute_map(
+        range,
+        page_addr,
+        TranslationAttributes::from(attrs::device()),
+    )?;
     Ok(offset.offset_mut(page_addr.as_mut_ptr()))
 }

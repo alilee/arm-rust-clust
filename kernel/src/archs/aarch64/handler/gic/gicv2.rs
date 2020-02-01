@@ -1,6 +1,6 @@
 use log::{debug, info};
 
-use super::super::tree::DTBHeader;
+use super::super::device_tree::DTBHeader;
 use register::{mmio::*, register_bitfields, register_structs};
 
 register_bitfields! {
