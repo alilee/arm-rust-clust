@@ -142,6 +142,10 @@ impl VirtAddrRange {
             length: (top - base) as usize,
         }
     }
+
+    pub fn covers(&self, other: &Self) -> bool {
+        self.base <= other.base && self.top() >= other.top()
+    }
 }
 
 impl Debug for VirtAddrRange {

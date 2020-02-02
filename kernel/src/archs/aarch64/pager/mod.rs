@@ -22,7 +22,7 @@ pub fn init() -> Result<(), u64> {
 }
 
 pub fn enable(boot3: fn() -> !) -> ! {
-    info!("enable {:?}", boot3);
+    info!("enable boot3@{:?}", boot3);
     fn translate_fn(a: fn() -> !, offset: VirtOffset) -> fn() -> ! {
         let pa = PhysAddr::from_fn(a);
         let va = offset.increment(pa);

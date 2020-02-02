@@ -18,8 +18,9 @@ impl log::Log for Locked<uart::Uart> {
             ("gic", Info),
             ("gicv2", Trace),
             ("timer", Info),
-            ("aarch64::pager", Trace),
-            ("pager::table", Trace),
+            ("aarch64::pager", Debug),
+            ("pager::table", Debug),
+            ("pager::table::trans", Debug),
         ];
         let level = levels.into_iter().fold(Trace, |base, (suffix, level)| {
             if metadata.target().ends_with(suffix) {

@@ -1,6 +1,6 @@
 use super::attrs;
 use super::mair;
-use super::PageTableEntry;
+use super::{PageTableEntry, PageTableEntryType};
 use attrs::TranslationAttributes;
 use mair::MAIR;
 
@@ -29,7 +29,7 @@ register_bitfields! {
 
 register_bitfields! {
     u64,
-    PageDescriptorFields [
+    PageBlockDescriptorFields [
         Available OFFSET(55) NUMBITS(9) [],
         UXN OFFSET(54) NUMBITS(1) [],                      // Unprivileged Execute Never
         PXN OFFSET(53) NUMBITS(1) [],                      // Privileged Execute Never
@@ -58,10 +58,10 @@ register_bitfields! {
 }
 
 #[derive(Copy, Clone)]
-pub struct TableDescriptor(PageTableEntry);
+pub struct TableDescriptor(PageTableEntryType);
 
 type TableDescReg = TableDescriptorFields::Register;
-type TableDescLocal = LocalRegisterCopy<PageTableEntry, TableDescReg>;
+type TableDescLocal = LocalRegisterCopy<PageTableEntryType, TableDescReg>;
 
 impl TableDescriptor {
     pub fn new_entry(pt: PhysAddr, attributes: TranslationAttributes) -> Self {
@@ -85,6 +85,16 @@ impl TableDescriptor {
     pub fn next_level_table_address(&self) -> PhysAddr {
         let field = TableDescriptorFields::NextLevelTableAddress;
         PhysAddr::new((self.0 & (field.mask << field.shift)) as usize)
+    }
+
+    pub fn get(&self) -> PageTableEntryType {
+        self.0
+    }
+}
+
+impl From<PageTableEntry> for TableDescriptor {
+    fn from(pte: PageTableEntry) -> Self {
+        Self(pte.get())
     }
 }
 
@@ -115,46 +125,59 @@ impl Debug for TableDescriptor {
 }
 
 #[derive(Copy, Clone)]
-pub struct PageDescriptor(PageTableEntry);
+pub struct PageBlockDescriptor(PageTableEntryType);
 
-type PageDescReg = PageDescriptorFields::Register;
-type PageDescLocal = LocalRegisterCopy<PageTableEntry, PageDescReg>;
+type PageBlockDescReg = PageBlockDescriptorFields::Register;
+type PageBlockDescLocal = LocalRegisterCopy<PageTableEntryType, PageBlockDescReg>;
 
-impl PageDescriptor {
-    pub fn new_entry(output_addr: PhysAddr, attributes: TranslationAttributes) -> Self {
-        use PageDescriptorFields::*;
+impl PageBlockDescriptor {
+    pub fn new_entry(level: u8, output_addr: PhysAddr, attributes: TranslationAttributes) -> Self {
+        use PageBlockDescriptorFields::*;
 
-        let field = Valid::SET + Type::SET + OutputAddress.val(output_addr.get() as u64 >> 12);
-        let value = (attributes.page_desc().0 & !field.mask) | field.value;
+        let mut field =
+            Valid::SET + OutputAddress.val(output_addr.get() as u64 >> 12) + Contiguous::CLEAR;
+        if level == 3 {
+            field += Type::SET;
+        }
+        let value = (attributes.pageblock_desc().0 & !field.mask) | field.value;
         Self(value)
     }
 
-    pub const fn new_bitfield(field_value: FieldValue<u64, PageDescReg>) -> Self {
+    pub const fn new_bitfield(field_value: FieldValue<u64, PageBlockDescReg>) -> Self {
         Self(field_value.value)
     }
 
-    pub fn is_valid(&self) -> bool {
-        let field = PageDescriptorFields::Valid;
-        0 != self.0 & (field.mask << field.shift)
+    pub fn is_contiguous(&self) -> bool {
+        PageBlockDescLocal::new(self.0).is_set(PageBlockDescriptorFields::Contiguous)
     }
 
     pub fn output_address(&self) -> PhysAddr {
-        use PageDescriptorFields::*;
+        use PageBlockDescriptorFields::*;
 
         let field = OutputAddress;
         PhysAddr::new((self.0 & (field.mask << field.shift)) as usize)
     }
+
+    pub fn get(&self) -> PageTableEntryType {
+        self.0
+    }
 }
 
-impl Debug for PageDescriptor {
+impl From<PageTableEntry> for PageBlockDescriptor {
+    fn from(pte: PageTableEntry) -> Self {
+        Self(pte.get())
+    }
+}
+
+impl Debug for PageBlockDescriptor {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         if self.output_address().get() != 0 {
             write!(f, "OA: {:?} ", self.output_address(),)?;
         }
-        use PageDescriptorFields::*;
+        use PageBlockDescriptorFields::*;
 
         write!(f, "(")?;
-        let attrs = PageDescLocal::new(self.0);
+        let attrs = PageBlockDescLocal::new(self.0);
         if attrs.is_set(UXN) {
             write!(f, " UXN")?;
         }

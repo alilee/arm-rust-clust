@@ -3,6 +3,7 @@ use register::{register_bitfields, LocalRegisterCopy};
 register_bitfields! {
     u64,
     AttributeFields [
+        Block 16,
         StreamIn 10,
         StreamOut 9,
         Device 8,
@@ -25,12 +26,12 @@ pub fn kernel() -> Attributes {
 
 pub fn device() -> Attributes {
     use AttributeFields::*;
-    let field = KernelRead::SET + KernelWrite::SET + Device::SET;
+    let field = KernelRead::SET + KernelWrite::SET + Device::SET + Block::SET;
     Attributes::new(field.value)
 }
 
 pub fn ram() -> Attributes {
     use AttributeFields::*;
-    let field = KernelRead::SET + KernelWrite::SET;
+    let field = KernelRead::SET + KernelWrite::SET + Block::SET;
     Attributes::new(field.value)
 }
