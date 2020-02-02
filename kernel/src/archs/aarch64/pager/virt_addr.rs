@@ -52,9 +52,6 @@ impl VirtAddr {
     pub fn id_map(pa: PhysAddr, offset: VirtOffset) -> VirtAddr {
         offset.increment(pa)
     }
-    pub fn forward(&self, step: usize) -> VirtAddr {
-        VirtAddr(self.0 + step)
-    }
     pub fn addr(&self) -> usize {
         self.0
     }
@@ -98,18 +95,19 @@ pub struct VirtAddrRange {
 }
 
 impl VirtAddrRange {
-    pub fn id_map(range: PhysAddrRange) -> VirtAddrRange {
-        VirtAddrRange {
+    pub fn new(base: VirtAddr, length: usize) -> Self {
+        Self { base, length }
+    }
+
+    pub fn id_map(range: PhysAddrRange) -> Self {
+        Self {
             base: VirtAddr::id_map(range.base(), VirtOffset(0)),
             length: range.length(),
         }
     }
 
-    pub fn target_map(
-        phys_range: PhysAddrRange,
-        virt_base: VirtAddr,
-    ) -> (VirtAddrRange, PhysOffset) {
-        let virt_range = VirtAddrRange {
+    pub fn target_map(phys_range: PhysAddrRange, virt_base: VirtAddr) -> (Self, PhysOffset) {
+        let virt_range = Self {
             base: virt_base,
             length: phys_range.length(),
         };
@@ -119,7 +117,7 @@ impl VirtAddrRange {
 
     pub fn step(self: &Self) -> VirtAddrRange {
         VirtAddrRange {
-            base: self.base.forward(self.length),
+            base: self.base.increment(self.length),
             length: self.length,
         }
     }

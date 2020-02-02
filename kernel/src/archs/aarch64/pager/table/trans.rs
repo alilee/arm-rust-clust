@@ -9,11 +9,13 @@ use desc::{PageBlockDescriptor, TableDescriptor};
 
 use crate::arch::pager::virt_addr::{PhysOffset, VirtAddr, VirtAddrRange, VirtOffset};
 use crate::device;
-use crate::pager::{frames, range::layout, PhysAddr, PhysAddrRange, PAGESIZE_BYTES};
+use crate::pager::{frames, range::layout, PhysAddr, PhysAddrRange};
 
 use log::{debug, trace};
 
 use core::fmt::{Debug, Error, Formatter};
+
+const CONTIG_SPAN: usize = 16;
 
 pub struct Translation {
     /// Bottom of table's VA range
@@ -183,6 +185,10 @@ fn map_level(
         if level == 3
             || ((1u8..=2u8).contains(&level) && attributes.pageblock_desc().is_contiguous())
         {
+            // if the entry range is inside the 16-entry span contig range
+            let contiguous_range = contiguous_virt_range(level, index, table_base);
+            let contiguous = attributes.pageblock_desc().is_contiguous()
+                && target_range.covers(&contiguous_range);
             // if the entire entry_range is inside the virt_range
             if level == 3 || entry_target_range.covers(&entry_range) {
                 // level 1: 1GB block
@@ -192,7 +198,8 @@ fn map_level(
                 assert!(!pte.is_valid());
                 let output_addr = phys_offset.translate(entry_range.base());
                 trace!("{:?}+{:?}={:?}", entry_range, phys_offset, output_addr);
-                let pte = PageBlockDescriptor::new_entry(level, output_addr, attributes);
+                let pte =
+                    PageBlockDescriptor::new_entry(level, output_addr, attributes, contiguous);
                 table.set(index, PageTableEntry::from(pte));
                 trace!("{:?}", pte);
                 continue;
@@ -304,6 +311,15 @@ fn table_entries(virt_range: VirtAddrRange, level: u8, base: VirtAddr) -> PageTa
     result
 }
 
+fn contiguous_virt_range(level: u8, index: usize, table_base: VirtAddr) -> VirtAddrRange {
+    let level_offset = LEVEL_OFFSETS[level as usize];
+    let entry_size = 1usize << level_offset;
+    let index = index - index % CONTIG_SPAN;
+    let base = table_base.increment(index * entry_size);
+    let length = CONTIG_SPAN * entry_size;
+    VirtAddrRange::new(base, length)
+}
+
 impl Debug for Translation {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         fn print_level(
@@ -323,7 +339,6 @@ impl Debug for Translation {
             for (i, pte) in table.entries().enumerate() {
                 if pte.is_valid() {
                     if pte.is_table(level) {
-                        //                        writeln!(f, "{} istable! at level: {} {:#b}", i, level, pte.get())?;
                         let pte = TableDescriptor::from(*pte);
                         writeln!(f, "      {}{:03}: {:?}", LEVEL_BUFFERS[level], i, pte)?;
                         let pt = pte.next_level_table_address();
@@ -332,13 +347,15 @@ impl Debug for Translation {
                         print_level(level + 1, pt, table_base, offset, f)?;
                     } else {
                         let pte = PageBlockDescriptor::from(*pte);
-                        writeln!(
-                            f,
-                            "                         {}{:08x}: {:?}",
-                            LEVEL_BUFFERS[level],
-                            i << LEVEL_OFFSETS[level],
-                            pte
-                        )?;
+                        if !pte.is_contiguous() || 0 == i % CONTIG_SPAN {
+                            writeln!(
+                                f,
+                                "                         {}{:08x}: {:?}",
+                                LEVEL_BUFFERS[level],
+                                i << LEVEL_OFFSETS[level],
+                                pte
+                            )?;
+                        }
                     }
                 }
             }

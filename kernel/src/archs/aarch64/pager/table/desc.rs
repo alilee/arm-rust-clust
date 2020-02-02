@@ -103,7 +103,7 @@ impl Debug for TableDescriptor {
         if self.next_level_table_address().get() != 0 {
             write!(
                 f,
-                "Next-level table physical address: {:?} ",
+                "Next-level table: {:?} ",
                 self.next_level_table_address()
             )?;
         }
@@ -131,14 +131,26 @@ type PageBlockDescReg = PageBlockDescriptorFields::Register;
 type PageBlockDescLocal = LocalRegisterCopy<PageTableEntryType, PageBlockDescReg>;
 
 impl PageBlockDescriptor {
-    pub fn new_entry(level: u8, output_addr: PhysAddr, attributes: TranslationAttributes) -> Self {
+    pub fn new_entry(
+        level: u8,
+        output_addr: PhysAddr,
+        attributes: TranslationAttributes,
+        contiguous: bool,
+    ) -> Self {
         use PageBlockDescriptorFields::*;
 
-        let mut field =
-            Valid::SET + OutputAddress.val(output_addr.get() as u64 >> 12) + Contiguous::CLEAR;
+        let mut field = Valid::SET + OutputAddress.val(output_addr.get() as u64 >> 12);
+
+        if contiguous {
+            field += Contiguous::SET;
+        } else {
+            field += Contiguous::CLEAR;
+        }
+
         if level == 3 {
             field += Type::SET;
         }
+
         let value = (attributes.pageblock_desc().0 & !field.mask) | field.value;
         Self(value)
     }
