@@ -25,6 +25,8 @@ pub fn init(boot3: fn() -> !) -> ! {
 
 pub fn device_map<T>(base: PhysAddr) -> Result<*mut T, u64> {
     let length = mem::size_of::<T>();
-    let device_addr = arch::pager::device_map(PhysAddrRange::new(base, length))?;
+    let range = PhysAddrRange::new(base, length);
+    info!("device map @ {:?}", range);
+    let device_addr = arch::pager::device_map(range)?;
     Ok(device_addr as *mut T)
 }

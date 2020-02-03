@@ -8,7 +8,7 @@ use crate::debug;
 use crate::device;
 use crate::pager::{range::attrs, frames, range::layout, range, Page, PhysAddr, PhysAddrRange, PAGESIZE_BYTES};
 
-use log::{debug, info};
+use log::{info, debug, trace};
 
 use core::mem;
 
@@ -58,26 +58,27 @@ pub fn enable(boot3: fn() -> !) -> ! {
 
         let mut tt0 = Translation::new_lower(ram_offset).unwrap();
         tt0.identity_map(range, kernel_attrs).unwrap();
-        debug!("ttbr0: {:?}", tt0);
+        trace!("ttbr0: {:?}", tt0);
 
         let mut tt1 = Translation::new_upper(ram_offset).unwrap();
         let reserved_for_ram: usize = 4 * 1024 * 1024 * 1024;
         let kernel_image_location = VirtAddr::new(reserved_for_ram).offset(kernel_mem_offset);
         tt1.absolute_map(range, kernel_image_location, kernel_attrs)
             .unwrap();
-        debug!("ttbr1: {:?}", tt1);
+        trace!("ttbr1: {:?}", tt1);
 
         tt1.absolute_map(
             device::ram::range(),
             VirtAddr::from(layout::ram().base()),
             TranslationAttributes::from(attrs::ram()),
-        )
-        .unwrap();
+        ).unwrap();
         debug!("ttbr1: {:?}", tt1);
 
-        enable_paging(tt1.base_register(), tt0.base_register(), 0);
+        let uart_block = debug::uart_logger::device_range();
+        tt0.identity_map(uart_block, TranslationAttributes::from(attrs::device())).unwrap();
+        debug!("ttbr0: {:?}", tt0);
 
-        debug::uart_logger::reset().unwrap();
+        enable_paging(tt1.base_register(), tt0.base_register(), 0);
 
         VirtOffset::between(range.base(), kernel_image_location)
     };
@@ -88,17 +89,20 @@ pub fn enable(boot3: fn() -> !) -> ! {
 }
 
 pub fn device_map(range: PhysAddrRange) -> Result<*mut (), u64> {
+    info!("device_map {:?}", range);
     let (base, offset) = range.base().align_down(PAGESIZE_BYTES);
     let top = range.top().align_up(PAGESIZE_BYTES);
-    let range = PhysAddrRange::bounded_by(base, top);
-    let page_addr = VirtAddr::from(range::device(range.pages())?);
+    let phys_range = PhysAddrRange::bounded_by(base, top);
+    debug!("widened for alignment to {:?} being {} pages", phys_range, phys_range.pages());
+    let virt_base = VirtAddr::from(range::device(phys_range.pages())?);
+    debug!("mapped to {:?}", virt_base);
     let mut tt1 = Translation::ttbr1()?;
     tt1.absolute_map(
-        range,
-        page_addr,
+        phys_range,
+        virt_base,
         TranslationAttributes::from(attrs::device()),
     )?;
-    Ok(offset.offset_mut(page_addr.as_mut_ptr()))
+    Ok(offset.offset_mut(virt_base.as_mut_ptr()))
 }
 
 fn enable_paging(ttbr1: u64, ttbr0: u64, asid: u16) {

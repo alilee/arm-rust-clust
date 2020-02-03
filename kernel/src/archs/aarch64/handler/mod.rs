@@ -15,6 +15,8 @@ fn tick(_irq: u32, duration: u64) {
 }
 
 pub fn init() -> Result<(), u64> {
+    info!("init");
+
     extern "C" {
         static vector_table_el1: u64;
     }
@@ -24,7 +26,7 @@ pub fn init() -> Result<(), u64> {
     };
 
     let dtb = device_tree::get_dtb();
-    gic::init(dtb);
+    gic::init(dtb)?;
     gic::reset();
     let timer_irq = timer::set(62500000 * 4, tick).unwrap();
     gic::enable_irq(timer_irq);
@@ -76,9 +78,9 @@ fn el1_sp1_sync_handler() -> ! {
     info!("SP1 Sync Exception!");
     info!("SPSR_EL1: {:b}", SPSR_EL1.get());
     info!("ESR_EL1: {:b}", ESR_EL1.get());
-    info!("ESR_EL1::EC {:b}", ESR_EL1.read(ESR_EL1::EC));
     info!(
-        "{}",
+        "ESR_EL1::EC {:b} - {}",
+        ESR_EL1.read(ESR_EL1::EC),
         match ESR_EL1.read(ESR_EL1::EC) {
             0b010101 => "SVC64",
             0b100001 => "Instruction Abort (from EL1)",

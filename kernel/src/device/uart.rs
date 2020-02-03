@@ -1,6 +1,6 @@
 //! A stream sink which writes to the serial port.
 
-use crate::pager::PhysAddr;
+use crate::pager::{PhysAddr, PhysAddrRange, PAGESIZE_BYTES};
 use crate::util::locked::Locked;
 use core::fmt;
 use core::fmt::{write, Arguments, Write};
@@ -30,6 +30,10 @@ impl Uart {
         unsafe {
             *self.dr_addr = b as u32;
         }
+    }
+
+    pub fn phys_addr(&self) -> PhysAddrRange {
+        PhysAddrRange::new(self.phys_addr, PAGESIZE_BYTES)
     }
 }
 

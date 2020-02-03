@@ -1,6 +1,7 @@
 use log::{debug, info};
 
 use super::super::device_tree::DTBHeader;
+use crate::pager::PhysAddr;
 use register::{mmio::*, register_bitfields, register_structs};
 
 register_bitfields! {
@@ -129,6 +130,7 @@ pub struct GICv2 {
     cpu_intf_base: *mut CPUInterfaceRegisters,
 }
 
+// FIXME static mut
 static mut THE_GIC: GICv2 = GICv2 {
     dist_base: 0 as *mut DistRegisters,
     cpu_intf_base: 0 as *mut CPUInterfaceRegisters,
@@ -146,18 +148,20 @@ impl GICv2 {
 unsafe impl Sync for GICv2 {}
 
 /// Find the GICD base address from the DTB
-pub fn init(_pdtb: *const DTBHeader) -> impl super::GIC {
-    info!("finding GICD");
+pub fn init(_pdtb: *const DTBHeader) -> Result<(), u64> {
+    use crate::pager::device_map;
 
-    let dist_base = 0x8000000usize as *mut DistRegisters;
-    let cpu_intf_base = 0x8010000usize as *mut CPUInterfaceRegisters;
+    info!("init");
+    let dist_base = device_map::<DistRegisters>(PhysAddr::new(0x8000000))?;
+    let cpu_intf_base = device_map::<CPUInterfaceRegisters>(PhysAddr::new(0x8010000))?;
 
     unsafe {
+        // FIXME: wut
         THE_GIC = GICv2 {
             dist_base,
             cpu_intf_base,
         };
-        THE_GIC.clone()
+        Ok(())
     }
 }
 
@@ -167,7 +171,7 @@ pub fn get_gic() -> impl super::GIC {
 
 impl super::GIC for GICv2 {
     fn reset(self: &mut Self) {
-        info!("resetting GIC");
+        info!("reset");
         // IHI0048B_b_gic_architecture_specification s4.1.5
         {
             let dist = { self.dist() };

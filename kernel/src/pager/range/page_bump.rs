@@ -2,6 +2,7 @@ use super::PageRange;
 use crate::pager::{Page, PAGESIZE_BYTES};
 use crate::util::locked::Locked;
 
+use core::fmt::{Debug, Error, Formatter};
 use core::ptr;
 
 pub struct PageBumpAllocator {
@@ -25,7 +26,6 @@ impl PageBumpAllocator {
     }
 
     pub fn alloc(&mut self, span: usize) -> Result<*const Page, u64> {
-        let span = (span + PAGESIZE_BYTES - 1) / PAGESIZE_BYTES;
         if span > self.limit {
             Err(0)
         } else {
@@ -33,5 +33,15 @@ impl PageBumpAllocator {
             self.top = unsafe { self.top.offset(-1 * (span as isize)) };
             Ok(self.top)
         }
+    }
+}
+
+impl Debug for PageBumpAllocator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(
+            f,
+            "PageBumpAllocator{{ limit: {}, top: {:?} }}",
+            self.limit, self.top
+        )
     }
 }

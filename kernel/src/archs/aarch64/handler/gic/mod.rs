@@ -1,6 +1,8 @@
+mod gicv2;
+
 use crate::arch::device_tree::DTBHeader;
 
-mod gicv2;
+use log::info;
 
 pub type IRQHandler = fn(u32, u64);
 
@@ -32,8 +34,9 @@ pub trait GIC {
     fn print_state(self: &mut Self);
 }
 
-pub fn init(pdtb: *const DTBHeader) {
-    gicv2::init(pdtb);
+pub fn init(pdtb: *const DTBHeader) -> Result<(), u64> {
+    info!("init");
+    gicv2::init(pdtb)
 }
 
 fn get_gic() -> impl GIC {
@@ -41,16 +44,19 @@ fn get_gic() -> impl GIC {
 }
 
 pub fn reset() {
+    info!("reset");
     let mut gic = get_gic();
     gic.reset();
 }
 
 pub fn request_irq(irq: u32, handler: IRQHandler, data: u64) {
+    info!("request_irq");
     let mut gic = get_gic();
     gic.request_irq(irq, handler, data);
 }
 
 pub fn enable_irq(irq: u32) {
+    info!("enable_irq");
     let mut gic = get_gic();
     gic.enable_irq(irq);
 }

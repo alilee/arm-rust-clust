@@ -7,6 +7,7 @@ use crate::util::locked::Locked;
 
 use log::{Level, LevelFilter, Metadata, Record, SetLoggerError};
 
+use crate::pager::PhysAddrRange;
 use core::fmt::Write;
 
 impl log::Log for Locked<uart::Uart> {
@@ -21,6 +22,7 @@ impl log::Log for Locked<uart::Uart> {
             ("aarch64::pager", Debug),
             ("pager::table", Debug),
             ("pager::table::trans", Debug),
+            ("table::mair", Debug),
         ];
         let level = levels.into_iter().fold(Trace, |base, (suffix, level)| {
             if metadata.target().ends_with(suffix) {
@@ -57,8 +59,7 @@ pub fn init() -> Result<(), SetLoggerError> {
     log::set_logger(&uart::UART0).map(|()| log::set_max_level(LevelFilter::Trace))
 }
 
-pub fn reset() -> Result<(), u64> {
-    let result = uart::UART0.lock().reset();
-    log::info!("uart_logger reset");
-    result
+pub fn device_range() -> PhysAddrRange {
+    let lock = uart::UART0.lock();
+    lock.phys_addr()
 }
