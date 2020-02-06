@@ -218,7 +218,7 @@ global_asm!(
     /* Exception taken from EL0/AArch64. */
     /* Synchronous */
     el0_64_sync:    stp     x2, x3, [sp, #-16]! // push x2, x3
-                    mrs     x2, tpidrro_el0
+                    mrs     x2, tpidr_el1
                     stp     x0, x1, [x2], #16   // save x0, x1
                     ldp     x0, x1, [sp], #16   // pop original x2, x3 into x0, x1
                     stp     x0, x1, [x2], #16   // push x2, x3
@@ -242,7 +242,7 @@ global_asm!(
     /* IRQ or vIRQ */
     .balign         0x80
     el0_64_irq:     stp     x2, x3, [sp, #-16]! // push x2, x3 onto EL1 stack
-                    mrs     x2, tpidrro_el0     // address of control block
+                    mrs     x2, tpidr_el1       // address of control block
                     stp     x0, x1, [x2], #16   // save x0, x1
                     ldp     x0, x1, [sp], #16   // pop original x2, x3 into x0, x1
                     stp     x0, x1, [x2], #16   // push x2, x3
@@ -291,7 +291,7 @@ global_asm!(
 
     /* Return from handler */
     .balign         0x80
-    handler_return: mrs     x30, tpidrro_el0
+    handler_return: mrs     x30, tpidr_el1
                     ldp     x0, x1, [x30], #16
                     ldp     x2, x3, [x30], #16
                     ldp     x4, x5, [x30], #16

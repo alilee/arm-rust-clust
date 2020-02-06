@@ -147,8 +147,8 @@ impl Debug for FrameMap {
 
 static FRAME_MAP: Locked<FrameMap> = Locked::<FrameMap>::new(FrameMap::init());
 
-pub fn reset(map_range: PhysAddrRange) -> Result<(), u64> {
-    info!("reset {:?} -> ()", map_range);
+pub fn init(map_range: PhysAddrRange) -> Result<(), u64> {
+    info!("init {:?} -> ()", map_range);
     FRAME_MAP.lock().reset(map_range)
 }
 
@@ -159,12 +159,21 @@ pub fn reserve(range: PhysAddrRange) -> Result<(), u64> {
     Ok(result)
 }
 
+/// TODO: zero memory
 pub fn find() -> Result<PhysAddr, u64> {
     debug!("find");
     let par = FRAME_MAP.lock().find_contiguous(1)?;
     info!("find -> {:?}", par.base());
     trace!("{:?}", *FRAME_MAP.lock());
     Ok(par.base())
+}
+
+pub fn find_contiguous(pages: usize) -> Result<PhysAddrRange, u64> {
+    debug!("find_contiguous pages: {}", pages);
+    let par = FRAME_MAP.lock().find_contiguous(pages)?;
+    info!("find -> {:?}", par);
+    trace!("{:?}", *FRAME_MAP.lock());
+    Ok(par)
 }
 
 #[cfg(test)]

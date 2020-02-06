@@ -1,5 +1,7 @@
+use super::Page;
 use super::PAGESIZE_BYTES;
 
+use crate::pager::virt_addr::VirtAddr;
 use core::fmt::{Debug, Error, Formatter};
 
 /// A local physical address
@@ -51,7 +53,7 @@ impl PhysAddr {
         Self(self.0 + distance)
     }
 
-    pub fn get(&self) -> usize {
+    pub unsafe fn get(&self) -> usize {
         self.0
     }
 }
@@ -62,16 +64,26 @@ impl From<*const u8> for PhysAddr {
     }
 }
 
-pub struct MemOffset(isize);
+#[derive(Copy, Clone, Debug)]
+pub struct MemOffset(usize);
 
 impl MemOffset {
-    pub fn _offset(&self, virt_addr: *const ()) -> *const () {
-        let pb = virt_addr as *const u8;
-        unsafe { pb.offset(self.0) as *const () }
+    pub fn new(ram_base: PhysAddr, kernel_ram_location: VirtAddr) -> Self {
+        unsafe { Self(kernel_ram_location.get() - ram_base.get()) }
     }
-    pub fn offset_mut(&self, virt_addr: *mut ()) -> *mut () {
-        let pb = virt_addr as *mut u8;
-        unsafe { pb.offset(self.0) as *mut () }
+
+    pub fn identity() -> Self {
+        MemOffset(0)
+    }
+
+    pub fn offset(&self, phys_addr: PhysAddr) -> *const Page {
+        let va = VirtAddr::id_map(phys_addr);
+        va.increment(self.0).as_ptr() as *const Page
+    }
+
+    pub fn offset_mut(&self, phys_addr: PhysAddr) -> *mut Page {
+        let va = VirtAddr::id_map(phys_addr);
+        va.increment(self.0).as_ptr() as *mut Page
     }
 }
 
@@ -96,6 +108,13 @@ impl PhysAddrRange {
             let length = top.as_ptr().offset_from(base.as_ptr()) as usize;
             Self { base, length }
         }
+    }
+
+    pub fn align_to_pages(&mut self) -> Self {
+        Self::bounded_by(
+            self.base().align_down(PAGESIZE_BYTES),
+            self.top().align_up(4096),
+        )
     }
 
     pub fn pages(self: &Self) -> usize {

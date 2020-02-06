@@ -7,9 +7,11 @@ use super::{
 use attrs::TranslationAttributes;
 use desc::{PageBlockDescriptor, TableDescriptor};
 
-use crate::arch::pager::virt_addr::{PhysOffset, VirtAddr, VirtAddrRange, VirtOffset};
-use crate::device;
-use crate::pager::{frames, range::layout, PhysAddr, PhysAddrRange};
+use crate::pager::{
+    clear_page, frames,
+    virt_addr::{PhysOffset, VirtAddr, VirtAddrRange},
+    MemOffset, Page, PhysAddr, PhysAddrRange,
+};
 
 use log::{debug, trace};
 
@@ -24,69 +26,69 @@ pub struct Translation {
     first_level: u8,
     /// PA of first-level page table
     page_table: PhysAddr,
-    /// Offset for pointer to table base
-    ram_offset: VirtOffset,
+    /// Generate pointer to access physical memory
+    mem_offset: MemOffset,
 }
 
 impl Translation {
-    pub fn new_upper(ram_offset: VirtOffset) -> Result<Translation, u64> {
-        debug!("Translation::new_upper(ram_offset: {:?})", ram_offset);
+    pub fn new_upper(mem_offset: MemOffset) -> Result<Translation, u64> {
+        debug!("Translation::new_upper(mem_offset: {:?})", mem_offset);
         let page_table = frames::find()?;
-        clear_page_table(page_table, ram_offset);
+        clear_page(mem_offset.offset_mut(page_table) as *mut Page);
         Ok(Translation {
             va_range_base: VirtAddr::new(UPPER_VA_BASE),
             first_level: UPPER_TABLE_LEVEL,
             page_table,
-            ram_offset,
+            mem_offset,
         })
     }
 
-    pub fn new_lower(ram_offset: VirtOffset) -> Result<Translation, u64> {
-        debug!("Translation::new_lower(ram_offset: {:?})", ram_offset);
+    pub fn new_lower(mem_offset: MemOffset) -> Result<Translation, u64> {
+        debug!("Translation::new_lower(mem_offset: {:?})", mem_offset);
         let page_table = frames::find()?;
-        clear_page_table(page_table, ram_offset);
+        clear_page(mem_offset.offset(page_table) as *mut Page);
         Ok(Translation {
             va_range_base: VirtAddr::new(0),
             first_level: LOWER_TABLE_LEVEL,
             page_table,
-            ram_offset,
+            mem_offset,
         })
     }
 
-    pub fn ttbr1() -> Result<Translation, u64> {
-        use cortex_a::regs::{RegisterReadWrite, TTBR1_EL1};
+    pub fn ttbr1() -> u64 {
+        use cortex_a::regs::*;
+        TTBR1_EL1.get()
+    }
+
+    pub fn tt1(mem_offset: MemOffset) -> Result<Translation, u64> {
         debug!("Translation::ttbr1()");
-        let page_table = PhysAddr::new(TTBR1_EL1.get() as usize);
-        let ram_offset = VirtOffset::between(
-            device::ram::range().base(),
-            VirtAddr::from(layout::ram().base()),
-        );
+        let page_table = PhysAddr::new(Self::ttbr1() as usize);
         Ok(Translation {
             va_range_base: VirtAddr::new(UPPER_VA_BASE),
             first_level: UPPER_TABLE_LEVEL,
             page_table,
-            ram_offset,
+            mem_offset,
         })
     }
 
-    pub fn _ttbr0() -> Result<Translation, u64> {
-        use cortex_a::regs::{RegisterReadWrite, TTBR0_EL1};
+    pub fn ttbr0() -> u64 {
+        use cortex_a::regs::*;
+        TTBR0_EL1.get()
+    }
+
+    pub fn tt0(mem_offset: MemOffset) -> Result<Translation, u64> {
         debug!("Translation::ttbr0()");
-        let page_table = PhysAddr::new(TTBR0_EL1.get() as usize);
-        let ram_offset = VirtOffset::between(
-            device::ram::range().base(),
-            VirtAddr::from(layout::ram().base()),
-        );
+        let page_table = PhysAddr::new(Self::ttbr0() as usize);
         Ok(Translation {
             va_range_base: VirtAddr::new(0),
             first_level: LOWER_TABLE_LEVEL,
             page_table,
-            ram_offset,
+            mem_offset,
         })
     }
 
     pub fn page_table(&self) -> *mut PageTable {
-        let p = VirtAddr::id_map(self.page_table, self.ram_offset).as_ptr();
+        let p = self.mem_offset.offset_mut(self.page_table);
         p as *mut PageTable
     }
 
@@ -98,7 +100,7 @@ impl Translation {
         &mut self,
         phys_range: PhysAddrRange,
         attributes: TranslationAttributes,
-    ) -> Result<(), u64> {
+    ) -> Result<VirtAddrRange, u64> {
         debug!(
             "Translation::identity_map(&mut self, phys_range: {:?}, attributes: <{:?}>)",
             phys_range, attributes
@@ -114,7 +116,7 @@ impl Translation {
             pt,
             va_range_base,
             attributes,
-            self.ram_offset,
+            self.mem_offset,
         )
     }
 
@@ -123,7 +125,7 @@ impl Translation {
         phys_range: PhysAddrRange,
         virt_base: VirtAddr,
         attributes: TranslationAttributes,
-    ) -> Result<(), u64> {
+    ) -> Result<VirtAddrRange, u64> {
         debug!(
             "Translation::absolute_map(&mut self, phys_range: {:?}, virt_base: {:?}, attributes: <{:?}>)",
             phys_range, virt_base, attributes
@@ -138,14 +140,9 @@ impl Translation {
             pt,
             va_range_base,
             attributes,
-            self.ram_offset,
+            self.mem_offset,
         )
     }
-}
-
-fn clear_page_table(page_table: PhysAddr, ram_offset: VirtOffset) {
-    let pt = ram_offset.increment(page_table).as_ptr() as *mut PageTable;
-    unsafe { core::intrinsics::volatile_set_memory(pt, 0, 1) };
 }
 
 fn map_level(
@@ -155,16 +152,16 @@ fn map_level(
     pt: *mut PageTable,
     table_base: VirtAddr,
     attributes: TranslationAttributes,
-    ram_offset: VirtOffset,
-) -> Result<(), u64> {
+    mem_offset: MemOffset,
+) -> Result<VirtAddrRange, u64> {
     trace!(
-        "id_map_level(table_range: {:?}, phys_offset: {:?}, level: {}, pt: 0x{:08x}, table_base: {:?}, _, ram_offset: {:?})",
+        "id_map_level(table_range: {:?}, phys_offset: {:?}, level: {}, pt: 0x{:08x}, table_base: {:?}, _, mem_offset: {:?})",
         target_range,
         phys_offset,
         level,
         pt as u64,
         table_base,
-        ram_offset
+        mem_offset
     );
     for (index, entry_target_range, entry_range) in table_entries(target_range, level, table_base) {
         // pt: a pointer to the physical address of the page table, offset by ram_offset, which can
@@ -213,11 +210,11 @@ fn map_level(
             let pt = frames::find()?;
             let table_entry = TableDescriptor::new_entry(pt, attributes);
             table.set(index, PageTableEntry::from(table_entry));
-            let ppt = ram_offset.increment(pt).as_ptr() as *mut PageTable;
+            let ppt = mem_offset.offset(pt) as *mut PageTable;
             unsafe { core::intrinsics::volatile_set_memory(ppt, 0, 1) };
             pt
         };
-        let pt = ram_offset.increment(pt).as_ptr() as *mut PageTable;
+        let pt = mem_offset.offset(pt) as *mut PageTable;
         map_level(
             entry_target_range,
             phys_offset,
@@ -225,10 +222,10 @@ fn map_level(
             pt,
             entry_range.base(),
             attributes,
-            ram_offset,
+            mem_offset,
         )?;
     }
-    Ok(())
+    Ok(target_range)
 }
 
 struct PageTableEntries {
@@ -326,7 +323,7 @@ impl Debug for Translation {
             level: usize,
             pt: *const PageTable,
             table_base: VirtAddr,
-            offset: VirtOffset,
+            mem_offset: MemOffset,
             f: &mut Formatter<'_>,
         ) -> Result<(), Error> {
             const LEVEL_BUFFERS: [&str; 4] = ["", " ", "  ", "   "];
@@ -343,8 +340,8 @@ impl Debug for Translation {
                         writeln!(f, "      {}{:03}: {:?}", LEVEL_BUFFERS[level], i, pte)?;
                         let pt = pte.next_level_table_address();
                         let table_base = table_base.increment(i << LEVEL_OFFSETS[level]);
-                        let pt = offset.increment(pt).as_ptr() as *const PageTable;
-                        print_level(level + 1, pt, table_base, offset, f)?;
+                        let pt = mem_offset.offset(pt) as *const PageTable;
+                        print_level(level + 1, pt, table_base, mem_offset, f)?;
                     } else {
                         let pte = PageBlockDescriptor::from(*pte);
                         if !pte.is_contiguous() || 0 == i % CONTIG_SPAN {
@@ -365,14 +362,14 @@ impl Debug for Translation {
         writeln!(
             f,
             "Translation: based at {:?} starting level {} (accessing ram through {:?})",
-            self.va_range_base, self.first_level, self.ram_offset
+            self.va_range_base, self.first_level, self.mem_offset
         )?;
         writeln!(f, "      ######")?;
         let result = print_level(
             self.first_level as usize,
             self.page_table(),
             self.va_range_base,
-            self.ram_offset,
+            self.mem_offset,
             f,
         );
         write!(f, "      ######")?;

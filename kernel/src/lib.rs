@@ -41,35 +41,6 @@ use debug::uart_logger;
 
 use log::info;
 
-use thread::ThreadID;
-
-/// Kernel API for spawning a new thread
-///
-/// Integrates the sub-modules.
-fn spawn(f: fn() -> ()) -> Result<ThreadID, u64> {
-    use thread::Thread;
-
-    let tcb: &mut Thread = Thread::spawn(f)?;
-    let stack: [u64; 10] = [0; 10]; // pager::alloc(thread_id, 10)?;
-    tcb.set_stack(&stack);
-    tcb.ready();
-    Ok(tcb.thread_id())
-}
-
-/// Kernel function which terminates current thread
-///
-/// This would be called by a kernel thread to terminate itself.
-fn _terminate() -> ! {
-    use thread::Thread;
-    //
-    let t = Thread::current();
-    t.terminate();
-    // pager::free(thread_id); // what happens to the stack?
-    t.unused();
-
-    loop {}
-}
-
 /// Boot operating system from first core
 ///
 /// TODO: what happens if any of this code panics?
@@ -96,17 +67,15 @@ pub fn boot3() -> ! {
     // establish io
     device::init();
 
-    let ta = spawn(workload_a).unwrap();
+    let ta = thread::spawn(workload_a).unwrap();
     thread::ready(ta);
-    let tb = spawn(workload_b).unwrap();
+    let tb = thread::spawn(workload_b).unwrap();
     thread::ready(tb);
 
-    // clean up boot thread
-    thread::terminate()
-}
+    thread::show_state();
 
-fn panic() -> ! {
-    loop {}
+    // clean up boot thread and yield to ready
+    thread::terminate()
 }
 
 #[doc(hidden)]

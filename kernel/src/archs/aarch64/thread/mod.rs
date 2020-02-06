@@ -5,7 +5,7 @@
 /// State in a separate ringbuffer for simple round-robin scheduling.
 /// Array and ringbuffer access behind spinlock.
 /// EL0 register state is saved into TCB on exception.
-use log::info;
+use log::{info, trace};
 
 pub mod spinlock;
 
@@ -43,7 +43,7 @@ impl ControlBlock {
     }
 
     pub fn current() -> &'static mut ControlBlock {
-        let ptcb = TPIDRRO_EL0.get() as *mut ControlBlock;
+        let ptcb = TPIDR_EL1.get() as *mut ControlBlock;
         unsafe { &mut (*ptcb) }
     }
 
@@ -60,10 +60,11 @@ impl ControlBlock {
     }
 
     pub fn restore_cpu(self: &ControlBlock) -> () {
+        trace!("restore_cpu &self {:?}", self as *const ControlBlock);
         SP_EL0.set(self.sp_el0 as u64);
         ELR_EL1.set(self.elr as u64);
         SPSR_EL1.set(self.spsr);
-        TPIDRRO_EL0.set(self as *const ControlBlock as u64);
+        TPIDR_EL1.set(self as *const ControlBlock as u64);
     }
 
     pub fn resume(self: &ControlBlock) -> ! {

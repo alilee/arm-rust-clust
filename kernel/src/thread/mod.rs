@@ -5,14 +5,18 @@
 ///
 ///
 ///
-use log::info;
-
-use core::sync::atomic::AtomicBool;
-
 use super::arch;
 use crate::dbg;
+use crate::pager;
 use arch::thread::spinlock;
+use pager::Page;
 
+use log::{debug, info, trace};
+
+use core::panic;
+use core::sync::atomic::AtomicBool;
+
+#[derive(Copy, Clone, Debug)]
 pub struct ThreadID(usize);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -25,7 +29,7 @@ pub enum State {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Thread {
+struct Thread {
     arch_tcb: arch::thread::ControlBlock,
     slot: usize,
     priority: i32,
@@ -47,14 +51,12 @@ impl Thread {
         unsafe { &STATES[..] }
     }
 
-    pub fn spawn(f: fn() -> ()) -> Result<&'static mut Thread, u64> {
+    pub fn spawn(f: fn() -> (), stack: *const Page) -> Result<&'static mut Thread, u64> {
         info!("current state of STATES: {:?}", Thread::get_states());
         unsafe {
-            let maybe_slot: Option<usize> = spinlock::exclusive(&mut THREADS_SL, || {
-                find_state(&STATES[..], State::Unused).map(|slot| {
-                    STATES[slot] = State::Blocked;
-                    slot
-                })
+            let maybe_slot: Option<usize> = find_state(&STATES[..], State::Unused).map(|slot| {
+                STATES[slot] = State::Blocked;
+                slot
             });
 
             info!("candidate slot: {:?}", maybe_slot);
@@ -62,8 +64,8 @@ impl Thread {
             maybe_slot
                 .map(|slot| {
                     THREADS[slot] = Thread {
-                        arch_tcb: arch::thread::ControlBlock::spawn(f),
-                        slot: slot,
+                        arch_tcb: arch::thread::ControlBlock::spawn(f, stack),
+                        slot,
                         priority: 0,
                     };
                     &mut THREADS[slot]
@@ -76,6 +78,7 @@ impl Thread {
     pub fn current() -> &'static mut Thread {
         let current = arch::thread::ControlBlock::current();
         let pt = current as *mut arch::thread::ControlBlock as *mut Thread;
+        trace!("{:?}", pt);
         unsafe { &mut (*pt) }
     }
 
@@ -88,13 +91,12 @@ impl Thread {
     /// TODO: Make this fair, rather than favouring the lower slots.
     pub fn next_ready() -> Option<&'static mut Thread> {
         unsafe {
-            spinlock::exclusive(&mut THREADS_SL, || {
-                find_state(&STATES[..], State::Ready).map(|slot| {
+            find_state(&STATES[..], State::Ready)
+                .map(|slot| {
                     STATES[slot] = State::Blocked;
                     slot
                 })
-            })
-            .map(|slot| &mut THREADS[slot])
+                .map(|slot| &mut THREADS[slot])
         }
     }
 
@@ -119,6 +121,7 @@ impl Thread {
     }
 
     pub fn terminate(self: &mut Thread) -> () {
+        trace!("terminate");
         unsafe {
             STATES[self.slot] = State::Terminated;
         }
@@ -156,7 +159,7 @@ fn find_state(states: &[State], state: State) -> Option<usize> {
 /// thread can be cleaned up normally.
 /// The thread would behave as if it called the supervisor exception.
 /// TODO: Instead, just find work as when thread yields.
-pub fn init() -> () {
+pub fn init() -> Result<(), u64> {
     fn terminator() {
         crate::user::thread::terminate();
     }
@@ -166,13 +169,26 @@ pub fn init() -> () {
 
     let slot = 0;
     unsafe {
-        let arch_tcb = arch::thread::ControlBlock::spawn(terminator);
+        let stack = pager::alloc(1, true)?.top();
+        let arch_tcb = spinlock::exclusive(&mut THREADS_SL, || {
+            arch::thread::ControlBlock::spawn(terminator, stack)
+        })?;
         STATES[slot] = State::Blocked;
         THREADS[slot] = Thread {
             arch_tcb,
             slot: 0,
             priority: 0,
         };
+        THREADS[slot].arch_tcb.restore_cpu(); // this is now the running thread
+    }
+    Ok(())
+}
+
+pub fn spawn(f: fn() -> ()) -> Result<ThreadID, u64> {
+    unsafe {
+        let stack = pager::alloc(1, true)?;
+        let result = spinlock::exclusive(&mut THREADS_SL, || Thread::spawn(f, stack))?;
+        Ok(result.thread_id())
     }
 }
 
@@ -206,21 +222,24 @@ pub fn resume(tid: ThreadID) -> ! {
     let t = Thread::find(tid);
     match t {
         Some(t) => t.arch_tcb.resume(),
-        None => crate::panic(),
+        None => panic!(),
     }
 }
 
 /// Declare a thread ready
 pub fn ready(tid: ThreadID) -> () {
+    info!("ready {:?}", tid);
     let t = Thread::find(tid);
     match t {
         Some(t) => t.ready(),
-        None => crate::panic(),
+        None => panic!(),
     }
 }
 
 pub fn terminate() -> ! {
+    info!("terminate");
     let current = Thread::current();
+    debug!("terminating: {:?}", current);
     unsafe {
         spinlock::exclusive(&mut THREADS_SL, || {
             current.terminate();

@@ -3,7 +3,6 @@ pub mod desc;
 mod mair;
 mod trans;
 
-use super::virt_addr::VirtOffset;
 pub use attrs::TranslationAttributes;
 pub use trans::Translation;
 
@@ -28,10 +27,6 @@ const UPPER_TABLE_LEVEL: u8 = 1;
 const LOWER_TABLE_LEVEL: u8 = 0;
 const LEVEL_OFFSETS: [usize; 4] = [39, 30, 21, 12];
 const LEVEL_WIDTH: usize = 9;
-
-pub const fn kernel_mem_offset() -> VirtOffset {
-    VirtOffset::new_const(UPPER_VA_BASE)
-}
 
 pub const fn kernel_va_bits() -> u32 {
     UPPER_VA_BITS

@@ -1,4 +1,4 @@
-#[allow(missing_docs)]
+#![allow(missing_docs)]
 
 /// Processor entry point
 pub unsafe extern "C" fn _reset() -> ! {
@@ -56,7 +56,9 @@ pub mod handler {
 }
 
 pub mod pager {
-    use crate::pager::{PhysAddr, PhysAddrRange};
+    use crate::pager;
+    use pager::virt_addr::*;
+    use pager::{PhysAddr, PhysAddrRange};
 
     pub fn init() -> Result<PhysAddrRange, u64> {
         Ok(PhysAddrRange::new_const(
@@ -65,10 +67,10 @@ pub mod pager {
         ))
     }
 
-    pub fn enable(boot3: fn() -> !) -> ! {
+    pub fn enable(boot3: fn() -> !, offset: VirtOffset) -> ! {
         boot3()
     }
-    pub fn device_map(range: PhysAddrRange) -> Result<*mut (), u64> {
+    pub fn device_map(_range: PhysAddrRange) -> Result<*mut (), u64> {
         Err(0)
     }
 }
