@@ -108,10 +108,6 @@ impl Thread {
         unsafe { Some(&mut THREADS[slot]) }
     }
 
-    pub fn set_stack(self: &mut Thread, stack: &[u64]) -> () {
-        self.arch_tcb.set_user_stack(stack);
-    }
-
     pub fn thread_id(self: &Thread) -> ThreadID {
         ThreadID(self.slot)
     }
@@ -159,7 +155,7 @@ fn find_state(states: &[State], state: State) -> Option<usize> {
 /// thread can be cleaned up normally.
 /// The thread would behave as if it called the supervisor exception.
 /// TODO: Instead, just find work as when thread yields.
-pub fn init() -> Result<(), u64> {
+pub fn init() {
     fn terminator() {
         crate::user::thread::terminate();
     }
@@ -169,10 +165,10 @@ pub fn init() -> Result<(), u64> {
 
     let slot = 0;
     unsafe {
-        let stack = pager::alloc(1, true)?.top();
+        let stack = pager::alloc(1, true).unwrap().top();
         let arch_tcb = spinlock::exclusive(&mut THREADS_SL, || {
             arch::thread::ControlBlock::spawn(terminator, stack)
-        })?;
+        });
         STATES[slot] = State::Blocked;
         THREADS[slot] = Thread {
             arch_tcb,
@@ -181,13 +177,12 @@ pub fn init() -> Result<(), u64> {
         };
         THREADS[slot].arch_tcb.restore_cpu(); // this is now the running thread
     }
-    Ok(())
 }
 
 pub fn spawn(f: fn() -> ()) -> Result<ThreadID, u64> {
     unsafe {
         let stack = pager::alloc(1, true)?;
-        let result = spinlock::exclusive(&mut THREADS_SL, || Thread::spawn(f, stack))?;
+        let result = spinlock::exclusive(&mut THREADS_SL, || Thread::spawn(f, stack.top()))?;
         Ok(result.thread_id())
     }
 }

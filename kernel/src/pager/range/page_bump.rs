@@ -15,7 +15,7 @@ impl PageBumpAllocator {
     pub const fn new() -> Self {
         Self {
             limit: 0,
-            top: VirtAddr::new(0),
+            top: VirtAddr::new_const(0),
         }
     }
 
@@ -30,7 +30,7 @@ impl PageBumpAllocator {
         } else {
             let length = span * PAGESIZE_BYTES;
             self.limit -= span;
-            self.top = self.top.decrement(length);
+            self.top = unsafe { self.top.decrement(length) };
             Ok(VirtAddrRange::new(self.top, length))
         }
     }

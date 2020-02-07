@@ -17,7 +17,7 @@ pub const LAYOUT: [(&str, usize); 4] = [
 fn find(section: &str) -> Result<VirtAddrRange, u64> {
     let mut base: VirtAddr = arch::pager::KERNEL_BASE;
     for (this_section, length) in LAYOUT.iter() {
-        let next = base.increment(*length);
+        let next = unsafe { base.increment(*length) };
         if *this_section == section {
             return Ok(VirtAddrRange::new(base, *length));
         }
@@ -43,5 +43,5 @@ pub fn page_pool() -> VirtAddrRange {
 }
 
 pub fn kernel_mem_offset() -> MemOffset {
-    MemOffset::new(device::ram::range(), ram().base())
+    MemOffset::new(device::ram::range().base(), ram().base())
 }

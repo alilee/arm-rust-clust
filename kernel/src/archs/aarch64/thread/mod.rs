@@ -9,6 +9,8 @@ use log::{info, trace};
 
 pub mod spinlock;
 
+use crate::pager::Page;
+
 use core::ptr;
 use cortex_a::regs::*;
 
@@ -30,10 +32,10 @@ impl ControlBlock {
         }
     }
 
-    pub fn spawn(f: fn() -> ()) -> ControlBlock {
+    pub fn spawn(f: fn() -> (), stack: *const Page) -> ControlBlock {
         let mut res = ControlBlock {
             regs: [0; 32],
-            sp_el0: ptr::null(),
+            sp_el0: stack as *const u64,
             elr: f as *const (),
             spsr: 0,
         };
@@ -45,12 +47,6 @@ impl ControlBlock {
     pub fn current() -> &'static mut ControlBlock {
         let ptcb = TPIDR_EL1.get() as *mut ControlBlock;
         unsafe { &mut (*ptcb) }
-    }
-
-    pub fn set_user_stack(self: &mut ControlBlock, stack: &[u64]) -> () {
-        const U64_SIZE: u64 = 8;
-        let tos = &stack[stack.len() - 1] as *const u64 as u64 + U64_SIZE;
-        self.sp_el0 = tos as *const u64;
     }
 
     pub fn store_cpu(self: &mut ControlBlock) -> () {

@@ -1,12 +1,9 @@
-pub mod attrs;
-pub mod desc;
-mod mair;
-mod trans;
+pub use super::attrs::TranslationAttributes;
+use super::desc;
+use super::mair;
+pub use super::trans::Translation;
 
-pub use attrs::TranslationAttributes;
-pub use trans::Translation;
-
-use crate::pager::PAGESIZE_BYTES;
+use crate::pager::{MemOffset, PAGESIZE_BYTES};
 use crate::util::set_above_bits;
 
 #[allow(unused_imports)]
@@ -15,7 +12,8 @@ use log::{debug, info, trace};
 use core::mem;
 use core::slice::Iter;
 
-type PageTableEntryType = u64;
+pub type PageTableEntryType = u64;
+
 #[derive(Copy, Clone)]
 pub struct PageTableEntry(PageTableEntryType);
 
@@ -23,18 +21,18 @@ const TABLE_ENTRIES: usize = PAGESIZE_BYTES / mem::size_of::<PageTableEntry>();
 const LOWER_VA_BITS: u32 = 48; // 256 TB
 const UPPER_VA_BITS: u32 = 39; // 512 GB
 pub const UPPER_VA_BASE: usize = set_above_bits(UPPER_VA_BITS);
-const UPPER_TABLE_LEVEL: u8 = 1;
-const LOWER_TABLE_LEVEL: u8 = 0;
-const LEVEL_OFFSETS: [usize; 4] = [39, 30, 21, 12];
-const LEVEL_WIDTH: usize = 9;
+pub const UPPER_TABLE_LEVEL: u8 = 1;
+pub const LOWER_TABLE_LEVEL: u8 = 0;
+pub const LEVEL_OFFSETS: [usize; 4] = [39, 30, 21, 12];
+pub const LEVEL_WIDTH: usize = 9;
 
-pub const fn kernel_va_bits() -> u32 {
-    UPPER_VA_BITS
-}
-
-pub const fn user_va_bits() -> u32 {
-    LOWER_VA_BITS
-}
+//pub const fn kernel_va_bits() -> u32 {
+//    UPPER_VA_BITS
+//}
+//
+//pub const fn user_va_bits() -> u32 {
+//    LOWER_VA_BITS
+//}
 
 impl PageTableEntry {
     pub fn get(&self) -> PageTableEntryType {
@@ -77,15 +75,56 @@ impl PageTable {
     }
 }
 
-pub fn init() {
+pub fn init() -> Result<(), u64> {
+    use cortex_a::{
+        barrier,
+        regs::{TCR_EL1::*, *},
+    };
+
     trace!("init");
     info!("kernel base: {:#x}", UPPER_VA_BASE);
     trace!(
         "kernel va space: {:#x}",
         0xFFFF_FFFF_FFFF_FFFF - UPPER_VA_BASE
     );
-
     mair::init();
+
+    let mem_offset = MemOffset::identity();
+    let tt1 = Translation::new_upper(mem_offset)?;
+    let tt0 = Translation::new_lower(mem_offset)?;
+
+    let ttbr1 = tt1.base_register();
+    let ttbr0 = tt0.base_register();
+
+    let asid = 0;
+    let ttbr0: u64 = ttbr0 | ((asid as u64) << 48);
+
+    TTBR0_EL1.set(ttbr0);
+    TTBR1_EL1.set(ttbr1);
+
+    assert_eq!(crate::pager::PAGESIZE_BYTES, 4096);
+    //
+    // TODO: nTWE, nTWI
+    //
+    TCR_EL1.modify(
+        AS::Bits_16    // 16 bit ASID 
+            + IPS::Bits_36  // 36 bits/64GB of physical address space
+            + TG1::KiB_4
+            + SH1::Outer
+            + ORGN1::WriteThrough_ReadAlloc_NoWriteAlloc_Cacheable
+            + IRGN1::WriteThrough_ReadAlloc_NoWriteAlloc_Cacheable
+            + T1SZ.val(64 - UPPER_VA_BITS as u64) // 64-t1sz=43 bits of address space in high range
+            + TG0::KiB_4
+            + SH0::Outer
+            + ORGN0::WriteThrough_ReadAlloc_NoWriteAlloc_Cacheable
+            + IRGN0::WriteThrough_ReadAlloc_NoWriteAlloc_Cacheable
+            + T0SZ.val(64 - LOWER_VA_BITS as u64), // 64-t0sz=48 bits of address space in low range
+    );
+    unsafe {
+        barrier::isb(barrier::SY);
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

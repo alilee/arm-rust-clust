@@ -35,3 +35,15 @@ pub fn ram() -> Attributes {
     let field = KernelRead::SET + KernelWrite::SET + Block::SET;
     Attributes::new(field.value)
 }
+
+pub fn user_read_write() -> Attributes {
+    use AttributeFields::*;
+    let field = UserRead::SET + UserWrite::SET;
+    Attributes::new(field.value)
+}
+
+pub fn user_read_write_exec() -> Attributes {
+    use AttributeFields::*;
+    let field = UserRead::SET + UserWrite::SET + UserExec::SET;
+    Attributes::new(field.value)
+}

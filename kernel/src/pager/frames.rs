@@ -64,7 +64,7 @@ impl FrameMap {
             return Err(0);
         }
 
-        let first_page = PhysAddrRange::bounded_by(self.range.base(), range.base()).pages();
+        let first_page = PhysAddrRange::pages_bounding(self.range.base(), range.base()).pages();
         let mut i = first_page / Self::CHUNK_BITS;
         let offset = first_page % Self::CHUNK_BITS;
         let mut n_pages_reqd = range.pages();
@@ -122,7 +122,7 @@ impl Debug for FrameMap {
         let mut gap_i = 0usize;
         let mut last_printed_addr = 0usize;
         for (i, chunk) in self.page_map.iter().enumerate() {
-            let addr = self.range.base().offset(i * PAGESIZE_BYTES).get();
+            let addr = unsafe { self.range.base().offset(i * PAGESIZE_BYTES).get() };
             if i == self.highwater_mark {
                 writeln!(f, "      0x{:08x} ====================== highwater", addr)?;
                 last_printed_addr = addr;
@@ -138,7 +138,7 @@ impl Debug for FrameMap {
                 gap_i += 1;
             }
         }
-        let addr = self.range.top().get();
+        let addr = unsafe { self.range.top().get() };
         writeln!(f, "      ... 0x{:08x}", addr - last_printed_addr)?;
         write!(f, "      ######")?;
         Ok(())
@@ -166,14 +166,6 @@ pub fn find() -> Result<PhysAddr, u64> {
     info!("find -> {:?}", par.base());
     trace!("{:?}", *FRAME_MAP.lock());
     Ok(par.base())
-}
-
-pub fn find_contiguous(pages: usize) -> Result<PhysAddrRange, u64> {
-    debug!("find_contiguous pages: {}", pages);
-    let par = FRAME_MAP.lock().find_contiguous(pages)?;
-    info!("find -> {:?}", par);
-    trace!("{:?}", *FRAME_MAP.lock());
-    Ok(par)
 }
 
 #[cfg(test)]

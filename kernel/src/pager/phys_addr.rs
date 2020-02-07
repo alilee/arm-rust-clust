@@ -28,23 +28,33 @@ impl PhysAddr {
         Self(sym as *const u8 as usize)
     }
 
-    pub fn align_down(self: &Self, align: usize) -> (Self, MemOffset) {
+    pub fn align_down(self: &Self, align: usize) -> Self {
         assert!(align.is_power_of_two(), "`align` must be a power of two");
-        let result = self.0 & !(align - 1);
-        (Self(result), MemOffset((self.0 - result) as isize))
+        Self(self.0 & !(align - 1))
     }
+
     pub fn align_up(self: &Self, align: usize) -> Self {
         assert!(align.is_power_of_two(), "`align` must be a power of two");
         let result = (self.0 + align - 1) & !(align - 1);
         Self(result)
     }
 
-    pub fn identity_map(&self) -> *const () {
+    pub fn _identity_map(&self) -> *const () {
         self.0 as *const ()
     }
+
     pub const fn identity_map_mut(&self) -> *mut () {
         self.0 as *mut ()
     }
+
+    pub const fn is_null(&self) -> bool {
+        self.0 == 0
+    }
+
+    pub const fn page(&self) -> usize {
+        self.0 >> 12
+    }
+
     fn as_ptr(self: &Self) -> *const u8 {
         self.0 as *const u8
     }
@@ -78,12 +88,12 @@ impl MemOffset {
 
     pub fn offset(&self, phys_addr: PhysAddr) -> *const Page {
         let va = VirtAddr::id_map(phys_addr);
-        va.increment(self.0).as_ptr() as *const Page
+        unsafe { va.increment(self.0).as_ptr() as *const Page }
     }
 
     pub fn offset_mut(&self, phys_addr: PhysAddr) -> *mut Page {
         let va = VirtAddr::id_map(phys_addr);
-        va.increment(self.0).as_ptr() as *mut Page
+        unsafe { va.increment(self.0).as_ptr() as *mut Page }
     }
 }
 
@@ -98,10 +108,12 @@ impl PhysAddrRange {
     pub fn new(base: PhysAddr, length: usize) -> Self {
         Self { base, length }
     }
+
     pub const fn new_const(base: PhysAddr, length: usize) -> Self {
         Self { base, length }
     }
-    pub fn bounded_by(base: PhysAddr, top: PhysAddr) -> Self {
+
+    pub fn pages_bounding(base: PhysAddr, top: PhysAddr) -> Self {
         assert!(base.0 < top.0);
         let top = top.align_up(PAGESIZE_BYTES);
         unsafe {
@@ -110,11 +122,15 @@ impl PhysAddrRange {
         }
     }
 
-    pub fn align_to_pages(&mut self) -> Self {
-        Self::bounded_by(
-            self.base().align_down(PAGESIZE_BYTES),
-            self.top().align_up(4096),
-        )
+    pub fn extend_to_align_to(&self, align: usize) -> Self {
+        unsafe {
+            let top = self.top().get() + align - 1;
+            let aligned_top = top & !(align - 1);
+            Self {
+                base: self.base.align_down(align),
+                length: aligned_top - self.base.get(),
+            }
+        }
     }
 
     pub fn pages(self: &Self) -> usize {

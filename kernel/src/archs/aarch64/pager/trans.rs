@@ -1,6 +1,6 @@
 use super::attrs;
 use super::desc;
-use super::{
+use super::table::{
     PageTable, PageTableEntry, LEVEL_OFFSETS, LEVEL_WIDTH, LOWER_TABLE_LEVEL, UPPER_TABLE_LEVEL,
     UPPER_VA_BASE,
 };
@@ -9,7 +9,7 @@ use desc::{PageBlockDescriptor, TableDescriptor};
 
 use crate::pager::{
     clear_page, frames,
-    virt_addr::{PhysOffset, VirtAddr, VirtAddrRange},
+    virt_addr::{AddrOffsetUp, VirtAddr, VirtAddrRange},
     MemOffset, Page, PhysAddr, PhysAddrRange,
 };
 
@@ -93,7 +93,7 @@ impl Translation {
     }
 
     pub fn base_register(&self) -> u64 {
-        self.page_table.get() as u64
+        unsafe { self.page_table.get() as u64 }
     }
 
     pub fn identity_map(
@@ -107,11 +107,11 @@ impl Translation {
         );
         let va_range_base = self.va_range_base;
         let pt = self.page_table();
-        let virt_range = VirtAddrRange::id_map(phys_range);
-        let phys_offset = PhysOffset::id_map();
+        let addr_offset = AddrOffsetUp::id_map();
+        let virt_range = addr_offset.reverse_translate_range(phys_range);
         map_level(
             virt_range,
-            phys_offset,
+            addr_offset,
             self.first_level,
             pt,
             va_range_base,
@@ -132,10 +132,11 @@ impl Translation {
         );
         let va_range_base = self.va_range_base;
         let pt = self.page_table();
-        let (virt_range, phys_offset) = VirtAddrRange::target_map(phys_range, virt_base);
+        let addr_offset = AddrOffsetUp::reverse_translation(phys_range.base(), virt_base);
+        let virt_range = addr_offset.reverse_translate_range(phys_range);
         map_level(
             virt_range,
-            phys_offset,
+            addr_offset,
             self.first_level,
             pt,
             va_range_base,
@@ -143,11 +144,19 @@ impl Translation {
             self.mem_offset,
         )
     }
+
+    pub fn provisional_map(
+        &mut self,
+        _virt_range: VirtAddrRange,
+        _attributes: TranslationAttributes,
+    ) -> Result<VirtAddrRange, u64> {
+        todo!()
+    }
 }
 
 fn map_level(
     target_range: VirtAddrRange,
-    phys_offset: PhysOffset,
+    addr_offset: AddrOffsetUp,
     level: u8,
     pt: *mut PageTable,
     table_base: VirtAddr,
@@ -155,9 +164,9 @@ fn map_level(
     mem_offset: MemOffset,
 ) -> Result<VirtAddrRange, u64> {
     trace!(
-        "id_map_level(table_range: {:?}, phys_offset: {:?}, level: {}, pt: 0x{:08x}, table_base: {:?}, _, mem_offset: {:?})",
+        "id_map_level(table_range: {:?}, addr_offset: {:?}, level: {}, pt: 0x{:08x}, table_base: {:?}, _, mem_offset: {:?})",
         target_range,
-        phys_offset,
+        addr_offset,
         level,
         pt as u64,
         table_base,
@@ -167,7 +176,7 @@ fn map_level(
         // pt: a pointer to the physical address of the page table, offset by ram_offset, which can
         //     be used to read or modify the page table.
         // pt[index]: the relevant entry inside the page table
-        // phys_offset: the offset from a va to the intended output address
+        // addr_offset: the offset from a va to the intended output address
         // entry_range: the sub-part of the range which this entry covers
         // entry_target_range: the all or part of this entry to map pages for
         // target_range: the span of entries in this table to map pages for
@@ -193,8 +202,8 @@ fn map_level(
                 // level 3: 4KB page
                 let pte = table.get(index);
                 assert!(!pte.is_valid());
-                let output_addr = phys_offset.translate(entry_range.base());
-                trace!("{:?}+{:?}={:?}", entry_range, phys_offset, output_addr);
+                let output_addr = addr_offset.translate(entry_range.base());
+                trace!("{:?}+{:?}={:?}", entry_range, addr_offset, output_addr);
                 let pte =
                     PageBlockDescriptor::new_entry(level, output_addr, attributes, contiguous);
                 table.set(index, PageTableEntry::from(pte));
@@ -217,7 +226,7 @@ fn map_level(
         let pt = mem_offset.offset(pt) as *mut PageTable;
         map_level(
             entry_target_range,
-            phys_offset,
+            addr_offset,
             level + 1,
             pt,
             entry_range.base(),
@@ -285,11 +294,12 @@ fn table_entries(virt_range: VirtAddrRange, level: u8, base: VirtAddr) -> PageTa
         ((1usize << LEVEL_WIDTH) - 1usize) << level_offset,
     );
 
-    let first = (virt_range.base.addr() >> level_offset) & ((1 << LEVEL_WIDTH) - 1);
+    let virt_range_base = unsafe { virt_range.base.get() };
+    let first = (virt_range_base >> level_offset) & ((1 << LEVEL_WIDTH) - 1);
     let entries = (virt_range.length + ((1 << level_offset) - 1)) >> level_offset;
 
     let span = VirtAddrRange {
-        base: base.increment(first << level_offset),
+        base: unsafe { base.increment(first << level_offset) },
         length: 1usize << level_offset,
     };
 
@@ -312,7 +322,7 @@ fn contiguous_virt_range(level: u8, index: usize, table_base: VirtAddr) -> VirtA
     let level_offset = LEVEL_OFFSETS[level as usize];
     let entry_size = 1usize << level_offset;
     let index = index - index % CONTIG_SPAN;
-    let base = table_base.increment(index * entry_size);
+    let base = unsafe { table_base.increment(index * entry_size) };
     let length = CONTIG_SPAN * entry_size;
     VirtAddrRange::new(base, length)
 }
@@ -339,7 +349,7 @@ impl Debug for Translation {
                         let pte = TableDescriptor::from(*pte);
                         writeln!(f, "      {}{:03}: {:?}", LEVEL_BUFFERS[level], i, pte)?;
                         let pt = pte.next_level_table_address();
-                        let table_base = table_base.increment(i << LEVEL_OFFSETS[level]);
+                        let table_base = unsafe { table_base.increment(i << LEVEL_OFFSETS[level]) };
                         let pt = mem_offset.offset(pt) as *const PageTable;
                         print_level(level + 1, pt, table_base, mem_offset, f)?;
                     } else {

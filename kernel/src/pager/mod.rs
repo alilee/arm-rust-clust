@@ -32,17 +32,16 @@ impl PageRange {
     pub fn top(&self) -> *const Page {
         self.1
     }
-    pub fn length_in_pages(&self) -> usize {
-        unsafe { self.1.offset_from(self.0) as usize }
-    }
 }
 
 impl From<VirtAddrRange> for PageRange {
     fn from(range: VirtAddrRange) -> Self {
-        PageRange(
-            range.base().as_ptr() as *const Page,
-            range.top().as_ptr() as *const Page,
-        )
+        unsafe {
+            PageRange(
+                range.base().as_ptr() as *const Page,
+                range.top().as_ptr() as *const Page,
+            )
+        }
     }
 }
 
@@ -51,16 +50,16 @@ pub fn init(boot3: fn() -> !) -> ! {
     info!("init");
 
     let ram = device::ram::range();
-    frames::init(ram);
-    range::init();
-    arch::pager::init();
+    frames::init(ram).unwrap();
+    range::init().unwrap();
+    arch::pager::init().unwrap();
 
     let image_range = unsafe {
         extern "C" {
             static image_base: u8;
             static image_end: u8;
         }
-        PhysAddrRange::bounded_by(
+        PhysAddrRange::pages_bounding(
             PhysAddr::from_linker_symbol(&image_base),
             PhysAddr::from_linker_symbol(&image_end),
         )
@@ -80,31 +79,29 @@ pub fn init(boot3: fn() -> !) -> ! {
     let uart_registers = debug::uart_logger::device_range();
     arch::pager::identity_map(uart_registers, attrs::device(), mem_offset).unwrap();
 
-    let kernel_image_offset = XVirtOffset::between(
-        VirtAddr::id_map(image_range.base()),
-        VirtAddr::from(kernel_base),
-    );
-    let boot3 = kernel_image_offset.offset_fn(boot3);
+    let kernel_image_offset = AddrOffsetUp::reverse_translation(image_range.base(), kernel_base);
+    let boot3 = kernel_image_offset.reverse_translate_fn(boot3);
     arch::pager::enable(boot3, kernel_image_offset)
 }
 
 pub fn device_map<T>(base: PhysAddr) -> Result<*mut T, u64> {
     let length = mem::size_of::<T>();
-    let range = PhysAddrRange::new(base, length);
-    let range = range.align_to_pages();
-    info!("device map @ {:?}", range);
-    let device_base = range::alloc_device(range.pages())?;
+    let phys_range = PhysAddrRange::new(base, length);
+    let aligned_range = phys_range.extend_to_align_to(PAGESIZE_BYTES);
+    info!("device map pages@{:?}", aligned_range);
+    let device_range = range::alloc_device(aligned_range.pages())?;
     arch::pager::absolute_map(
-        range,
-        device_base.base(),
+        phys_range,
+        device_range.base(),
         attrs::device(),
         layout::kernel_mem_offset(),
     )?;
-    Ok(device_base.base().as_ptr() as *mut T)
+    let align_offset = AddrOffsetDown::new_phys_offset(base, aligned_range.base());
+    let mapped_addr = align_offset.reverse_offset_virt_addr(device_range.base());
+    unsafe { Ok(mapped_addr.as_ptr() as *mut T) }
 }
 
 pub fn alloc(pages: usize, guard: bool) -> Result<PageRange, u64> {
-    let phys_range = frames::find_contiguous(pages)?;
     let pages = if guard { pages + 1 } else { pages };
     let alloc_range = range::alloc_pool(pages)?;
     let alloc_range = if guard {
@@ -112,7 +109,11 @@ pub fn alloc(pages: usize, guard: bool) -> Result<PageRange, u64> {
     } else {
         alloc_range
     };
-    arch::pager::absolute_map(phys_range, alloc_range.base(), range::attrs::kernel())?;
+    arch::pager::provisional_map(
+        alloc_range,
+        range::attrs::user_read_write(),
+        kernel_mem_offset(),
+    )?;
     Ok(PageRange::from(alloc_range))
 }
 

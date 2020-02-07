@@ -2,62 +2,6 @@ use crate::pager::{Page, PhysAddr, PhysAddrRange, PAGESIZE_BYTES};
 
 use core::fmt::{Debug, Error, Formatter};
 
-//register_bitfields! {
-//    u64,
-//    VirtualAddress [
-//        L0Index OFFSET(39) NUMBITS(9) [],
-//        L1Index OFFSET(30) NUMBITS(9) [],
-//        L2Index OFFSET(21) NUMBITS(9) [],
-//        L3Index OFFSET(12) NUMBITS(9) [],
-//        PageOffset OFFSET(0) NUMBITS(12) []
-//    ]
-//}
-
-/// A single-step addition offset between a physical address and a virtual location
-#[derive(Copy, Clone)]
-pub struct PhysVirtTranslation(usize);
-
-impl PhysVirtTranslation {
-    pub unsafe fn between(pa: PhysAddr, va: VirtAddr) -> Self {
-        assert!(pa.get() < va.get());
-        Self(va.0 - pa.get())
-    }
-    pub unsafe fn translate(&self, pa: PhysAddr) -> VirtAddr {
-        VirtAddr::new(pa.get() + self.0)
-    }
-    pub unsafe fn xget(&self) -> usize {
-        self.0
-    }
-}
-
-#[derive(Copy, Clone)]
-pub struct XVirtOffset(usize);
-
-impl XVirtOffset {
-    pub fn between(low_va: VirtAddr, high_va: VirtAddr) -> Self {
-        assert!(low_va < high_va);
-        Self(high_va.0 - low_va.0)
-    }
-    pub fn offset(&self, virt_addr: VirtAddr) -> VirtAddr {
-        unsafe { virt_addr.increment(self.0) }
-    }
-    pub fn offset_fn(&self, addr: fn() -> !) -> fn() -> ! {
-        use core::mem;
-        let va = VirtAddr::from(addr as *const ());
-        let va = self.offset(va);
-        unsafe { mem::transmute::<*const (), fn() -> !>(va.as_ptr()) }
-    }
-    pub unsafe fn get(&self) -> usize {
-        self.0
-    }
-}
-
-impl Debug for XVirtOffset {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "+0x{:08x}", self.0)
-    }
-}
-
 /// A cluster-wide virtual address
 #[derive(Copy, Clone, PartialEq, PartialOrd)]
 pub struct VirtAddr(usize);
@@ -66,10 +10,13 @@ impl VirtAddr {
     pub fn new(addr: usize) -> VirtAddr {
         VirtAddr(addr)
     }
-    pub fn id_map(pa: PhysAddr) -> VirtAddr {
-        unsafe { VirtAddr::new(pa.get()) }
+    pub const fn new_const(addr: usize) -> VirtAddr {
+        VirtAddr(addr)
     }
-    pub unsafe fn addr(&self) -> usize {
+    pub fn id_map(phys_addr: PhysAddr) -> VirtAddr {
+        unsafe { VirtAddr::new(phys_addr.get()) }
+    }
+    pub unsafe fn get(&self) -> usize {
         self.0
     }
     pub unsafe fn increment(&self, incr: usize) -> VirtAddr {
@@ -124,14 +71,14 @@ impl VirtAddrRange {
         }
     }
 
-    pub fn target_map(phys_range: PhysAddrRange, virt_base: VirtAddr) -> (Self, PhysOffset) {
-        let virt_range = Self {
-            base: virt_base,
-            length: phys_range.length(),
-        };
-        let phys_offset = PhysOffset::new(virt_base, phys_range.base());
-        (virt_range, phys_offset)
-    }
+    //    pub fn target_map(phys_range: PhysAddrRange, virt_base: VirtAddr) -> (Self, PhysOffset) {
+    //        let virt_range = Self {
+    //            base: virt_base,
+    //            length: phys_range.length(),
+    //        };
+    //        let phys_offset = PhysOffset::new(virt_base, phys_range.base());
+    //        (virt_range, phys_offset)
+    //    }
 
     pub fn trim_left_pages(&self, pages: usize) -> VirtAddrRange {
         let length = pages * PAGESIZE_BYTES;
@@ -141,9 +88,16 @@ impl VirtAddrRange {
         }
     }
 
-    pub fn step(self: &Self) -> VirtAddrRange {
-        VirtAddrRange {
+    pub fn step(self: &Self) -> Self {
+        Self {
             base: unsafe { self.base.increment(self.length) },
+            length: self.length,
+        }
+    }
+
+    pub fn increment(&self, incr: usize) -> Self {
+        Self {
+            base: unsafe { self.base.increment(incr) },
             length: self.length,
         }
     }
@@ -151,6 +105,11 @@ impl VirtAddrRange {
     pub const fn top(self: &Self) -> VirtAddr {
         VirtAddr(self.base.0 + self.length)
     }
+
+    pub const fn length_in_pages(&self) -> usize {
+        self.length / PAGESIZE_BYTES
+    }
+
     pub fn base(&self) -> VirtAddr {
         self.base
     }
@@ -185,25 +144,69 @@ impl Debug for VirtAddrRange {
 }
 
 #[derive(Copy, Clone)]
-pub struct PhysOffset {
-    delta: isize,
+pub struct AddrOffsetDown {
+    delta: usize,
 }
 
-impl PhysOffset {
+impl AddrOffsetDown {
+    pub fn new_phys_offset(high_addr: PhysAddr, low_addr: PhysAddr) -> Self {
+        assert!(high_addr > low_addr);
+        let delta = unsafe { high_addr.get() - low_addr.get() };
+        Self { delta }
+    }
+
+    pub fn reverse_offset_virt_addr(&self, virt_base: VirtAddr) -> VirtAddr {
+        unsafe { virt_base.increment(self.delta) }
+    }
+}
+
+impl Debug for AddrOffsetDown {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(f, "- {:#x}", self.delta)
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct AddrOffsetUp {
+    delta: usize,
+}
+
+impl AddrOffsetUp {
     pub fn id_map() -> Self {
         Self { delta: 0 }
     }
-    pub fn new(va: VirtAddr, pa: PhysAddr) -> Self {
-        let delta = (pa.get() as isize) - (va.0 as isize);
-        Self { delta }
+
+    pub fn reverse_translation(phys_addr: PhysAddr, virt_base: VirtAddr) -> Self {
+        assert!(virt_base > VirtAddr::id_map(phys_addr));
+        Self {
+            delta: unsafe { virt_base.get() - phys_addr.get() },
+        }
     }
-    pub fn translate(&self, va: VirtAddr) -> PhysAddr {
-        PhysAddr::new((va.addr() as isize + self.delta) as usize)
+    pub fn reverse_translate_range(&self, phys_range: PhysAddrRange) -> VirtAddrRange {
+        VirtAddrRange::id_map(phys_range).increment(self.delta)
+    }
+
+    pub fn reverse_translate_fn(&self, addr: fn() -> !) -> fn() -> ! {
+        use core::mem;
+        let va = VirtAddr::from(addr as *const ());
+        let va = unsafe { va.increment(self.delta) };
+        unsafe { mem::transmute::<*const (), fn() -> !>(va.as_ptr()) }
+    }
+
+    pub fn translate(&self, virt_addr: VirtAddr) -> PhysAddr {
+        unsafe {
+            let addr = virt_addr.get();
+            PhysAddr::new(addr + self.delta)
+        }
+    }
+
+    pub unsafe fn get_offset(&self) -> usize {
+        self.delta
     }
 }
 
-impl Debug for PhysOffset {
+impl Debug for AddrOffsetUp {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "VA {:#x} PA", self.delta)
+        write!(f, "+ {:#x}", self.delta)
     }
 }

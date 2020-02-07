@@ -1,6 +1,6 @@
 use super::attrs;
 use super::mair;
-use super::{PageTableEntry, PageTableEntryType};
+use super::table::{PageTableEntry, PageTableEntryType};
 use attrs::TranslationAttributes;
 use mair::MAIR;
 
@@ -67,7 +67,7 @@ impl TableDescriptor {
     pub fn new_entry(pt: PhysAddr, attributes: TranslationAttributes) -> Self {
         use TableDescriptorFields::*;
 
-        let nlta = pt.get() >> 12;
+        let nlta = unsafe { pt.get() >> 12 };
         let field = Valid::SET + Type::SET + NextLevelTableAddress.val(nlta as u64);
         let value = (attributes.table_desc().0 & !field.mask) | field.value;
         Self(value)
@@ -100,7 +100,7 @@ impl From<PageTableEntry> for TableDescriptor {
 
 impl Debug for TableDescriptor {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        if self.next_level_table_address().get() != 0 {
+        if !self.next_level_table_address().is_null() {
             write!(
                 f,
                 "Next-level table: {:?} ",
@@ -139,7 +139,7 @@ impl PageBlockDescriptor {
     ) -> Self {
         use PageBlockDescriptorFields::*;
 
-        let mut field = Valid::SET + OutputAddress.val(output_addr.get() as u64 >> 12);
+        let mut field = Valid::SET + OutputAddress.val(output_addr.page() as u64);
 
         if contiguous {
             field += Contiguous::SET;
@@ -183,8 +183,8 @@ impl From<PageTableEntry> for PageBlockDescriptor {
 
 impl Debug for PageBlockDescriptor {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        if self.output_address().get() != 0 {
-            write!(f, "OA: {:?} ", self.output_address(),)?;
+        if !self.output_address().is_null() {
+            write!(f, "OA: {:?} ", self.output_address())?;
         }
         use PageBlockDescriptorFields::*;
 
