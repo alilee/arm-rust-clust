@@ -15,14 +15,14 @@ impl Debug for PhysAddr {
 }
 
 impl PhysAddr {
+    pub fn null() -> PhysAddr {
+        PhysAddr(0)
+    }
     pub fn new(base: usize) -> PhysAddr {
         PhysAddr(base)
     }
     pub const fn new_const(base: usize) -> PhysAddr {
         PhysAddr(base)
-    }
-    pub fn from_fn(f: fn() -> !) -> PhysAddr {
-        PhysAddr(f as *const () as usize)
     }
     pub fn from_linker_symbol(sym: &u8) -> Self {
         Self(sym as *const u8 as usize)
@@ -71,6 +71,12 @@ impl PhysAddr {
 impl From<*const u8> for PhysAddr {
     fn from(p: *const u8) -> Self {
         Self(p as usize)
+    }
+}
+
+impl From<fn() -> !> for PhysAddr {
+    fn from(p: fn() -> !) -> Self {
+        Self::from(p as *const u8)
     }
 }
 

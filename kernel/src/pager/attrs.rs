@@ -2,7 +2,7 @@ use register::{register_bitfields, LocalRegisterCopy};
 
 register_bitfields! {
     u64,
-    AttributeFields [
+    pub AttributeFields [
         Block 16,
         StreamIn 10,
         StreamOut 9,
@@ -36,7 +36,7 @@ pub fn ram() -> Attributes {
     Attributes::new(field.value)
 }
 
-pub fn user_read_write() -> Attributes {
+pub fn user_read_write_prov() -> Attributes {
     use AttributeFields::*;
     let field = UserRead::SET + UserWrite::SET;
     Attributes::new(field.value)
@@ -45,5 +45,11 @@ pub fn user_read_write() -> Attributes {
 pub fn user_read_write_exec() -> Attributes {
     use AttributeFields::*;
     let field = UserRead::SET + UserWrite::SET + UserExec::SET;
+    Attributes::new(field.value)
+}
+
+pub fn kernel_read_write() -> Attributes {
+    use AttributeFields::*;
+    let field = KernelRead::SET + KernelWrite::SET;
     Attributes::new(field.value)
 }

@@ -1,14 +1,15 @@
+pub mod attrs;
 pub mod frames;
+pub mod layout;
 mod phys_addr;
-pub mod range;
 pub mod virt_addr;
 
 use crate::arch;
 use crate::debug;
 use crate::device;
+use attrs::Attributes;
 pub use layout::kernel_mem_offset;
 pub use phys_addr::{MemOffset, PhysAddr, PhysAddrRange};
-use range::{attrs, layout};
 use virt_addr::*;
 
 use log::info;
@@ -23,11 +24,11 @@ pub struct Page([u8; PAGESIZE_BYTES]);
 pub struct PageRange(*const Page, *const Page);
 
 impl PageRange {
-    pub fn new(range: (*const Page, *const Page)) -> Self {
-        PageRange(range.0, range.1)
-    }
     pub fn base(&self) -> *const Page {
         self.0
+    }
+    pub fn base_mut(&self) -> *mut Page {
+        self.0 as *mut Page
     }
     pub fn top(&self) -> *const Page {
         self.1
@@ -51,7 +52,7 @@ pub fn init(boot3: fn() -> !) -> ! {
 
     let ram = device::ram::range();
     frames::init(ram).unwrap();
-    range::init().unwrap();
+    layout::init().unwrap();
     arch::pager::init().unwrap();
 
     let image_range = unsafe {
@@ -89,7 +90,7 @@ pub fn device_map<T>(base: PhysAddr) -> Result<*mut T, u64> {
     let phys_range = PhysAddrRange::new(base, length);
     let aligned_range = phys_range.extend_to_align_to(PAGESIZE_BYTES);
     info!("device map pages@{:?}", aligned_range);
-    let device_range = range::alloc_device(aligned_range.pages())?;
+    let device_range = layout::alloc_device(aligned_range.pages())?;
     arch::pager::absolute_map(
         phys_range,
         device_range.base(),
@@ -101,22 +102,18 @@ pub fn device_map<T>(base: PhysAddr) -> Result<*mut T, u64> {
     unsafe { Ok(mapped_addr.as_ptr() as *mut T) }
 }
 
-pub fn alloc(pages: usize, guard: bool) -> Result<PageRange, u64> {
-    let pages = if guard { pages + 1 } else { pages };
-    let alloc_range = range::alloc_pool(pages)?;
-    let alloc_range = if guard {
-        alloc_range.trim_left_pages(1)
-    } else {
-        alloc_range
-    };
-    arch::pager::provisional_map(
-        alloc_range,
-        range::attrs::user_read_write(),
-        kernel_mem_offset(),
-    )?;
+pub fn alloc_pool(pages: usize) -> Result<PageRange, u64> {
+    let alloc_range = layout::alloc_pool(pages)?;
+    arch::pager::demand_map(alloc_range, attrs::kernel_read_write(), kernel_mem_offset())?;
     Ok(PageRange::from(alloc_range))
 }
 
+pub fn allocate(virt_range: VirtAddrRange, attributes: Attributes) -> Result<*const Page, u64> {
+    let result = arch::pager::fulfil_map(virt_range, attributes, kernel_mem_offset())?;
+    Ok(result.base().as_ptr())
+}
+
+// FIXME: When we can rely on frames to issue zero'd frames
 pub fn clear_page(page: *mut Page) {
     unsafe { core::intrinsics::volatile_set_memory(page, 0, 1) };
 }

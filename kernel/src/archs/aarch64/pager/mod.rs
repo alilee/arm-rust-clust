@@ -1,15 +1,18 @@
 mod attrs;
 mod desc;
 mod mair;
+mod mapper;
 mod table;
 mod trans;
 
-use crate::pager::{range::attrs::Attributes, virt_addr::*, MemOffset, PhysAddrRange};
+use crate::pager::{attrs::Attributes, virt_addr::*, MemOffset, PhysAddr, PhysAddrRange};
+use mapper::Mapper;
 use table::{Translation, TranslationAttributes};
 
 use log::{debug, info};
 
 pub const KERNEL_BASE: VirtAddr = VirtAddr::new_const(table::UPPER_VA_BASE);
+pub const USER_TOP: VirtAddr = VirtAddr::new_const(table::LOWER_VA_TOP);
 
 pub fn init() -> Result<(), u64> {
     info!("init");
@@ -57,13 +60,9 @@ pub fn identity_map(
     attributes: Attributes,
     mem_offset: MemOffset,
 ) -> Result<VirtAddrRange, u64> {
-    let mut tt = if VirtAddr::id_map(phys_range.base()) < KERNEL_BASE {
-        Translation::tt0(mem_offset).unwrap()
-    } else {
-        Translation::tt1(mem_offset).unwrap()
-    };
-    let attributes = TranslationAttributes::from(attributes);
-    tt.identity_map(phys_range, attributes)
+    let attributes = TranslationAttributes::from_attrs(attributes);
+    let virt_range = VirtAddrRange::id_map(phys_range);
+    Translation::map_to(virt_range, Mapper::identity(), attributes, mem_offset)
 }
 
 pub fn absolute_map(
@@ -72,25 +71,29 @@ pub fn absolute_map(
     attributes: Attributes,
     mem_offset: MemOffset,
 ) -> Result<VirtAddrRange, u64> {
-    let mut tt = if virt_base < KERNEL_BASE {
-        Translation::tt0(mem_offset).unwrap()
-    } else {
-        Translation::tt1(mem_offset).unwrap()
-    };
-    let attributes = TranslationAttributes::from(attributes);
-    tt.absolute_map(phys_range, virt_base, attributes)
+    let attributes = TranslationAttributes::from_attrs(attributes);
+    let offset_mapper = Mapper::reverse_translation(phys_range.base(), virt_base);
+    Translation::map_to(virt_range, offset_mapper, attributes, mem_offset)
 }
 
-pub fn provisional_map(
+pub fn demand_map(
     virt_range: VirtAddrRange,
     attributes: Attributes,
     mem_offset: MemOffset,
 ) -> Result<VirtAddrRange, u64> {
-    let mut tt = if virt_range.base() < KERNEL_BASE {
-        Translation::tt0(mem_offset).unwrap()
-    } else {
-        Translation::tt1(mem_offset).unwrap()
-    };
-    let attributes = TranslationAttributes::from(attributes);
-    tt.provisional_map(virt_range, attributes)
+    let attributes = TranslationAttributes::from_attrs_provisional(attributes);
+    Translation::map_to(virt_range, Mapper::demand(), attributes, mem_offset)
+}
+
+pub fn fulfil_map(
+    virt_range: VirtAddrRange,
+    attributes: Attributes,
+    mem_offset: MemOffset,
+) -> Result<VirtAddrRange, u64> {
+    let attributes = TranslationAttributes::from_attrs(attributes);
+    Translation::map_to(virt_range, Mapper::fulfil(), attributes, mem_offset)
+}
+
+pub fn user_tt_page() -> Result<PhysAddr, u64> {
+    Ok(PhysAddr::new(Translation::ttbr0() as usize))
 }

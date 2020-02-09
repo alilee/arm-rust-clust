@@ -1,7 +1,9 @@
+use crate::pager::{
+    virt_addr::{VirtAddr, VirtAddrRange},
+    PAGESIZE_BYTES,
+};
 use crate::util::locked::Locked;
 
-use crate::pager::virt_addr::{VirtAddr, VirtAddrRange};
-use crate::pager::PAGESIZE_BYTES;
 use core::fmt::{Debug, Error, Formatter};
 
 pub struct PageBumpAllocator {
@@ -24,12 +26,12 @@ impl PageBumpAllocator {
         self.top = range.top();
     }
 
-    pub fn alloc(&mut self, span: usize) -> Result<VirtAddrRange, u64> {
-        if span > self.limit {
+    pub fn alloc(&mut self, pages: usize) -> Result<VirtAddrRange, u64> {
+        if pages > self.limit {
             Err(0)
         } else {
-            let length = span * PAGESIZE_BYTES;
-            self.limit -= span;
+            let length = pages * PAGESIZE_BYTES;
+            self.limit -= pages;
             self.top = unsafe { self.top.decrement(length) };
             Ok(VirtAddrRange::new(self.top, length))
         }

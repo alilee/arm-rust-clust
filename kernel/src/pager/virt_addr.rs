@@ -7,30 +7,30 @@ use core::fmt::{Debug, Error, Formatter};
 pub struct VirtAddr(usize);
 
 impl VirtAddr {
-    pub fn new(addr: usize) -> VirtAddr {
-        VirtAddr(addr)
+    pub const fn null() -> Self {
+        Self(0)
     }
-    pub const fn new_const(addr: usize) -> VirtAddr {
-        VirtAddr(addr)
+    pub fn new(addr: usize) -> Self {
+        Self(addr)
     }
-    pub fn id_map(phys_addr: PhysAddr) -> VirtAddr {
-        unsafe { VirtAddr::new(phys_addr.get()) }
+    pub const fn new_const(addr: usize) -> Self {
+        Self(addr)
+    }
+    pub fn id_map(phys_addr: PhysAddr) -> Self {
+        unsafe { Self::new(phys_addr.get()) }
     }
     pub unsafe fn get(&self) -> usize {
         self.0
     }
-    pub unsafe fn increment(&self, incr: usize) -> VirtAddr {
-        VirtAddr(self.0 + incr)
+    pub unsafe fn increment(&self, incr: usize) -> Self {
+        Self(self.0 + incr)
     }
-    pub unsafe fn decrement(&self, decr: usize) -> VirtAddr {
-        VirtAddr(self.0 - decr)
+    pub unsafe fn decrement(&self, decr: usize) -> Self {
+        Self(self.0 - decr)
     }
 
     pub unsafe fn as_ptr(&self) -> *const () {
         self.0 as *const ()
-    }
-    pub unsafe fn as_mut_ptr(&self) -> *mut () {
-        self.0 as *mut ()
     }
 }
 
@@ -60,8 +60,18 @@ pub struct VirtAddrRange {
 }
 
 impl VirtAddrRange {
+    pub const fn null() -> Self {
+        Self::new(VirtAddr::null(), 0)
+    }
     pub fn new(base: VirtAddr, length: usize) -> Self {
         Self { base, length }
+    }
+    pub fn between(base: VirtAddr, top: VirtAddr) -> Self {
+        assert!(top > base);
+        Self {
+            base,
+            length: top.0 - base.0,
+        }
     }
 
     pub fn id_map(range: PhysAddrRange) -> Self {

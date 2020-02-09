@@ -96,67 +96,40 @@ impl Translation {
         unsafe { self.page_table.get() as u64 }
     }
 
-    pub fn identity_map(
-        &mut self,
-        phys_range: PhysAddrRange,
+    pub fn map_to(
+        virt_range: VirtAddrRange,
+        mapper: Mapper,
         attributes: TranslationAttributes,
+        mem_offset: MemOffset,
     ) -> Result<VirtAddrRange, u64> {
         debug!(
-            "Translation::identity_map(&mut self, phys_range: {:?}, attributes: <{:?}>)",
-            phys_range, attributes
+            "Translation::map_to(&mut self, virt_range: {:?}, mapper: {:?}, attributes: <{:?}>)",
+            virt_range, mapper, attributes
         );
-        let va_range_base = self.va_range_base;
-        let pt = self.page_table();
-        let addr_offset = AddrOffsetUp::id_map();
-        let virt_range = addr_offset.reverse_translate_range(phys_range);
+
+        let mut tt = if virt_range.base() < KERNEL_BASE {
+            Translation::tt0(mem_offset)?
+        } else {
+            Translation::tt1(mem_offset)?
+        };
+
+        let va_range_base = tt.va_range_base;
+        let pt = tt.page_table();
         map_level(
             virt_range,
-            addr_offset,
-            self.first_level,
+            mapper,
+            tt.first_level,
             pt,
             va_range_base,
             attributes,
-            self.mem_offset,
+            tt.mem_offset,
         )
-    }
-
-    pub fn absolute_map(
-        &mut self,
-        phys_range: PhysAddrRange,
-        virt_base: VirtAddr,
-        attributes: TranslationAttributes,
-    ) -> Result<VirtAddrRange, u64> {
-        debug!(
-            "Translation::absolute_map(&mut self, phys_range: {:?}, virt_base: {:?}, attributes: <{:?}>)",
-            phys_range, virt_base, attributes
-        );
-        let va_range_base = self.va_range_base;
-        let pt = self.page_table();
-        let addr_offset = AddrOffsetUp::reverse_translation(phys_range.base(), virt_base);
-        let virt_range = addr_offset.reverse_translate_range(phys_range);
-        map_level(
-            virt_range,
-            addr_offset,
-            self.first_level,
-            pt,
-            va_range_base,
-            attributes,
-            self.mem_offset,
-        )
-    }
-
-    pub fn provisional_map(
-        &mut self,
-        _virt_range: VirtAddrRange,
-        _attributes: TranslationAttributes,
-    ) -> Result<VirtAddrRange, u64> {
-        todo!()
     }
 }
 
 fn map_level(
     target_range: VirtAddrRange,
-    addr_offset: AddrOffsetUp,
+    mapper: Mapper,
     level: u8,
     pt: *mut PageTable,
     table_base: VirtAddr,
@@ -164,9 +137,9 @@ fn map_level(
     mem_offset: MemOffset,
 ) -> Result<VirtAddrRange, u64> {
     trace!(
-        "id_map_level(table_range: {:?}, addr_offset: {:?}, level: {}, pt: 0x{:08x}, table_base: {:?}, _, mem_offset: {:?})",
+        "map_level(target_range: {:?}, mapper: {:?}, level: {}, pt: {:#x}, table_base: {:?}, _, mem_offset: {:?})",
         target_range,
-        addr_offset,
+        mapper,
         level,
         pt as u64,
         table_base,
@@ -176,7 +149,7 @@ fn map_level(
         // pt: a pointer to the physical address of the page table, offset by ram_offset, which can
         //     be used to read or modify the page table.
         // pt[index]: the relevant entry inside the page table
-        // addr_offset: the offset from a va to the intended output address
+        // mapper: generates an output address from a va
         // entry_range: the sub-part of the range which this entry covers
         // entry_target_range: the all or part of this entry to map pages for
         // target_range: the span of entries in this table to map pages for
@@ -202,8 +175,8 @@ fn map_level(
                 // level 3: 4KB page
                 let pte = table.get(index);
                 assert!(!pte.is_valid());
-                let output_addr = addr_offset.translate(entry_range.base());
-                trace!("{:?}+{:?}={:?}", entry_range, addr_offset, output_addr);
+                let output_addr = mapper.translate(entry_range.base());
+                trace!("{:?}+{:?}={:?}", entry_range, mapper, output_addr);
                 let pte =
                     PageBlockDescriptor::new_entry(level, output_addr, attributes, contiguous);
                 table.set(index, PageTableEntry::from(pte));
@@ -226,7 +199,7 @@ fn map_level(
         let pt = mem_offset.offset(pt) as *mut PageTable;
         map_level(
             entry_target_range,
-            addr_offset,
+            mapper,
             level + 1,
             pt,
             entry_range.base(),

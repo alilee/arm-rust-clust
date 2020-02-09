@@ -6,7 +6,7 @@ pub unsafe extern "C" fn _reset() -> ! {
 }
 
 pub mod thread {
-    use crate::pager::Page;
+    use crate::pager::{Page, PhysAddr};
 
     pub mod spinlock {
         use core::sync::atomic::AtomicBool;
@@ -30,7 +30,11 @@ pub mod thread {
         pub const fn new() -> Self {
             Self {}
         }
-        pub fn spawn(_f: fn() -> (), stack: *const Page) -> ControlBlock {
+        pub fn spawn(
+            f: fn() -> (),
+            stack_top: *const Page,
+            user_tt_page: PhysAddr,
+        ) -> ControlBlock {
             ControlBlock {}
         }
         pub fn current() -> &'static mut ControlBlock {

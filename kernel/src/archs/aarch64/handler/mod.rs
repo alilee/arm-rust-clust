@@ -8,40 +8,25 @@ mod timer;
 
 use log::info;
 
-fn tick(_irq: u32, duration: u64) {
-    use cortex_a::regs::*;
-    info!("tick!");
-    CNTP_TVAL_EL0.set(duration as u32);
-}
-
 pub fn init() -> Result<(), u64> {
     info!("init");
 
-    extern "C" {
-        static vector_table_el1: u64;
-    }
     unsafe {
         use cortex_a::regs::*;
+
+        extern "C" {
+            static vector_table_el1: u64;
+        }
         VBAR_EL1.set(&vector_table_el1 as *const u64 as u64);
     };
 
     let dtb = device_tree::get_dtb();
     gic::init(dtb)?;
     gic::reset();
-    let timer_irq = timer::set(62500000 * 4, tick).unwrap();
     gic::enable_irq(timer_irq);
 
-    unsafe {
-        unmask_interrupts();
-    }
-
+    unmask_interrupts();
     Ok(())
-}
-
-pub unsafe fn unmask_interrupts() {
-    use cortex_a::regs::*;
-
-    DAIF.modify(DAIF::I::CLEAR);
 }
 
 #[no_mangle]
@@ -111,6 +96,7 @@ fn el0_64_sync_handler() -> () {
         match ESR_EL1.read(ESR_EL1::EC) {
             0b010101 => "SVC64",
             0b011000 => "MSR, MRS, or System instruction execution",
+            0b100100 => "Data Abort from EL0",
             0b111100 => "BRK instruction execution in AArch64 state",
             _ => "Unknown exception class",
         }
@@ -128,6 +114,24 @@ fn el0_64_sync_handler() -> () {
 
     info!("looping...");
     loop {}
+
+    // if ESR_EL1.read(ESR_EL1::EC) == 0b100100 && ESR_EL1.read(DFSC) == 0b001011
+    //    // AF fault
+    //    AF::SET
+    //    if OA == 0  // demand-paging
+    //       OA.val(alloc zero'd frame)
+    //    if is_set(DBM/EL0) && WnR
+    //       Dirty::SET + RW/EL0::SET
+    //  else
+    //    Fault!
+
+    // if ESR_EL1.read(ESR_EL1::EC) == 0b100100 && ESR_EL1.read(DFSC) == 0b001111
+    //    // Permission fault
+    //    if is_set(DBM/EL0) && WnR
+    //       Dirty::SET + RW/EL0::SET
+    //       invalidate_tlb(FAR_EL1)
+    //    else
+    //       Fault!
 }
 
 #[no_mangle]
@@ -158,13 +162,21 @@ pub fn resume() -> ! {
 //}
 
 #[inline(always)]
-pub fn disable_irq() {
-    unsafe { asm!("msr DAIFSet, $0"::"i"(1<<1)) }
+pub fn mask_interrupts() {
+    use cortex_a::regs::*;
+    DAIF.modify(DAIF::I::SET);
 }
 
 #[inline(always)]
-pub fn enable_irq() {
-    unsafe { asm!("msr DAIFClr, $0"::"i"(1<<1)) }
+pub fn unmask_interrupts() {
+    use cortex_a::regs::*;
+    DAIF.modify(DAIF::I::CLEAR);
+}
+
+#[inline(always)]
+pub fn are_interrupts_masked() -> bool {
+    use cortex_a::regs::*;
+    DAIF.is_set(DAIF::I)
 }
 
 global_asm!(

@@ -11,7 +11,10 @@
 #![feature(core_intrinsics)]
 #![feature(ptr_offset_from)]
 #![feature(never_type)]
+#![feature(alloc_error_handler)]
 #![warn(missing_docs)]
+
+extern crate alloc;
 
 mod archs;
 
@@ -29,7 +32,9 @@ pub use arch::_reset;
 
 mod device;
 mod handler;
+mod heap;
 mod pager;
+mod range;
 mod thread;
 mod util;
 
@@ -41,28 +46,30 @@ use debug::uart_logger;
 
 use log::info;
 
-/// Boot operating system from first core
+/// Boot operating system from first core. Called from arch::_reset.
 ///
-/// TODO: what happens if any of this code panics?
 /// TODO: switch to dedicated EL1 stack for this core
 /// TODO: enable other cores
 pub fn boot2() -> ! {
     uart_logger::init().unwrap();
     info!("starting");
 
-    // enable virtual memory and map image to kernel virtual range and jump to boot3
+    // enable virtual memory, map image to kernel virtual range and jump to boot3
     pager::init(boot3)
 }
 
-/// Kernel in upper VA
+/// Executes at kernel VA
 pub fn boot3() -> ! {
     info!("boot3");
 
-    // enable multi-processing and kernel thread
-    thread::init();
-
     // take exceptions
     handler::init();
+
+    // support alloc and collections
+    heap::init().expect("failed initialising heap");
+
+    // enable multi-processing and kernel thread
+    thread::init();
 
     // establish io
     device::init();
@@ -74,7 +81,7 @@ pub fn boot3() -> ! {
 
     thread::show_state();
 
-    // clean up boot thread and yield to ready
+    // clean up boot thread and yield to ready workload
     thread::terminate()
 }
 

@@ -4,7 +4,7 @@ use super::mair;
 pub use super::trans::Translation;
 
 use crate::pager::{MemOffset, PAGESIZE_BYTES};
-use crate::util::set_above_bits;
+use crate::util::{set_above_bits, set_below_bits};
 
 #[allow(unused_imports)]
 use log::{debug, info, trace};
@@ -20,6 +20,7 @@ pub struct PageTableEntry(PageTableEntryType);
 const TABLE_ENTRIES: usize = PAGESIZE_BYTES / mem::size_of::<PageTableEntry>();
 const LOWER_VA_BITS: u32 = 48; // 256 TB
 const UPPER_VA_BITS: u32 = 39; // 512 GB
+pub const LOWER_VA_TOP: usize = 1 << (LOWER_VA_BITS as usize);
 pub const UPPER_VA_BASE: usize = set_above_bits(UPPER_VA_BITS);
 pub const UPPER_TABLE_LEVEL: u8 = 1;
 pub const LOWER_TABLE_LEVEL: u8 = 0;

@@ -1,4 +1,5 @@
 pub mod locked;
+pub mod page_bump;
 
 pub const fn set_above_bits(n: u32) -> usize {
     !((1 << (n as usize)) - 1)

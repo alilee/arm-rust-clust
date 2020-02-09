@@ -11,7 +11,7 @@ use register::{register_bitfields, FieldValue, LocalRegisterCopy};
 
 register_bitfields! {
     u64,
-    TableDescriptorFields [
+    pub TableDescriptorFields [
         NSTable OFFSET(63) NUMBITS(1) [],
         APTable OFFSET(61) NUMBITS(2) [
             NoEffect = 0b00,
@@ -29,7 +29,7 @@ register_bitfields! {
 
 register_bitfields! {
     u64,
-    PageBlockDescriptorFields [
+    pub PageBlockDescriptorFields [
         Available OFFSET(55) NUMBITS(9) [],
         UXN OFFSET(54) NUMBITS(1) [],                      // Unprivileged Execute Never
         PXN OFFSET(53) NUMBITS(1) [],                      // Privileged Execute Never
@@ -139,7 +139,13 @@ impl PageBlockDescriptor {
     ) -> Self {
         use PageBlockDescriptorFields::*;
 
-        let mut field = Valid::SET + OutputAddress.val(output_addr.page() as u64);
+        let mut field = Valid::SET;
+
+        if attributes.is_provisional() {
+            field += OutputAddress::CLEAR;
+        } else {
+            field += OutputAddress.val(output_addr.page() as u64);
+        }
 
         if contiguous {
             field += Contiguous::SET;

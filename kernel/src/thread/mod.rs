@@ -5,19 +5,33 @@
 ///
 ///
 ///
+pub mod cap;
+
 use super::arch;
+use crate::arch::thread::ControlBlock;
 use crate::dbg;
 use crate::pager;
-use arch::thread::spinlock;
-use pager::Page;
+use crate::range;
+use crate::util::locked::Locked;
+use pager::{layout, Page, PhysAddr};
 
 use log::{debug, info, trace};
 
 use core::panic;
-use core::sync::atomic::AtomicBool;
+use core::pin::Pin;
+use crate::pager::attrs::kernel_read_write;
+use crate::pager::virt_addr::VirtAddrRange;
+use crate::pager::MemOffset;
 
 #[derive(Copy, Clone, Debug)]
 pub struct ThreadID(usize);
+
+impl From<Pin<&Thread>> for ThreadID {
+    fn from(thread: Pin<&Thread>) -> Self {
+        let result = thread as *const Thread as usize;
+        Self(result)
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum State {
@@ -29,49 +43,38 @@ pub enum State {
 }
 
 #[derive(Clone, Copy, Debug)]
+#[repr(C), align(4096)]
 struct Thread {
     arch_tcb: arch::thread::ControlBlock,
-    slot: usize,
+    state: State,
     priority: i32,
 }
 
-const MAX_THREADS: usize = 4;
-
-static mut STATES: [State; MAX_THREADS] = [State::Unused; MAX_THREADS];
-static mut THREADS: [Thread; MAX_THREADS] = [Thread {
-    arch_tcb: arch::thread::ControlBlock::new(),
-    slot: 0,
-    priority: 0,
-}; MAX_THREADS];
-
-static mut THREADS_SL: AtomicBool = spinlock::new();
+static THREADS: Locked<HashSet<ThreadID>> = Locked::new(HashSet::new());
 
 impl Thread {
-    fn get_states() -> &'static [State] {
-        unsafe { &STATES[..] }
+    pub fn reset(&mut self, f: fn() -> (), stack_top: *const Page, user_tt_page: PhysAddr) -> Result<(), u64> {
+        self.arch_tcb = arch::thread::ControlBlock::spawn(f, stack_top, user_tt_page);
+        self.state = State::Blocked;
+        self.priority = 0;
+        assert_eq!(
+            &result as *const Thread as *const ControlBlock,
+            &result.arch_tcb as *const ControlBlock
+        );
+        let _x = masking_interrupts(|| THREADS.lock().insert(ThreadID::from(result)));
+        result
     }
 
-    pub fn spawn(f: fn() -> (), stack: *const Page) -> Result<&'static mut Thread, u64> {
-        info!("current state of STATES: {:?}", Thread::get_states());
-        unsafe {
-            let maybe_slot: Option<usize> = find_state(&STATES[..], State::Unused).map(|slot| {
-                STATES[slot] = State::Blocked;
-                slot
-            });
-
-            info!("candidate slot: {:?}", maybe_slot);
-
-            maybe_slot
-                .map(|slot| {
-                    THREADS[slot] = Thread {
-                        arch_tcb: arch::thread::ControlBlock::spawn(f, stack),
-                        slot,
-                        priority: 0,
-                    };
-                    &mut THREADS[slot]
-                })
-                .ok_or(0)
-        }
+    pub fn spawn_into_page(
+        page: *const Page,
+        f: fn() -> (),
+        stack_top: *const Page,
+        user_tt_page: PhysAddr,
+    ) -> Result<&mut Thread, u64> {
+        debug!("spawn");
+        let thread = unsafe { &mut (*(page as *mut Thread)) };
+        thread.reset(f, stack_top, user_tt_page);
+        Ok(thread)
     }
 
     /// Find the TCB for the currently running user thread
@@ -155,36 +158,27 @@ fn find_state(states: &[State], state: State) -> Option<usize> {
 /// thread can be cleaned up normally.
 /// The thread would behave as if it called the supervisor exception.
 /// TODO: Instead, just find work as when thread yields.
-pub fn init() {
-    fn terminator() {
-        crate::user::thread::terminate();
-    }
-
+/// FIXME: Ensure that size_of<Thread> < 1 page
+pub fn init() -> Result<(), u64> {
     info!("init");
     arch::thread::init();
 
-    let slot = 0;
-    unsafe {
-        let stack = pager::alloc(1, true).unwrap().top();
-        let arch_tcb = spinlock::exclusive(&mut THREADS_SL, || {
-            arch::thread::ControlBlock::spawn(terminator, stack)
-        });
-        STATES[slot] = State::Blocked;
-        THREADS[slot] = Thread {
-            arch_tcb,
-            slot: 0,
-            priority: 0,
-        };
-        THREADS[slot].arch_tcb.restore_cpu(); // this is now the running thread
-    }
+    let attributes = kernel_read_write();
+    let cap = range::reserve(1, false, attributes)?;
+    let virt_range = VirtAddrRange::from(cap);
+    let page = pager::allocate(virt_range, attributes)?;
+    let stack_top = range::null(); // we will never drop to user
+    let user_tt_page: PhysAddr = arch::pager::user_tt_page(); // populated through pager::init
+    let thread = Thread::spawn_into(page, crate::user::thread::terminate, stack_top, user_tt_page)?;
+    thread.arch_tcb.restore_cpu(); // this is now the running thread
+    Ok(())
 }
 
 pub fn spawn(f: fn() -> ()) -> Result<ThreadID, u64> {
-    unsafe {
-        let stack = pager::alloc(1, true)?;
-        let result = spinlock::exclusive(&mut THREADS_SL, || Thread::spawn(f, stack.top()))?;
-        Ok(result.thread_id())
-    }
+    let user_stack = range::reserve(1, true)?;
+    let tt0 = pager::alloc_pool(1)?;
+    let result = Thread::spawn(f, user_stack, tt0.base_mut())?;
+    Ok(result.thread_id())
 }
 
 /// Dump the state of the thread records for debugging.
@@ -248,4 +242,27 @@ pub fn terminate() -> ! {
         });
     }
     arch::handler::resume()
+}
+
+#[inline(always)]
+pub fn masking_interrupts<F, R>(f: F) -> R
+where
+    F: FnOnce() -> R,
+{
+    use arch::handler::{are_interrupts_masked, mask_interrupts, unmask_interrupts};
+
+    let were_masked = are_interrupts_masked();
+
+    if !were_masked {
+        mask_interrupts();
+    }
+
+    let ret = f();
+
+    if !were_masked {
+        unmask_interrupts();
+    }
+
+    // return the result of `f` to the caller
+    ret
 }
