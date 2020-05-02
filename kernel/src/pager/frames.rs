@@ -1,7 +1,7 @@
 //! Manages a page frame table, which tracks which pages of physical memory
-//! have been allocated for virtual address ranges
+//! have not yet been allocated for virtual address ranges.
 //!
-//! Pages which have not been allocated, are free memory. Since pages may
+//! Pages which have not been allocated are free memory. Since pages may
 //! be freed, there may be fragmentation, if multiple pages are required.
 
 use super::PAGESIZE_BYTES;
