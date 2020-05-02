@@ -34,6 +34,7 @@ register_bitfields! {
         UXN OFFSET(54) NUMBITS(1) [],                      // Unprivileged Execute Never
         PXN OFFSET(53) NUMBITS(1) [],                      // Privileged Execute Never
         Contiguous OFFSET(52) NUMBITS(1) [],               // One of a contiguous set of entries
+        Dirty OFFSET(51) NUMBITS(1) [],                    // Dirty (DBM?)
         OutputAddress OFFSET(12) NUMBITS(35) [],
         nG OFFSET(11) NUMBITS(1) [],                       // Not Global - all or current ASID
         AF OFFSET(10) NUMBITS(1) [],                       // Access flag
@@ -42,13 +43,13 @@ register_bitfields! {
             OuterShareable = 0b10,
             InnerShareable = 0b11
         ],
-        AP OFFSET(6) NUMBITS(2) [                        // Data access permissions
+        AP OFFSET(6) NUMBITS(2) [                          // Data access permissions
             PrivOnly = 0b00,
             ReadWrite = 0b01,
             PrivReadOnly = 0b10,
             ReadOnly = 0b11
         ],
-        AttrIndx OFFSET(2) NUMBITS(3) [                  // Memory attributes index for MAIR_ELx
+        AttrIndx OFFSET(2) NUMBITS(3) [                    // Memory attributes index for MAIR_ELx
             DeviceStronglyOrdered = 0,
             MemoryWriteThrough = 1
         ],

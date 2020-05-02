@@ -12,14 +12,14 @@
 ///
 /// Who grants a thread capabilities? A thread who owns those capabilities.
 ///   On creation, by the creating thread
-///   On request, by an owning thread
+///   On request, by a thread owning requested capabilities
 ///
 /// Requires trusted IPC to authenticate requester
 ///
 /// Does subject pack into a u64?
-///   AddrRange(63:56 -> ADDR, 55:12 -> page_base, 11:0 -> number of pages)
-///   ThreadID(63:56 -> THRD, 55:0 -> id)
-///   IORange(63:56 -> IORG, 55:32 -> NodeID, 31:8 -> page_base >> 12, 7:0 number of pages)
+///   AddrRange(63:60 -> ADDR, 59:49 -> AddrRightsFlags, 48:21 -> page_base, 20:0 -> number of megapages)
+///   ThreadID(63:60 -> THRD, 59:49 -> ThreadRightsFlags, 48:0 -> id)
+///   IORange(63:60 -> IORG, 59:49 -> IORightsFlags, 48:32 -> NodeID, 31:8 -> page_base >> 12, 7:0 number of pages)
 /// Are rights a u64, with one bit per right, according to subject type (max. 64 rights)?
 use super::ThreadID;
 use crate::pager;
