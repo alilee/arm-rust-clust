@@ -1,0 +1,14 @@
+target
+*.o
+*.elf
+*.code
+*.bin
+*.img
+.DS_Store
+Cargo.lock
+crates/core/src
+build
+a.out
+sdimage
+qemu*.*dt*
+rust-clust.iml
