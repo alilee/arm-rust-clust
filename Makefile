@@ -14,17 +14,22 @@ CPU = cortex-a53
 
 all: test build
 
+
 ### test, build and run ###
 
 build: $(kernel).bin
 
-test:
-	cd kernel && cargo test --all-targets --color=always --target=$(HOST)
+unit_test:
+	cargo test --lib --target=$(HOST)
+
+test: unit_test qemu.dtb
+	cargo test --tests
 
 clean:
 	cargo clean
 	rm *.rawdtb
 	rm *.dtb
+	rm *.dts
 
 SOURCES := $(shell find . -name '*.rs') linker.ld
 kernel := target/$(TARGET)/debug/rust-clust
@@ -36,6 +41,7 @@ $(kernel): $(SOURCES)
 	$(OBJCOPY) -O binary $< $@
 	$(OBJDUMP) -dS $< > $*.code
 	$(OBJDUMP) -d $< > $*.s
+
 
 ### debugging ###
 

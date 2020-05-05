@@ -57,6 +57,7 @@ dependencies = [
  "dtb",
  "linked_list_allocator",
  "log",
+ "qemu-exit",
  "register",
  "spin",
 ]
@@ -97,8 +98,6 @@ checksum = "72ef4a56884ca558e5ddb05a1d1e7e1bfd9a68d9ed024c21704cc98872dae1bb"
 [[package]]
 name = "qemu-exit"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6eef8966dfa42074458b801f4ca70c0a070a84a500022584cc11d7a3c1fdb105"
 dependencies = [
  "x86_64",
 ]
@@ -110,15 +109,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e10c2ba523bc81270ecb9b6ca6704f42cd1efec89fddbfe0e520ad0e218f401"
 dependencies = [
  "tock-registers",
-]
-
-[[package]]
-name = "rust-clust"
-version = "0.1.0"
-dependencies = [
- "kernel",
- "log",
- "qemu-exit",
 ]
 
 [[package]]

@@ -19,13 +19,17 @@ pub unsafe extern "C" fn _reset(_pdtb: *const u8) -> ! {
         static STACK_TOP: u64; // defined in linker.ld
     }
 
+    extern "Rust" {
+        fn kernel_init() -> !;
+    }
+
     const CORE_0: u64 = 0;
     const AFF0_CORE_MASK: u64 = 0xFF;
 
     if CORE_0 == MPIDR_EL1.get() & AFF0_CORE_MASK {
         SP.set(&STACK_TOP as *const u64 as u64);
         // device_tree::set(pdtb);
-        crate::kernel_init()
+        kernel_init()
     }
 
     loop {

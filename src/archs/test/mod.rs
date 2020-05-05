@@ -15,6 +15,4 @@ impl super::ArchTrait for Arch {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn _reset() -> ! {
-    crate::kernel_init()
-}
+pub unsafe extern "C" fn _reset() -> ! { unreachable!() }
