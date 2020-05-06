@@ -28,3 +28,15 @@ impl super::ArchTrait for Arch {
 
 #[cfg(not(test))]
 pub use hal::_reset;
+
+#[cfg(test)]
+mod tests {
+    extern crate std;
+    use std::dbg;
+
+    #[test]
+    fn sandwich() {
+        dbg!("hello");
+        assert!(true)
+    }
+}

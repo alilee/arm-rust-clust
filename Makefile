@@ -45,7 +45,7 @@ clean:
 	rm *.dts
 
 SOURCES := $(shell find . -name '*.rs') linker.ld
-kernel := target/$(TARGET)/debug/rust-clust
+kernel := target/$(TARGET)/debug/kernel
 
 $(kernel): $(SOURCES)
 	cargo build

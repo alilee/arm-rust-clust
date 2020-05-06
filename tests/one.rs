@@ -5,22 +5,22 @@
 #![test_runner(libkernel::test_runner)]
 
 extern crate libkernel;
-use test_macros::kernel_test;
-
-// use log::trace;
 
 #[no_mangle]
-fn kernel_init() -> ! {
+fn kernel_init() {
     test_main();
-    qemu_exit::aarch64::exit_success()
 }
 
-#[kernel_test]
-fn a_test() {
-    assert!(true)
-}
+mod tests {
+    use test_macros::kernel_test;
 
-#[kernel_test]
-fn b_test() {
-    assert!(true)
+    #[kernel_test]
+    fn a_test() {
+        assert!(true)
+    }
+
+    #[kernel_test]
+    fn b_test() {
+        assert!(true)
+    }
 }
