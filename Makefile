@@ -22,7 +22,20 @@ build: $(kernel).bin
 unit_test:
 	cargo test --lib --target=$(HOST)
 
-test: unit_test qemu.dtb
+define KERNEL_TEST_RUNNER
+#!/usr/local/bin/fish
+
+$(OBJCOPY) -O binary $$argv[1] $$argv[1].bin
+$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -semihosting -dtb qemu.dtb -kernel $$argv[1].bin
+endef
+
+export KERNEL_TEST_RUNNER
+target/kernel_test_runner.sh:
+	@mkdir -p target
+	@echo "$$KERNEL_TEST_RUNNER" > target/kernel_test_runner.sh
+	@chmod +x target/kernel_test_runner.sh
+
+test: unit_test qemu.dtb target/kernel_test_runner.sh
 	cargo test --tests
 
 clean:

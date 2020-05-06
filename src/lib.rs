@@ -13,11 +13,12 @@ use crate::archs::arch::_reset;
 use log::info;
 
 /// The default runner for unit tests. Needed to support integration tests.
-pub fn test_runner(tests: &[&dyn Fn()]) {
+// pub fn test_runner(tests: &[&dyn Fn()]) {
+pub fn test_runner(tests: &[&test_types::UnitTest]) {
     info!("Running {} tests", tests.len());
     info!("-------------------------------------------------------------------\n");
-    for f in tests {
-        f();
+    for test in tests {
+        (test.test_func)();
         info!(".")
     }
 }

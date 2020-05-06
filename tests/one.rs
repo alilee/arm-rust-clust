@@ -5,6 +5,7 @@
 #![test_runner(libkernel::test_runner)]
 
 extern crate libkernel;
+use test_macros::kernel_test;
 
 // use log::trace;
 
@@ -14,12 +15,12 @@ fn kernel_init() -> ! {
     qemu_exit::aarch64::exit_success()
 }
 
-#[test_case]
+#[kernel_test]
 fn a_test() {
     assert!(true)
 }
 
-#[test_case]
+#[kernel_test]
 fn b_test() {
-    assert!(false)
+    assert!(true)
 }

@@ -6,6 +6,7 @@ edition = "2018"
 
 [lib]
 name = "libkernel"
+# NOTE: exclude cargo test --lib from cargo test --tests; see make test
 test = false
 
 [[bin]]
@@ -13,6 +14,7 @@ name = "kernel"
 test = false
 
 [dependencies]
+test-types = { path = "test-types" }
 qemu-exit = { path = "../qemu-exit" }
 log = { version = "0.4.8", default-features = false }
 spin = "0.5.2"
@@ -26,6 +28,9 @@ dtb = "0.2.0"
 [profile.dev]
 opt-level = 1
 panic = 'abort'
+
+[dev-dependencies]
+test-macros = { path = "test-macros" }
 
 [profile.release]
 opt-level = 2

@@ -3,4 +3,4 @@ target = "aarch64-unknown-none-softfloat"
 
 [target.aarch64-unknown-none-softfloat]
 rustflags = ["-Clink-arg=-Tlinker.ld"]
-runner = "bin/kernel_test_runner.sh"
+runner = "target/kernel_test_runner.sh"
