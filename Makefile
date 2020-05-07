@@ -10,7 +10,7 @@ OBJDUMP = $(BINTOOLS)-objdump
 BOARD = virt
 CPU = cortex-a53
 
-.PHONY: all build test clean qemu gdb run
+.PHONY: all check build unit_test test clean qemu gdb run real_clean
 
 all: test build
 
@@ -50,9 +50,6 @@ test: unit_test qemu.dtb target/kernel_test_runner.sh
 
 clean:
 	cargo clean
-	rm *.rawdtb
-	rm *.dtb
-	rm *.dts
 
 SOURCES := $(shell find . -name '*.rs') linker.ld
 kernel := target/$(TARGET)/debug/kernel
@@ -85,4 +82,9 @@ gdb: $(kernel)
 
 run: $(kernel).bin qemu.dtb
 	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -semihosting -dtb qemu.dtb -kernel $<
+
+real_clean: clean
+	rm -f *.rawdtb
+	rm -f *.dtb
+	rm -f *.dts
 
