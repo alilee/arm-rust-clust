@@ -27,3 +27,7 @@ macro_rules! dbg {
         ($($crate::debug::dbg!($val)),+,)
     };
 }
+
+/// Enable unit test logs to be collected and displayed on stdout
+#[cfg(test)]
+pub mod unit_test_logging;

@@ -23,6 +23,7 @@ mod tests {
 
     #[kernel_test]
     fn b_test() {
-        assert!(true)
+        log::info!("hello");
+        assert!(false)
     }
 }

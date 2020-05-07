@@ -27,3 +27,19 @@ pub fn kernel_test(_attr: TokenStream, input: TokenStream) -> TokenStream {
     )
     .into()
 }
+
+#[proc_macro_attribute]
+pub fn unit_test(_attr: TokenStream, input: TokenStream) -> TokenStream {
+    let f = parse_macro_input!(input as ItemFn);
+    let test_ident = f.sig.ident;
+    let test_code_block = f.block;
+
+    quote!(
+        #[test]
+        fn #test_ident() {
+            crate::debug::unit_test_logging::setup();
+            #test_code_block
+        }
+    )
+    .into()
+}

@@ -17,6 +17,9 @@ all: test build
 
 ### test, build and run ###
 
+check:
+	cargo check
+
 build: $(kernel).bin
 
 unit_test:
@@ -26,11 +29,18 @@ define KERNEL_TEST_RUNNER
 #!/usr/local/bin/fish
 
 $(OBJCOPY) -O binary $$argv[1] $$argv[1].bin
-$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -semihosting -dtb qemu.dtb -kernel $$argv[1].bin
+$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -semihosting -dtb qemu.dtb -kernel $$argv[1].bin > $$argv[1].out
+set result $$status
+if test $$result -ne 0
+	cat $$argv[1].out
+	$(OBJDUMP) -dS $$argv[1] > $$argv[1].code
+	$(OBJDUMP) -d $$argv[1] > $$argv[1].s
+end
+exit $$result
 endef
 
 export KERNEL_TEST_RUNNER
-target/kernel_test_runner.sh:
+target/kernel_test_runner.sh: Makefile
 	@mkdir -p target
 	@echo "$$KERNEL_TEST_RUNNER" > target/kernel_test_runner.sh
 	@chmod +x target/kernel_test_runner.sh
