@@ -5,10 +5,13 @@
 #![no_std]
 #![feature(naked_functions)] // for _reset
 #![feature(panic_info_message)]
+#![feature(format_args_nl)]  // for debug logging macros
 #![warn(missing_docs)]
 
-pub mod archs;
+#[macro_use]
 pub mod debug;
+
+pub mod archs;
 pub mod device;
 pub mod handler;
 pub mod util;
@@ -24,7 +27,6 @@ pub mod lang_items {
     #[allow(unreachable_code)]
     #[panic_handler]
     fn panic(info: &core::panic::PanicInfo) -> ! {
-        use log::error;
         match info.location() {
             None => error!(
                 "Panic: {}",

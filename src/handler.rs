@@ -12,17 +12,16 @@ pub fn init() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use test_macros::unit_test;
 
-    #[unit_test]
+    #[test]
     fn it_works() {
         init();
         assert!(true)
     }
 
-    #[unit_test]
+    #[test]
     fn another_works() {
-        log::info!("another_works");
+        info!("another_works");
         assert!(true);
     }
 }

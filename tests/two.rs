@@ -5,7 +5,9 @@
 #![no_std]
 #![reexport_test_harness_main = "test_main"]
 #![test_runner(libkernel::util::testing::test_runner)]
+#![feature(format_args_nl)] // for debug macros
 
+#[macro_use]
 extern crate libkernel;
 
 #[no_mangle]
@@ -23,7 +25,7 @@ mod tests {
 
     #[kernel_test]
     fn b_test() {
-        log::info!("hello");
-        assert!(false)
+        info!("hello");
+        assert!(true)
     }
 }

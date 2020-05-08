@@ -16,7 +16,6 @@ test = false
 [dependencies]
 test-types = { path = "test-types" }
 qemu-exit = "0.1.1"
-log = { version = "0.4.8", default-features = false }
 spin = "0.5.2"
 linked_list_allocator = "0.8.3"
 

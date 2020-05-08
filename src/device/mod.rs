@@ -2,8 +2,6 @@
 
 //! A module for devices.
 
-use log::info;
-
 pub mod uart;
 
 /// Initialise the device subsystem.

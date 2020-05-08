@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //
 // Copyright (c) 2019-2020 Andre Richter <andre.o.richter@gmail.com>
-// Copyright (c) 2020 Alister Lee <alister@dev.shortepic.com>
 
 use proc_macro::TokenStream;
 use proc_macro2::Span;
@@ -25,22 +24,6 @@ pub fn kernel_test(_attr: TokenStream, input: TokenStream) -> TokenStream {
             name: #test_name,
             test_func: || #test_code_block,
         };
-    )
-    .into()
-}
-
-#[proc_macro_attribute]
-pub fn unit_test(_attr: TokenStream, input: TokenStream) -> TokenStream {
-    let f = parse_macro_input!(input as ItemFn);
-    let test_ident = f.sig.ident;
-    let test_code_block = f.block;
-
-    quote!(
-        #[test]
-        fn #test_ident() {
-            crate::debug::unit_test_logging::setup();
-            #test_code_block
-        }
     )
     .into()
 }
