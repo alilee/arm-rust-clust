@@ -10,6 +10,9 @@ OBJDUMP = $(BINTOOLS)-objdump
 BOARD = virt
 CPU = cortex-a53
 
+SOURCES := $(shell find . -name '*.rs') linker.ld
+kernel := target/$(TARGET)/debug/kernel
+
 .PHONY: all check build unit_test test clean qemu gdb run real_clean
 
 all: test build
@@ -21,6 +24,9 @@ check:
 	cargo check
 
 build: $(kernel).bin
+
+$(kernel): $(SOURCES)
+	cargo build
 
 unit_test:
 	cargo test --lib --target=$(HOST)
@@ -50,12 +56,6 @@ test: unit_test qemu.dtb target/kernel_test_runner.sh
 
 clean:
 	cargo clean
-
-SOURCES := $(shell find . -name '*.rs') linker.ld
-kernel := target/$(TARGET)/debug/kernel
-
-$(kernel): $(SOURCES)
-	cargo build
 
 %.bin: % linker.ld
 	$(OBJCOPY) -O binary $< $@

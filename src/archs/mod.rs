@@ -8,14 +8,42 @@
 //!
 //! The target architecture for the build is usable at archs::arch
 
+use crate::Result;
+use crate::util::locked::Locked;
+use crate::{pager, pager::{PhysAddrRange, VirtAddr}};
+
 /// Each architecture must supply the following entry points.
 pub trait ArchTrait {
-    /// Initialise the exception handler.
-    fn init_handler();
+    /// Physical address range of ram
+    fn ram_range() -> Result<PhysAddrRange>;
+    /// Base virtual address of kernel address space
+    fn kernel_base() -> VirtAddr;
+
     /// Initialise virtual memory management.
-    fn init_pager();
+    fn pager_init() -> Result<()>;
+    /// Map physical address range at offset
+    fn map_translation(
+        phys_range: pager::PhysAddrRange,
+        virtual_address_translation: impl pager::Translate,
+        attrs: pager::Attributes,
+        allocator: &Locked<impl pager::FrameAllocator>,
+        mem_access_translation: impl pager::Translate,
+    );
+    /// Map physical address range at offset
+    fn map_demand(
+        virtual_range: pager::VirtAddrRange,
+        attrs: pager::Attributes,
+        allocator: &Locked<impl pager::FrameAllocator>,
+        mem_access_translation: impl pager::Translate,
+    );
+    /// Enable virtual memory management.
+    fn enable_paging();
+
+    /// Initialise the exception handler.
+    fn handler_init() -> Result<()>;
+
     /// Initialise tasking and multi-processing.
-    fn init_thread();
+    fn thread_init() -> Result<()>;
 }
 
 /// A mock architecture for use during unit testing.

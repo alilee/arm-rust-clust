@@ -8,22 +8,22 @@ extern crate libkernel; // yes, this is needed
 
 use libkernel::*;
 
+/// Kernel entry point, called from architecture-specific reset.
 #[no_mangle]
 fn kernel_init() -> ! {
     info!("starting");
 
-    // enable virtual memory, map image to kernel virtual range and jump to boot3
-    // pager::init(kernel_main)
-    kernel_main()
+    pager::init(kernel_main)
 }
 
+/// Kernel in high memory, initialise rest of kernel.
 fn kernel_main() -> ! {
     info!("kernel_main");
 
-    // handler::init().expect("handler::init");
+    handler::init().expect("handler::init");
     // heap::init().expect("heap::init");
+    device::init().expect("device::init");
     // thread::init().expect("thread::init");
-    // device::init().expect("device::init");
     //
     // let ta = thread::spawn(workload_a).unwrap();
     // thread::ready(ta);

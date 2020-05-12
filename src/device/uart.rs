@@ -2,6 +2,9 @@
 
 //! A stream sink which writes to the serial port.
 
+use crate::Result;
+use crate::pager::{PhysAddr, Translate};
+
 use core::fmt;
 use core::fmt::Write;
 
@@ -26,6 +29,17 @@ impl Uart {
         unsafe {
             *self.dr_addr = b as u32;
         }
+    }
+
+    /// Remap Uart structure.
+    ///
+    /// UNSAFE: Register pointer must point to physical memory.
+    #[allow(unused_unsafe)]
+    pub unsafe fn translate(&mut self, remap: impl Translate) -> Result<()> {
+        let pa = unsafe { PhysAddr::from_ptr(self.dr_addr as *const u8) };
+        let va = remap.translate(pa);
+        self.dr_addr = va.into();
+        Ok(())
     }
 }
 

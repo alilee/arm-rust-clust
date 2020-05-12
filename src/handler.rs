@@ -2,11 +2,12 @@
 
 //! Register exception handlers and service exceptions.
 
+use crate::Result;
 use crate::archs::{ArchTrait, arch::Arch};
 
 /// Initialise the exception handling module.
-pub fn init() {
-    Arch::init_handler();
+pub fn init() -> Result<()> {
+    Arch::handler_init()
 }
 
 #[cfg(test)]
@@ -15,7 +16,7 @@ mod tests {
 
     #[test]
     fn it_works() {
-        init();
+        init().expect("init");
         assert!(true)
     }
 
