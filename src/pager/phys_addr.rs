@@ -80,10 +80,7 @@ impl PhysAddrRange {
         unsafe {
             let base = PhysAddr::from_linker_symbol(&image_base);
             let top = PhysAddr::from_linker_symbol(&image_end);
-            Self::new(
-                 base,
-                top.offset_from(base),
-            )
+            Self::new(base, top.offset_from(base))
         }
     }
 
@@ -118,7 +115,26 @@ mod tests {
 
     #[test]
     fn phys_addr() {
-        let pa = PhysAddr(0x345_0000);
-        assert_eq!(0x345_0000, pa.get());
+        let base = PhysAddr(0x345_0000);
+        let c: u8 = 42u8;
+        static SYM: u8 = 43u8;
+        assert_eq!(0x345_0000, base.get());
+        assert_eq!(0x1_0000, PhysAddr(0x346_0000).offset_from(base));
+        unsafe {
+            PhysAddr::from_ptr(&c);
+            PhysAddr::from_fn(phys_addr);
+        };
+        PhysAddr::from_linker_symbol(&SYM);
+    }
+
+    #[test]
+    fn phys_addr_range() {
+        let base = PhysAddr(0x345_0000);
+        let _image_range = PhysAddrRange::new(base, 0x1_0000);
+        let _boot_image_range = PhysAddrRange::boot_image();
+        let top = PhysAddr(0x346_0000);
+        let between_range = PhysAddrRange::between(base, top);
+        assert_eq!(base, between_range.base());
+        assert_eq!(0x1_0000, between_range.length());
     }
 }

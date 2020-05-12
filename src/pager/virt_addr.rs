@@ -94,3 +94,26 @@ impl VirtAddrRange {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn virt_addr() {
+        let phys_addr = PhysAddr::at(0x345_0000);
+        let virt_id = unsafe { VirtAddr::identity_mapped(phys_addr) };
+        let base = VirtAddr(0x345_0000);
+        let high = base.increment(0x1_0000);
+        assert_eq!(0x1_0000, base.increment_to(high));
+        let _base1: fn() -> ! = virt_id.into();
+        let _base2: *mut u32 = virt_id.into();
+        let _base3: *const () = virt_id.into();
+    }
+
+    #[test]
+    fn virt_addr_range() {
+        let base = VirtAddr(0x345_0000);
+        let _range = base.extend(0x1_0000);
+    }
+}
