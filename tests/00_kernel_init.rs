@@ -20,5 +20,6 @@ fn kernel_init() {
 
 #[kernel_test]
 fn kernel_init_runs() {
+    info!("test logging");
     assert!(true)
 }

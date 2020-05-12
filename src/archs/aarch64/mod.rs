@@ -78,11 +78,9 @@ pub use hal::_reset;
 #[cfg(test)]
 mod tests {
     extern crate std;
-    use std::dbg;
 
     #[test]
-    fn sandwich() {
-        dbg!("hello");
-        assert!(true)
+    fn it_works() {
+        info!("marker")
     }
 }
