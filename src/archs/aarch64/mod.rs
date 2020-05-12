@@ -4,7 +4,7 @@
 #[cfg(test)]
 pub mod hal_test;
 
-/// Publish hardware abstration layer for unit tests.
+/// Publish hardware abstraction layer for unit tests.
 #[cfg(test)]
 pub use hal_test as hal;
 
@@ -12,7 +12,7 @@ pub use hal_test as hal;
 #[cfg(not(test))]
 pub mod hal_live;
 
-/// Publish hardware abstration layer for integration tests and releases.
+/// Publish hardware abstraction layer for integration tests and releases.
 #[cfg(not(test))]
 pub use hal_live as hal;
 

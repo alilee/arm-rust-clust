@@ -14,3 +14,13 @@ pub fn init() -> Result<()> {
     // eg. timer
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn can_call_on_test_arch() {
+        init().expect("init");
+    }
+}

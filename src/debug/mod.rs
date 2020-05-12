@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 
-//! A module
+//! Capture and log debugging output.
 
 pub mod logger;
 

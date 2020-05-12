@@ -19,7 +19,7 @@ unsafe impl Send for Uart {}
 impl Uart {
     /// Create a Uart structure for UART0 id_mapped.
     pub const fn debug() -> Uart {
-        // FIXME: Find UART in device tree
+        // FIXME: Get UART from arch
         let dr_addr = 0x9000000 as *mut u32;
         Uart { dr_addr }
     }
