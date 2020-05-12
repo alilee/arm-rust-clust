@@ -37,6 +37,19 @@ enum KernelExtent {
     },
 }
 
+impl Debug for KernelExtent {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        use KernelExtent::*;
+        match self {
+            RAM { phys_addr_range, virt_addr_extent, attributes } => write!(f, "RAM {{ {:?}, {:?}, {:?} }}", phys_addr_range(), virt_addr_extent, attributes),
+            Image { phys_addr_range, virt_addr_extent, attributes } => write!(f, "Image {{ {:?}, {:?}, {:?} }}", phys_addr_range(), virt_addr_extent, attributes),
+            Device { virt_addr_extent, attributes } => write!(f, "Device {{ {:?}, {:?} }}", virt_addr_extent, attributes),
+            L3PageTables { virt_addr_extent, attributes } => write!(f, "Device {{ {:?}, {:?} }}", virt_addr_extent, attributes),
+            Heap { virt_addr_extent, attributes } => write!(f, "Heap {{ {:?}, {:?} }}", virt_addr_extent, attributes),
+        }
+    }
+}
+
 impl KernelExtent {
     fn virt_addr_extent(&self) -> usize {
         use KernelExtent::*;
@@ -88,6 +101,7 @@ const LAYOUT: [KernelExtent; 5] = [
 ];
 
 /// Range requiring to be mapped
+#[derive(Debug)]
 pub enum KernelRange {
     RAM(PhysAddrRange, FixedOffset, Attributes),
     Image(PhysAddrRange, FixedOffset, Attributes),
@@ -190,6 +204,6 @@ mod tests {
 
     #[test]
     fn calculate() {
-        info!(layout());
+        info!("{:?}", LAYOUT);
     }
 }

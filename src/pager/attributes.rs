@@ -27,7 +27,7 @@ pub enum AttributeField {
 }
 
 /// Bit flags for page attributes.
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct Attributes(u64);
 
 impl Attributes {

@@ -3,9 +3,12 @@
 //! Debug logging to serial available from kernel_init
 
 use crate::Result;
-use crate::device::uart::Uart;
-use crate::util::locked::Locked;
 use crate::pager::Translate;
+
+#[cfg(not(test))]
+use crate::device::uart::Uart;
+#[cfg(not(test))]
+use crate::util::locked::Locked;
 
 use core::fmt::Arguments;
 
@@ -29,15 +32,15 @@ pub fn _print(args: Arguments) {
 }
 
 /// Move the debug UART address (after enabling paging)
-#[cfg(not(test))]
+#[cfg_attr(test, allow(unused_variables))]
 pub fn offset(remap: impl Translate) -> Result<()> {
+    #[cfg(not(test))]
     {
         let mut log = LOGGER.lock();
         unsafe { log.translate(remap)?; }
+
+        use crate::info;
+        info!("remapped debug UART successfully");
     }
-
-    use crate::info;
-
-    info!("remapped debug UART successfully");
     Ok(())
 }

@@ -29,7 +29,7 @@ $(kernel): $(SOURCES)
 	cargo build
 
 unit_test:
-	cargo test --lib --target=$(HOST)
+	cargo test --quiet --lib --target=$(HOST)
 
 define KERNEL_TEST_RUNNER
 #!/usr/local/bin/fish

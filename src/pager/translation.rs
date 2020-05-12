@@ -62,18 +62,20 @@ mod tests {
 
     #[test]
     fn identity() {
-        let pa = PhysAddr(0x4800_0000);
-        assert_eq!(pa.identity_map(), Identity::new().translate(pa));
+        let pa = PhysAddr::at(0x4800_0000);
+        unsafe {
+            assert_eq!(VirtAddr::identity_mapped(pa), Identity::new().translate(pa));
+        }
     }
 
     #[test]
     fn offset() {
-        let pa = PhysAddr(0x4800_0000);
-        let va = VirtAddr(0x1_4800_0000);
+        let pa = PhysAddr::at(0x4800_0000);
+        let va = VirtAddr::at(0x1_4800_0000);
         let fixed = FixedOffset::new(pa, va);
         assert_eq!(va, fixed.translate(pa));
 
-        let pa2 = PhysAddr(0x5800_0000);
-        assert_eq!(VirtAddr(0x1_5800_0000), fixed.translate(pa2));
+        let pa2 = PhysAddr::at(0x5800_0000);
+        assert_eq!(VirtAddr::at(0x1_5800_0000), fixed.translate(pa2));
     }
 }

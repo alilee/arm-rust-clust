@@ -13,6 +13,11 @@ impl Debug for PhysAddr {
 }
 
 impl PhysAddr {
+    /// At literal address.
+    pub const fn at(addr: usize) -> Self {
+        Self(addr)
+    }
+
     /// Number of bytes above reference point.
     pub const fn offset_from(self, base: Self) -> usize {
         // assert!(self.0 > base.0); - relies on checked subtraction to avoid underflow
@@ -104,5 +109,16 @@ impl PhysAddrRange {
     /// Length of the range in bytes
     pub const fn length(&self) -> usize {
         self.length
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn phys_addr() {
+        let pa = PhysAddr(0x345_0000);
+        assert_eq!(0x345_0000, pa.get());
     }
 }

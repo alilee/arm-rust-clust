@@ -24,6 +24,10 @@ pub use util::result::{Result, Error};
 #[allow(unused_imports)]
 use crate::archs::arch::_reset;
 
+#[cfg(test)]
+#[macro_use]
+extern crate claim;
+
 #[doc(hidden)]
 #[cfg(not(test))]
 pub mod lang_items {

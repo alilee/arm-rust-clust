@@ -9,6 +9,8 @@ pub enum Error {
     Success,
     /// Function failed with undefined error
     UnknownError,
+    /// Function failed because not implemented
+    Unimplemented,
 }
 
 /// Default error type for kernel functions.
@@ -39,8 +41,8 @@ mod tests {
             Ok(1.0)
         }
 
-        assert_eq!(1.0, fn_ok().unwrap());
-        assert_eq!(Err(Error::UnknownError), fn_error());
-        assert_eq!(Err(Error::UnknownError), fn_qmark());
+        assert_ok_eq!(fn_ok(), 1.0);
+        assert_err!(fn_error());
+        assert_err!(fn_qmark());
     }
 }

@@ -15,14 +15,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_works() {
+    fn can_call_test_arch() {
         init().expect("init");
-        assert!(true)
-    }
-
-    #[test]
-    fn another_works() {
-        info!("another_works");
-        assert!(true);
     }
 }

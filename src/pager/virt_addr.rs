@@ -17,6 +17,11 @@ impl Debug for VirtAddr {
 }
 
 impl VirtAddr {
+    /// Construct at literal address.
+    pub const fn at(addr: usize) -> Self {
+        Self(addr)
+    }
+
     /// Create a virtual address from a physical address.
     ///
     /// UNSAFE: virtual address can only be derefed when identity mapping is in place
