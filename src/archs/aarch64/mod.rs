@@ -16,8 +16,8 @@ pub mod hal_live;
 #[cfg(not(test))]
 pub use hal_live as hal;
 
+use crate::pager::{FrameAllocator, VirtAddr};
 use crate::Result;
-use crate::pager::{VirtAddr, FrameAllocator};
 
 /// Materialise empty struct implementating Arch trait.
 pub struct Arch {}
@@ -34,11 +34,22 @@ impl super::ArchTrait for Arch {
         unimplemented!()
     }
 
-    fn map_translation(_phys_range: PhysAddrRange, _virtual_address_translation: impl Translate, _attrs: Attributes, _allocator: &Locked<impl FrameAllocator>, _mem_access_translation: impl Translate) {
+    fn map_translation(
+        _phys_range: PhysAddrRange,
+        _virtual_address_translation: impl Translate,
+        _attrs: Attributes,
+        _allocator: &Locked<impl FrameAllocator>,
+        _mem_access_translation: impl Translate,
+    ) {
         unimplemented!()
     }
 
-    fn map_demand(_virtual_range: VirtAddrRange, _attrs: Attributes, _allocator: &Locked<impl FrameAllocator>, _mem_access_translation: impl Translate) {
+    fn map_demand(
+        _virtual_range: VirtAddrRange,
+        _attrs: Attributes,
+        _allocator: &Locked<impl FrameAllocator>,
+        _mem_access_translation: impl Translate,
+    ) {
         unimplemented!()
     }
 
@@ -53,12 +64,16 @@ impl super::ArchTrait for Arch {
     fn thread_init() -> Result<()> {
         unimplemented!()
     }
+
+    fn wait_forever() -> ! {
+        unimplemented!()
+    }
 }
 
+use crate::pager::{Attributes, PhysAddrRange, Translate, VirtAddrRange};
+use crate::util::locked::Locked;
 #[cfg(not(test))]
 pub use hal::_reset;
-use crate::util::locked::Locked;
-use crate::pager::{PhysAddrRange, Attributes, VirtAddrRange, Translate};
 
 #[cfg(test)]
 mod tests {

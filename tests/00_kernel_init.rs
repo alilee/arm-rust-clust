@@ -7,25 +7,18 @@
 #![test_runner(libkernel::util::testing::test_runner)]
 #![feature(format_args_nl)] // for debug macros
 
+#[allow(unused_imports)]
 #[macro_use]
 extern crate libkernel;
+
+use test_macros::kernel_test;
 
 #[no_mangle]
 fn kernel_init() {
     test_main();
 }
 
-mod tests {
-    use test_macros::kernel_test;
-
-    #[kernel_test]
-    fn a_test() {
-        assert!(true)
-    }
-
-    #[kernel_test]
-    fn b_test() {
-        info!("hello one::b");
-        assert!(true)
-    }
+#[kernel_test]
+fn kernel_init_runs() {
+    assert!(true)
 }

@@ -52,6 +52,10 @@ impl super::ArchTrait for Arch {
     fn thread_init() -> Result<()> {
         Ok(())
     }
+
+    fn wait_forever() -> ! {
+        loop {}
+    }
 }
 
 #[no_mangle]

@@ -44,6 +44,9 @@ pub trait ArchTrait {
 
     /// Initialise tasking and multi-processing.
     fn thread_init() -> Result<()>;
+
+    /// Initialise tasking and multi-processing.
+    fn wait_forever() -> !;
 }
 
 /// A mock architecture for use during unit testing.

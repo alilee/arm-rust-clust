@@ -21,13 +21,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn debug_error() {
+    fn debug_log_error() {
         error!("{:?}", Error::UnknownError);
     }
 
     #[test]
     fn return_error() {
-
         fn fn_ok() -> Result<f64> {
             Ok(1.0)
         }
@@ -37,8 +36,8 @@ mod tests {
         }
 
         fn fn_qmark() -> Result<f64> {
-            fn_error()?;
-            Ok(1.0)
+            let result = fn_error()?;
+            Ok(result)
         }
 
         assert_ok_eq!(fn_ok(), 1.0);

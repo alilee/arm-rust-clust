@@ -49,6 +49,10 @@ impl super::ArchTrait for Arch {
     fn thread_init() -> Result<()> {
         unimplemented!()
     }
+
+    fn wait_forever() -> ! {
+        unimplemented!()
+    }
 }
 
 #[cfg(not(test))]
