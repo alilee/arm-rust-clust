@@ -47,15 +47,15 @@ impl VirtAddr {
     }
 }
 
-impl core::convert::Into<*mut u32> for VirtAddr {
-    fn into(self) -> *mut u32 {
-        self.0 as *mut u32
+impl<T> core::convert::Into<*mut T> for VirtAddr {
+    fn into(self) -> *mut T {
+        self.0 as *mut T
     }
 }
 
-impl core::convert::Into<*const ()> for VirtAddr {
-    fn into(self) -> *const () {
-        self.0 as *const ()
+impl<T> core::convert::Into<*const T> for VirtAddr {
+    fn into(self) -> *const T {
+        self.0 as *const T
     }
 }
 

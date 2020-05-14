@@ -6,11 +6,13 @@ mod alloc;
 mod attributes;
 mod frames;
 mod layout;
+mod page;
 mod phys_addr;
 mod translation;
 mod virt_addr;
 
 pub use attributes::*;
+pub use page::*;
 pub use phys_addr::*;
 pub use translation::*;
 pub use virt_addr::*;
@@ -19,6 +21,9 @@ pub use frames::Allocator as FrameAllocator;
 
 use crate::archs::{arch::Arch, ArchTrait};
 use crate::debug;
+
+/// Number of bytes in a cluster-wide atomic page.
+const PAGESIZE_BYTES: usize = 4096;
 
 /// Initialise the virtual memory manager and jump to the kernel in high memory.
 ///
@@ -36,7 +41,7 @@ pub fn init(next: fn() -> !) -> ! {
 
     // TODO: put all available RAM into frame table
     let low_ram = PhysAddrRange::between(ram_range.base(), image_range.base());
-    frames::add_ram_range(low_ram).expect("pager::frames::include low_ram");
+    frames::add_ram_range(low_ram, &Identity::new()).expect("pager::frames::include low_ram");
 
     for kernel_range in layout::layout().expect("layout::layout") {
         use layout::KernelRange::*;

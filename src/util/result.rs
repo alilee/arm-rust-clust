@@ -7,6 +7,8 @@
 pub enum Error {
     /// Function completes with no adverse conditions
     Success,
+    /// Out of memory to allocate
+    OutOfMemory,
     /// Function failed with undefined error
     UnknownError,
     /// Function failed because not implemented

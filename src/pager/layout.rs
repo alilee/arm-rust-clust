@@ -41,11 +41,40 @@ impl Debug for KernelExtent {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         use KernelExtent::*;
         match self {
-            RAM { phys_addr_range, virt_addr_extent, attributes } => write!(f, "RAM {{ {:?}, {:?}, {:?} }}", phys_addr_range(), virt_addr_extent, attributes),
-            Image { phys_addr_range, virt_addr_extent, attributes } => write!(f, "Image {{ {:?}, {:?}, {:?} }}", phys_addr_range(), virt_addr_extent, attributes),
-            Device { virt_addr_extent, attributes } => write!(f, "Device {{ {:?}, {:?} }}", virt_addr_extent, attributes),
-            L3PageTables { virt_addr_extent, attributes } => write!(f, "Device {{ {:?}, {:?} }}", virt_addr_extent, attributes),
-            Heap { virt_addr_extent, attributes } => write!(f, "Heap {{ {:?}, {:?} }}", virt_addr_extent, attributes),
+            RAM {
+                phys_addr_range,
+                virt_addr_extent,
+                attributes,
+            } => write!(
+                f,
+                "RAM {{ {:?}, {:?}, {:?} }}",
+                phys_addr_range(),
+                virt_addr_extent,
+                attributes
+            ),
+            Image {
+                phys_addr_range,
+                virt_addr_extent,
+                attributes,
+            } => write!(
+                f,
+                "Image {{ {:?}, {:?}, {:?} }}",
+                phys_addr_range(),
+                virt_addr_extent,
+                attributes
+            ),
+            Device {
+                virt_addr_extent,
+                attributes,
+            } => write!(f, "Device {{ {:?}, {:?} }}", virt_addr_extent, attributes),
+            L3PageTables {
+                virt_addr_extent,
+                attributes,
+            } => write!(f, "Device {{ {:?}, {:?} }}", virt_addr_extent, attributes),
+            Heap {
+                virt_addr_extent,
+                attributes,
+            } => write!(f, "Heap {{ {:?}, {:?} }}", virt_addr_extent, attributes),
         }
     }
 }
@@ -172,7 +201,7 @@ impl Iterator for LayoutIterator {
     type Item = KernelRange;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.i > LAYOUT.len() {
+        if self.i >= LAYOUT.len() {
             return None;
         }
         let result = Some(KernelRange::from(self.next_base, &LAYOUT[self.i]));
@@ -204,6 +233,8 @@ mod tests {
 
     #[test]
     fn calculate() {
-        info!("{:?}", LAYOUT);
+        for item in layout().unwrap() {
+            info!("{:?}", item);
+        }
     }
 }

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 
+use core::fmt::{Debug, Formatter};
+
 /// Flags for page attributes.
 pub enum AttributeField {
     /// Readable by user-space threads
@@ -27,8 +29,14 @@ pub enum AttributeField {
 }
 
 /// Bit flags for page attributes.
-#[derive(Debug, Copy, Clone)]
+#[derive(Copy, Clone)]
 pub struct Attributes(u64);
+
+impl Debug for Attributes {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        write!(f, "Attributes({:011b})", self.0)
+    }
+}
 
 impl Attributes {
     /// Construct empty attributes.

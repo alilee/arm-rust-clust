@@ -8,6 +8,8 @@
 use super::PhysAddr;
 use super::VirtAddr;
 
+use core::fmt::{Debug, Formatter};
+
 /// Able to translate
 pub trait Translate {
     /// Translate a physical address to a virtual address
@@ -32,8 +34,14 @@ impl Translate for Identity {
 }
 
 /// A policy defining the translation using a fixed offset.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 pub struct FixedOffset(usize);
+
+impl Debug for FixedOffset {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        write!(f, "FixedOffset(+0x{:08x})", self.0)
+    }
+}
 
 impl FixedOffset {
     /// Define translation as different between reference physical and virtual addresses.

@@ -49,6 +49,11 @@ impl PhysAddr {
     pub const fn get(&self) -> usize {
         self.0
     }
+
+    /// Aligned on a byte boundary.
+    pub const fn aligned(&self, bytes: usize) -> bool {
+        0 == self.0 & (bytes - 1)
+    }
 }
 
 /// A physical address range.
@@ -68,6 +73,13 @@ impl Debug for PhysAddrRange {
             self.length
         )
     }
+}
+
+/// An iterator over byte-sized chunks of a physical address range.
+pub struct PhysAddrRangeIterator {
+    base: usize,
+    length: usize,
+    bytes: usize,
 }
 
 impl PhysAddrRange {
@@ -107,6 +119,34 @@ impl PhysAddrRange {
     pub const fn length(&self) -> usize {
         self.length
     }
+
+    /// aligned base and top
+    pub const fn aligned(&self, bytes: usize) -> bool {
+        self.base().aligned(bytes) || (0 == self.length & (bytes - 1))
+    }
+
+    /// Iterate over range in chunks of bytes.
+    pub const fn chunks(&self, bytes: usize) -> PhysAddrRangeIterator {
+        PhysAddrRangeIterator {
+            base: self.base.0,
+            length: self.length,
+            bytes,
+        }
+    }
+}
+
+impl Iterator for PhysAddrRangeIterator {
+    type Item = PhysAddr;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.length == 0 {
+            return None
+        }
+        let result = self.base;
+        self.base += self.bytes;
+        self.length -= self.bytes;
+        Some(PhysAddr(result))
+    }
 }
 
 #[cfg(test)]
@@ -136,5 +176,24 @@ mod tests {
         let between_range = PhysAddrRange::between(base, top);
         assert_eq!(base, between_range.base());
         assert_eq!(0x1_0000, between_range.length());
+    }
+
+    #[test]
+    fn alignment() {
+        let base = PhysAddr(0x1000_0010);
+        assert!(!base.aligned(0x100));
+        let top = PhysAddr(0x1000_1000);
+        assert!(top.aligned(0x100));
+        let range = PhysAddrRange::between(base, top);
+        assert!(!range.aligned(0x100));
+    }
+
+    #[test]
+    fn iterator() {
+        let range = PhysAddrRange::between(PhysAddr(0x1000), PhysAddr(0x3000));
+        let mut range_iter = range.chunks(0x1000);
+        assert_some_eq!(range_iter.next(), PhysAddr(0x1000));
+        assert_some_eq!(range_iter.next(), PhysAddr(0x2000));
+        assert_none!(range_iter.next());
     }
 }
