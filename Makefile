@@ -10,8 +10,9 @@ OBJDUMP = $(BINTOOLS)-objdump
 BOARD = virt
 CPU = cortex-a53
 
-SOURCES := $(shell find . -name '*.rs') linker.ld
 kernel := target/$(TARGET)/debug/kernel
+linker.ld := src/archs/aarch64/linker.ld
+SOURCES := $(shell find . -name '*.rs') $(linker.ld)
 
 .PHONY: all check build unit_test test clean qemu gdb run real_clean
 
@@ -57,7 +58,7 @@ test: unit_test qemu.dtb target/kernel_test_runner.sh
 clean:
 	cargo clean
 
-%.bin: % linker.ld
+%.bin: % $(linker.ld)
 	$(OBJCOPY) -O binary $< $@
 	$(OBJDUMP) -dS $< > $*.code
 	$(OBJDUMP) -d $< > $*.s
