@@ -11,7 +11,7 @@ use log::{debug, info};
 
 const GB: usize = 1024 * 1024 * 1024;
 
-pub const LAYOUT: [(&str, usize); 4] = [
+pub const LAYOUT: [(&str, usize); 5] = [
     ("ram", 4 * GB),
     ("image", 1 * GB),
     ("device", 1 * GB),
@@ -40,7 +40,7 @@ pub fn image() -> VirtAddrRange {
 }
 
 pub fn device() -> VirtAddrRange {
-    find("image").unwrap()
+    find("device").unwrap()
 }
 
 pub fn page_pool() -> VirtAddrRange {

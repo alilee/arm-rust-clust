@@ -1,4 +1,5 @@
-use cortex_a::{asm, regs::*};
+mod hal;
+
 use log::info;
 
 mod device_tree;
@@ -25,7 +26,7 @@ pub mod thread;
 pub fn loop_forever() -> ! {
     info!("looping forever...");
     loop {
-        asm::wfe()
+        hal::wfe()
     }
 }
 

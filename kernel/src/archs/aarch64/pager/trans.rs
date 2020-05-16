@@ -1,5 +1,6 @@
 use super::attrs;
 use super::desc;
+use super::mapper::Mapper;
 use super::table::{
     PageTable, PageTableEntry, LEVEL_OFFSETS, LEVEL_WIDTH, LOWER_TABLE_LEVEL, UPPER_TABLE_LEVEL,
     UPPER_VA_BASE,

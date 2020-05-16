@@ -51,9 +51,9 @@ pub fn init(boot3: fn() -> !) -> ! {
     info!("init");
 
     let ram = device::ram::range();
-    frames::init(ram).unwrap();
-    layout::init().unwrap();
-    arch::pager::init().unwrap();
+    frames::init(ram).expect("pager::frames::init");
+    layout::init().expect("pager::layout::init");
+    arch::pager::init().expect("arch::pager::init");
 
     let image_range = unsafe {
         extern "C" {
@@ -65,7 +65,7 @@ pub fn init(boot3: fn() -> !) -> ! {
             PhysAddr::from_linker_symbol(&image_end),
         )
     };
-    frames::reserve(image_range).unwrap();
+    frames::reserve(image_range).expect("pager::frames::reserve image");
 
     let mem_offset = MemOffset::identity();
 
@@ -82,7 +82,8 @@ pub fn init(boot3: fn() -> !) -> ! {
 
     let kernel_image_offset = AddrOffsetUp::reverse_translation(image_range.base(), kernel_base);
     let boot3 = kernel_image_offset.reverse_translate_fn(boot3);
-    arch::pager::enable(boot3, kernel_image_offset)
+    arch::pager::enable(kernel_image_offset);
+    boot3()
 }
 
 pub fn device_map<T>(base: PhysAddr) -> Result<*mut T, u64> {

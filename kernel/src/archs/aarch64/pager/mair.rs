@@ -21,9 +21,9 @@ pub fn init() {
     use cortex_a::regs::{RegisterReadWrite, MAIR_EL1, MAIR_EL1::*};
 
     MAIR_EL1.modify(
-        Attr0_Device::nGnRnE
-            + Attr1_Outer::WriteThrough_NonTransient_AllocRW
-            + Attr1_Inner::WriteThrough_NonTransient_AllocRW,
+        Attr0_Device::nonGathering_nonReordering_noEarlyWriteAck
+            + Attr1_Normal_Outer::WriteThrough_NonTransient_ReadWriteAlloc
+            + Attr1_Normal_Inner::WriteThrough_NonTransient_ReadWriteAlloc,
     );
 
     trace!("init -> MAIR_EL1 {:#b}", MAIR_EL1.get());

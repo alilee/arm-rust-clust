@@ -73,9 +73,7 @@ pub mod pager {
         ))
     }
 
-    pub fn enable(boot3: fn() -> !, offset: VirtOffset) -> ! {
-        boot3()
-    }
+    pub fn enable(offset: VirtOffset) {}
     pub fn device_map(_range: PhysAddrRange) -> Result<*mut (), u64> {
         Err(0)
     }

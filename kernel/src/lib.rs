@@ -6,9 +6,9 @@
 
 #![no_std]
 #![feature(naked_functions)]
-#![feature(global_asm)]
-#![feature(asm)]
 #![feature(core_intrinsics)]
+#![feature(global_asm)]
+#![feature(llvm_asm)]
 #![feature(ptr_offset_from)]
 #![feature(never_type)]
 #![feature(alloc_error_handler)]
@@ -31,11 +31,11 @@ use archs::arm as arch;
 pub use arch::_reset;
 
 mod device;
-mod handler;
-mod heap;
+// mod handler;
+// mod heap;
 mod pager;
-mod range;
-mod thread;
+// mod range;
+// mod thread;
 mod util;
 
 mod user;
@@ -55,35 +55,35 @@ pub fn boot2() -> ! {
     info!("starting");
 
     // enable virtual memory, map image to kernel virtual range and jump to boot3
-    pager::init(boot3)
+    // pager::init(boot3)
 }
 
 /// Executes at kernel VA
-pub fn boot3() -> ! {
-    info!("boot3");
-
-    // take exceptions
-    handler::init();
-
-    // support alloc and collections
-    heap::init().expect("failed initialising heap");
-
-    // enable multi-processing and kernel thread
-    thread::init();
-
-    // establish io
-    device::init();
-
-    let ta = thread::spawn(workload_a).unwrap();
-    thread::ready(ta);
-    let tb = thread::spawn(workload_b).unwrap();
-    thread::ready(tb);
-
-    thread::show_state();
-
-    // clean up boot thread and yield to ready workload
-    thread::terminate()
-}
+// pub fn boot3() -> ! {
+//     info!("boot3");
+//
+//     // take exceptions
+//     handler::init();
+//
+//     // support alloc and collections
+//     heap::init().expect("failed initialising heap");
+//
+//     // enable multi-processing and kernel thread
+//     thread::init();
+//
+//     // establish io
+//     device::init();
+//
+//     let ta = thread::spawn(workload_a).unwrap();
+//     thread::ready(ta);
+//     let tb = thread::spawn(workload_b).unwrap();
+//     thread::ready(tb);
+//
+//     thread::show_state();
+//
+//     // clean up boot thread and yield to ready workload
+//     thread::terminate()
+// }
 
 #[doc(hidden)]
 pub fn workload_a() -> () {

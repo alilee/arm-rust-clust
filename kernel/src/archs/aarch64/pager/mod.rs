@@ -19,8 +19,8 @@ pub fn init() -> Result<(), u64> {
     table::init()
 }
 
-pub fn enable(boot3: fn() -> !, kernel_offset: AddrOffsetUp) -> ! {
-    info!("enable boot3@{:?}", boot3);
+pub fn enable(kernel_offset: AddrOffsetUp) -> ! {
+    info!("enable");
 
     let ttbr1 = Translation::ttbr1();
     let ttbr0 = Translation::ttbr0();
@@ -30,12 +30,10 @@ pub fn enable(boot3: fn() -> !, kernel_offset: AddrOffsetUp) -> ! {
     // in one asm, so that SP can't move between get and set
     unsafe {
         let offset = kernel_offset.get_offset();
-        asm!("add sp, sp, $0"
+        llvm_asm!("add sp, sp, $0"
              :
              : "r"(offset));
     }
-
-    boot3()
 }
 
 fn enable_paging(ttbr1: u64, ttbr0: u64, asid: u16) {

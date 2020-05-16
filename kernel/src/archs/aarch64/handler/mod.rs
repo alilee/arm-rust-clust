@@ -23,7 +23,7 @@ pub fn init() -> Result<(), u64> {
     let dtb = device_tree::get_dtb();
     gic::init(dtb)?;
     gic::reset();
-    gic::enable_irq(timer_irq);
+    // gic::enable_irq(timer_irq);
 
     unmask_interrupts();
     Ok(())
@@ -144,14 +144,14 @@ fn el0_64_irq_handler() -> () {
 
 pub fn supervisor(syndrome: u16) -> () {
     match syndrome {
-        99 => unsafe { asm!("svc 99" :::: "volatile") },
+        99 => unsafe { llvm_asm!("svc 99" :::: "volatile") },
         _ => {}
     }
 }
 
 pub fn resume() -> ! {
     unsafe {
-        asm!("b handler_return");
+        llvm_asm!("b handler_return");
     }
     unreachable!()
 }

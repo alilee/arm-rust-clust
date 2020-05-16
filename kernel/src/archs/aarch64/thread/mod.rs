@@ -68,7 +68,7 @@ impl ControlBlock {
         self.restore_cpu();
         // FIXME: SP (EL1)
         unsafe {
-            asm!("b handler_return");
+            llvm_asm!("b handler_return");
         }
         unreachable!()
     }
