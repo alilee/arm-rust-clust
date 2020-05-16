@@ -2,6 +2,18 @@
 
 //! Support for integration testing, shared between tests.
 
+/// Quit the kernel and emulator signalling success.
+#[allow(unreachable_code)]
+pub fn exit_success() -> ! {
+    #[cfg(target_arch = "aarch64")]
+    qemu_exit::aarch64::exit_success();
+
+    #[cfg(target_arch = "x86_64")]
+    qemu_exit::x86::exit_success();
+
+    loop {}
+}
+
 /// The runner for integration tests.
 ///
 /// NOTE: This is not used for unit tests.
@@ -13,5 +25,5 @@ pub fn test_runner(tests: &[&test_types::UnitTest]) {
     }
     info!("test result: ok.");
 
-    qemu_exit::aarch64::exit_success();
+    exit_success()
 }

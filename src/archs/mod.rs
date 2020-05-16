@@ -8,9 +8,12 @@
 //!
 //! The target architecture for the build is usable at archs::arch
 
+mod pager;
+
+pub use pager::*;
+
+use crate::pager::{PhysAddrRange, VirtAddr};
 use crate::Result;
-use crate::util::locked::Locked;
-use crate::{pager, pager::{PhysAddrRange, VirtAddr}};
 
 /// Each architecture must supply the following entry points.
 pub trait ArchTrait {
@@ -21,23 +24,8 @@ pub trait ArchTrait {
 
     /// Initialise virtual memory management.
     fn pager_init() -> Result<()>;
-    /// Map physical address range at offset
-    fn map_translation(
-        phys_range: pager::PhysAddrRange,
-        virtual_address_translation: impl pager::Translate,
-        attrs: pager::Attributes,
-        allocator: &Locked<impl pager::FrameAllocator>,
-        mem_access_translation: impl pager::Translate,
-    );
-    /// Map physical address range at offset
-    fn map_demand(
-        virtual_range: pager::VirtAddrRange,
-        attrs: pager::Attributes,
-        allocator: &Locked<impl pager::FrameAllocator>,
-        mem_access_translation: impl pager::Translate,
-    );
     /// Enable virtual memory management.
-    fn enable_paging();
+    fn enable_paging(page_directory: &impl PageDirectory);
 
     /// Initialise the exception handler.
     fn handler_init() -> Result<()>;
@@ -58,8 +46,8 @@ pub mod test;
 pub mod aarch64;
 
 /// Intel/AMD architecture 64-bit
-#[cfg(any(test, target_arch = "x86_64"))]
-pub mod x86_64;
+// #[cfg(any(test, target_arch = "x86_64"))]
+// pub mod x86_64;
 
 // publish the target arch at Arch
 #[cfg(test)]
@@ -68,5 +56,10 @@ pub use test as arch;
 #[cfg(all(not(test), target_arch = "aarch64"))]
 pub use aarch64 as arch;
 
-#[cfg(all(not(test), target_arch = "x86_64"))]
-pub use x86_64 as arch;
+// #[cfg(all(not(test), target_arch = "x86_64"))]
+// pub use x86_64 as arch;
+
+/// Construct an empty page directory.
+pub fn new_page_directory() -> impl PageDirectory {
+    arch::new_page_directory()
+}

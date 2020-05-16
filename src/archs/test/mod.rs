@@ -10,6 +10,7 @@ use crate::Result;
 
 pub struct Arch {}
 
+#[allow(unused_variables)]
 impl super::ArchTrait for Arch {
     fn ram_range() -> Result<PhysAddrRange> {
         Ok(PhysAddrRange::between(
@@ -26,24 +27,7 @@ impl super::ArchTrait for Arch {
         Ok(())
     }
 
-    fn map_translation(
-        _phys_range: PhysAddrRange,
-        _virtual_address_translation: impl Translate,
-        _attrs: Attributes,
-        _allocator: &Locked<impl FrameAllocator>,
-        _mem_access_translation: impl Translate,
-    ) {
-    }
-
-    fn map_demand(
-        _virtual_range: VirtAddrRange,
-        _attrs: Attributes,
-        _allocator: &Locked<impl FrameAllocator>,
-        _mem_access_translation: impl Translate,
-    ) {
-    }
-
-    fn enable_paging() {}
+    fn enable_paging(page_directory: &impl super::PageDirectory) {}
 
     fn handler_init() -> Result<()> {
         Ok(())
@@ -56,6 +40,36 @@ impl super::ArchTrait for Arch {
     fn wait_forever() -> ! {
         loop {}
     }
+}
+
+pub struct PageDirectory {}
+
+#[allow(unused_variables)]
+impl super::PageDirectory for PageDirectory {
+    fn map_translation(
+        &mut self,
+        phys_range: PhysAddrRange,
+        virtual_address_translation: impl Translate,
+        attrs: Attributes,
+        allocator: &Locked<impl FrameAllocator>,
+        mem_access_translation: &impl Translate,
+    ) {
+        unimplemented!()
+    }
+
+    fn map_demand(
+        &mut self,
+        virtual_range: VirtAddrRange,
+        attrs: Attributes,
+        allocator: &Locked<impl FrameAllocator>,
+        mem_access_translation: &impl Translate,
+    ) {
+        unimplemented!()
+    }
+}
+
+pub fn new_page_directory() -> impl super::PageDirectory {
+    PageDirectory {}
 }
 
 #[no_mangle]

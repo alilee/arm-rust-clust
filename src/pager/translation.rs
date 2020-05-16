@@ -17,6 +17,7 @@ pub trait Translate {
 }
 
 /// Translation such that physical address is same as virtual address
+#[derive(Copy, Clone)]
 pub struct Identity;
 
 impl Identity {
