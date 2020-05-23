@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 
-//! Translation from physical to virtual addresses, based on policies..
+//! Translation from virtual to physical addresses, linear or based on policies.
 //!
 //! At different times during the boot sequence, accessible memory may be mapped
 //! at the same or different virtual addresses.
@@ -10,10 +10,39 @@ use super::VirtAddr;
 
 use core::fmt::{Debug, Formatter};
 
-/// Able to translate
+/// Able to translate.
 pub trait Translate {
-    /// Translate a physical address to a virtual address
-    fn translate(&self, phys_addr: PhysAddr) -> VirtAddr;
+    /// Translate a virtual address to a physical address.
+    fn translate(&self, virt_addr: VirtAddr) -> PhysAddr;
+    /// Reverse translate a physical address to a virtual address, if defined..
+    fn translate_phys(&self, phys_addr: PhysAddr) -> VirtAddr;
+}
+
+/// Translation such that physical address is always null.
+#[derive(Copy, Clone)]
+pub struct NullTranslation;
+
+impl Debug for NullTranslation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        write!(f, "NullTranslation()")
+    }
+}
+
+impl NullTranslation {
+    /// Construct a new null translation
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl Translate for NullTranslation {
+    fn translate(&self, _virt_addr: VirtAddr) -> PhysAddr {
+        PhysAddr::null()
+    }
+
+    fn translate_phys(&self, _phys_addr: PhysAddr) -> VirtAddr {
+        unimplemented!()
+    }
 }
 
 /// Translation such that physical address is same as virtual address
@@ -23,45 +52,58 @@ pub struct Identity;
 impl Identity {
     /// Construct a new identity translation
     pub fn new() -> Self {
-        Identity {}
+        Self {}
+    }
+}
+
+impl Debug for Identity {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        write!(f, "Identity()")
     }
 }
 
 impl Translate for Identity {
-    /// Calculate the virtual address offset from the given physical page.
-    fn translate(&self, phys_addr: PhysAddr) -> VirtAddr {
+    fn translate(&self, virt_addr: VirtAddr) -> PhysAddr {
+        PhysAddr::identity_mapped(virt_addr)
+    }
+    fn translate_phys(&self, phys_addr: PhysAddr) -> VirtAddr {
         unsafe { VirtAddr::identity_mapped(phys_addr) }
     }
 }
 
 /// A policy defining the translation using a fixed offset.
+///
+/// NOTE: This translates downward from higher virtual addresses to lower physical addresses
+/// such as you would need kernel is at the top of the virtual address space..
 #[derive(Copy, Clone)]
 pub struct FixedOffset(usize);
 
 impl Debug for FixedOffset {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "FixedOffset(+0x{:08x})", self.0)
+        write!(f, "FixedOffset(-0x{:08x})", self.0)
     }
 }
 
 impl FixedOffset {
-    /// Define translation as different between reference physical and virtual addresses.
+    /// Define translation as difference between reference physical and virtual addresses.
     ///
     /// NOTE: pa must not be above va.
     pub fn new(phys_addr: PhysAddr, virt_addr: VirtAddr) -> Self {
         unsafe {
-            let nominal_virt_addr = VirtAddr::identity_mapped(phys_addr);
-            assert!(nominal_virt_addr <= virt_addr);
-            Self(nominal_virt_addr.increment_to(virt_addr))
+            let nominal_phys_addr = VirtAddr::identity_mapped(phys_addr);
+            assert!(nominal_phys_addr <= virt_addr);
+            Self(nominal_phys_addr.increment_to(virt_addr))
         }
     }
 }
 
 impl Translate for FixedOffset {
     /// Calculate the virtual address offset from the given physical page.
-    fn translate(&self, phys_addr: PhysAddr) -> VirtAddr {
-        let virt_addr = unsafe { VirtAddr::identity_mapped(phys_addr) };
-        virt_addr.increment(self.0)
+    fn translate(&self, virt_addr: VirtAddr) -> PhysAddr {
+        PhysAddr::identity_mapped(virt_addr.decrement(self.0))
+    }
+    fn translate_phys(&self, phys_addr: PhysAddr) -> VirtAddr {
+        unsafe { VirtAddr::identity_mapped(phys_addr).increment(self.0) }
     }
 }
 
@@ -70,21 +112,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn null() {
+        let virt_addr = VirtAddr::at(0x4800_0000);
+        assert_eq!(PhysAddr::null(), NullTranslation::new().translate(virt_addr));
+    }
+
+    #[test]
     fn identity() {
-        let pa = PhysAddr::at(0x4800_0000);
-        unsafe {
-            assert_eq!(VirtAddr::identity_mapped(pa), Identity::new().translate(pa));
-        }
+        let virt_addr = VirtAddr::at(0x4800_0000);
+        assert_eq!(
+            PhysAddr::identity_mapped(virt_addr),
+            Identity::new().translate(virt_addr)
+        );
     }
 
     #[test]
     fn offset() {
-        let pa = PhysAddr::at(0x4800_0000);
-        let va = VirtAddr::at(0x1_4800_0000);
-        let fixed = FixedOffset::new(pa, va);
-        assert_eq!(va, fixed.translate(pa));
+        let phys_addr = PhysAddr::at(0x4800_0000);
+        let virt_addr = VirtAddr::at(0x1_4800_0000);
+        let fixed = FixedOffset::new(phys_addr, virt_addr);
+        assert_eq!(phys_addr, fixed.translate(virt_addr));
 
-        let pa2 = PhysAddr::at(0x5800_0000);
-        assert_eq!(VirtAddr::at(0x1_5800_0000), fixed.translate(pa2));
+        let virt_addr = VirtAddr::at(0x1_5800_0000);
+        assert_eq!(PhysAddr::at(0x5800_0000), fixed.translate(virt_addr));
     }
 }

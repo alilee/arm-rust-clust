@@ -18,9 +18,9 @@ test-types = { path = "test-types" }
 qemu-exit = "0.1.1"
 spin = "0.5.2"
 linked_list_allocator = "0.8.3"
+register = "0.5.0"
 
 [target.'cfg(target_arch = "aarch64")'.dependencies]
-register = "0.5.0"
 cortex-a = { path = "../cortex-a" }
 dtb = "0.2.0"
 

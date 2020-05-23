@@ -58,8 +58,3 @@ pub use aarch64 as arch;
 
 // #[cfg(all(not(test), target_arch = "x86_64"))]
 // pub use x86_64 as arch;
-
-/// Construct an empty page directory.
-pub fn new_page_directory() -> impl PageDirectory {
-    arch::new_page_directory()
-}

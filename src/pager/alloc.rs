@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 
-use crate::Result;
+//! Allocators to parcel up chunks of kernel memory.
+
 use crate::pager::VirtAddrRange;
+use crate::Result;
 
 pub fn add_device_range(_virt_addr_range: VirtAddrRange) -> Result<()> {
     unimplemented!()

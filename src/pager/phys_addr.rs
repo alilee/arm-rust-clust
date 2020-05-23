@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 
+
+use super::VirtAddr;
 use core::fmt::{Debug, Error, Formatter};
 
 /// A local physical address
@@ -13,9 +15,19 @@ impl Debug for PhysAddr {
 }
 
 impl PhysAddr {
+    /// Lowest possible phyical address.
+    pub const fn null() -> Self {
+        Self(0)
+    }
+
     /// At literal address.
     pub const fn at(addr: usize) -> Self {
         Self(addr)
+    }
+
+    /// At virtual address, assuming identity mapping.
+    pub const fn identity_mapped(virt_addr: VirtAddr) -> Self {
+        Self(virt_addr.get())
     }
 
     /// Number of bytes above reference point.
@@ -155,11 +167,15 @@ mod tests {
 
     #[test]
     fn phys_addr() {
+        let null = PhysAddr::null();
+        assert_eq!(0, null.get());
+
         let base = PhysAddr(0x345_0000);
         let c: u8 = 42u8;
         static SYM: u8 = 43u8;
         assert_eq!(0x345_0000, base.get());
         assert_eq!(0x1_0000, PhysAddr(0x346_0000).offset_from(base));
+
         unsafe {
             PhysAddr::from_ptr(&c);
             PhysAddr::from_fn(phys_addr);

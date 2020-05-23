@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 
-use cortex_a::{regs::*, asm};
+pub mod mair;
 
 #[link_section = ".startup"]
 #[no_mangle]
@@ -15,6 +15,8 @@ use cortex_a::{regs::*, asm};
 ///
 /// TODO: CPACR to enable FP in EL1
 pub unsafe extern "C" fn _reset(_pdtb: *const u8) -> ! {
+    use cortex_a::{regs::*, asm};
+
     extern "C" {
         static STACK_TOP: u64; // defined in linker.ld
     }

@@ -40,7 +40,7 @@ impl super::ArchTrait for Arch {
     }
 
     fn pager_init() -> Result<()> {
-        Ok(())
+        pager::init()
     }
 
     fn enable_paging(_page_directory: &impl super::PageDirectory) {

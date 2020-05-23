@@ -132,8 +132,8 @@ const LAYOUT: [KernelExtent; 5] = [
 /// Range requiring to be mapped
 #[derive(Debug)]
 pub enum KernelRange {
-    RAM(PhysAddrRange, FixedOffset, Attributes),
-    Image(PhysAddrRange, FixedOffset, Attributes),
+    RAM(VirtAddrRange, FixedOffset, Attributes),
+    Image(VirtAddrRange, FixedOffset, Attributes),
     Device(VirtAddrRange, Attributes),
     L3PageTables(VirtAddrRange, Attributes),
     Heap(VirtAddrRange, Attributes),
@@ -147,7 +147,7 @@ impl KernelRange {
                 attributes,
                 ..
             } => KernelRange::RAM(
-                phys_addr_range(),
+                VirtAddrRange::new(virt_addr, phys_addr_range().length()),
                 FixedOffset::new(phys_addr_range().base(), virt_addr),
                 *attributes,
             ),
@@ -156,7 +156,7 @@ impl KernelRange {
                 attributes,
                 ..
             } => KernelRange::Image(
-                phys_addr_range(),
+                VirtAddrRange::new(virt_addr, phys_addr_range().length()),
                 FixedOffset::new(phys_addr_range().base(), virt_addr),
                 *attributes,
             ),

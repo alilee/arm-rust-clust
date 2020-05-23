@@ -9,6 +9,7 @@
 #![feature(const_fn)] // casting pointer to ints in PhysAddr::from_linker_symbol
 #![feature(const_raw_ptr_to_usize_cast)] // casting pointer to ints in PhysAddr::from_linker_symbol
 #![feature(linkage)] // for weak linkage of panic::_panic_exit
+#![feature(const_transmute)] // for virt addr mem::transmute
 #![warn(missing_docs)]
 
 #[macro_use]

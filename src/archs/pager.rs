@@ -2,26 +2,25 @@
 
 //! Interface for paging functions.
 
-use crate::pager::{Attributes, FrameAllocator, PhysAddrRange, Translate, VirtAddrRange};
+use crate::pager::{Attributes, FrameAllocator, Translate, VirtAddrRange};
 use crate::util::locked::Locked;
+use crate::Result;
 
 /// Methods to maintain a directory of virtual to physical addresses.
 pub trait PageDirectory {
     /// Map physical address range at offset
     fn map_translation(
         &mut self,
-        phys_range: PhysAddrRange,
-        virtual_address_translation: impl Translate,
-        attrs: Attributes,
+        virt_addr_range: VirtAddrRange,
+        translation: impl Translate + core::fmt::Debug,
+        attributes: Attributes,
         allocator: &Locked<impl FrameAllocator>,
         mem_access_translation: &impl Translate,
-    );
-    /// Map physical address range at offset
-    fn map_demand(
-        &mut self,
-        virtual_range: VirtAddrRange,
-        attrs: Attributes,
-        allocator: &Locked<impl FrameAllocator>,
-        mem_access_translation: &impl Translate,
-    );
+    ) -> Result<VirtAddrRange>;
+}
+
+/// Construct an empty page directory.
+/// TODO: Should this be in Arch trait? limitation of generics in traits right now.
+pub fn new_page_directory() -> impl PageDirectory {
+    super::arch::new_page_directory()
 }

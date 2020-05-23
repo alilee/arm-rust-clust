@@ -10,7 +10,7 @@ use core::fmt::{Debug, Formatter};
 /// Ability to provide an unused frame.
 pub trait Allocator {
     /// Reserve and return a zero'd frame.
-    fn alloc_page(&mut self, mem_offset: &impl Translate) -> Result<PhysAddr>;
+    fn alloc_page(&mut self, mem_access_translation: &impl Translate) -> Result<PhysAddr>;
 }
 
 /// Initialise
@@ -52,7 +52,7 @@ impl StackAllocator {
     }
 
     fn push(&mut self, phys_addr: PhysAddr, mem_offset: &impl Translate) -> Result<()> {
-        let top: *mut Option<PhysAddr> = mem_offset.translate(phys_addr).into();
+        let top: *mut Option<PhysAddr> = mem_offset.translate_phys(phys_addr).into();
         unsafe {
             *top = self.top;
             self.top = Some(phys_addr);
@@ -76,7 +76,7 @@ impl Allocator for StackAllocator {
     fn alloc_page(&mut self, mem_offset: &impl Translate) -> Result<PhysAddr> {
         let phys_addr = self.top.ok_or(Error::OutOfMemory)?;
         unsafe {
-            let top: *mut Option<PhysAddr> = mem_offset.translate(phys_addr).into();
+            let top: *mut Option<PhysAddr> = mem_offset.translate_phys(phys_addr).into();
             self.top = *top;
             *top = None;
         };

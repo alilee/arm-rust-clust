@@ -48,22 +48,12 @@ pub struct PageDirectory {}
 impl super::PageDirectory for PageDirectory {
     fn map_translation(
         &mut self,
-        phys_range: PhysAddrRange,
-        virtual_address_translation: impl Translate,
-        attrs: Attributes,
+        virt_addr_range: VirtAddrRange,
+        translation: impl Translate,
+        attributes: Attributes,
         allocator: &Locked<impl FrameAllocator>,
         mem_access_translation: &impl Translate,
-    ) {
-        unimplemented!()
-    }
-
-    fn map_demand(
-        &mut self,
-        virtual_range: VirtAddrRange,
-        attrs: Attributes,
-        allocator: &Locked<impl FrameAllocator>,
-        mem_access_translation: &impl Translate,
-    ) {
+    ) -> Result<VirtAddrRange> {
         unimplemented!()
     }
 }
