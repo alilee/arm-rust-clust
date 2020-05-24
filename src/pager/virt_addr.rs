@@ -102,6 +102,12 @@ impl core::convert::Into<fn() -> !> for VirtAddr {
     }
 }
 
+impl<T> core::convert::From<&T> for VirtAddr {
+    fn from(t: &T) -> Self {
+        Self::at(t as *const T as usize)
+    }
+}
+
 /// A virtual address range.
 #[derive(Copy, Clone, PartialEq)]
 pub struct VirtAddrRange {
@@ -199,10 +205,12 @@ mod tests {
         let _base1: fn() -> ! = virt_id.into();
         let _base2: *mut u32 = virt_id.into();
         let _base3: *const () = virt_id.into();
+        let page = crate::pager::Page::new();
+        let _base4 = VirtAddr::from(&page);
 
         unsafe {
-            let _base4 = virt_id.as_ref::<u8>();
-            let _base5 = virt_id.as_mut_ref::<u8>();
+            let _base5 = virt_id.as_ref::<u8>();
+            let _base6 = virt_id.as_mut_ref::<u8>();
         }
     }
 

@@ -5,9 +5,7 @@
 mod mair;
 mod table;
 
-use table::{
-    PageBlockDescriptor, PageTable, PageTableEntry, TableDescriptor, LEVEL_OFFSETS, LEVEL_WIDTH,
-};
+use table::{PageBlockDescriptor, PageTable, TableDescriptor, LEVEL_OFFSETS, LEVEL_WIDTH};
 
 use crate::archs::ArchTrait;
 use crate::pager::{
@@ -36,6 +34,22 @@ impl PageDirectory {
         }
     }
 
+    /// Return the virtual address range for the required span for a page table entry to be contiguous.
+    fn contiguous_virt_range(
+        level: u8,
+        index: usize,
+        page_table_virt_addr_range_base: VirtAddr,
+    ) -> VirtAddrRange {
+        const CONTIG_SPAN: usize = 16;
+
+        let level_offset = LEVEL_OFFSETS[level as usize];
+        let entry_size = 1usize << level_offset;
+        let index = index - index % CONTIG_SPAN;
+        let base = page_table_virt_addr_range_base.increment(index * entry_size);
+        let length = CONTIG_SPAN * entry_size;
+        VirtAddrRange::new(base, length)
+    }
+
     fn map_level(
         &mut self,
         target_range: VirtAddrRange,
@@ -48,13 +62,11 @@ impl PageDirectory {
         mem_access_translation: &impl Translate,
     ) -> Result<VirtAddrRange> {
         trace!(
-            "map_level(target_range: {:?}, translation: {:?}, level: {}, page_table: {:?}, pt_base: {:?}, {:?}, ...)",
+            "map_level(target_range: {:?}, level: {}, page_table: {:?}, pt_base: {:?}, ...)",
             target_range,
-            translation,
             level,
             phys_addr_table,
             page_table_virt_addr_range_base,
-            attributes,
         );
         let page_table = unsafe {
             mem_access_translation
@@ -78,13 +90,14 @@ impl PageDirectory {
                 entry_target_range,
                 entry_range,
             );
-            if level == 3 || ((1u8..=2u8).contains(&level) && attributes.is_set(AttributeField::Block))
+            if level == 3
+                || ((1u8..=2u8).contains(&level) && attributes.is_set(AttributeField::Block))
             {
                 // if the entry range is inside the 16-entry span contig range
                 let contiguous_range =
-                    contiguous_virt_range(level, index, page_table_virt_addr_range_base);
-                let contiguous =
-                    attributes.is_set(AttributeField::Block) && target_range.covers(&contiguous_range);
+                    Self::contiguous_virt_range(level, index, page_table_virt_addr_range_base);
+                let contiguous = attributes.is_set(AttributeField::Block)
+                    && target_range.covers(&contiguous_range);
                 // if the entire entry_range is inside the virt_range
                 if level == 3 || entry_target_range.covers(&entry_range) {
                     // level 1: 1GB block
@@ -100,14 +113,14 @@ impl PageDirectory {
                     continue;
                 }
             }
-            // let phys_addr_table = if page_table[index].is_valid() {
-            //     page_table[index].next_level_table_address()
-            // } else {
-            //     // need a new table
-            //     let phys_addr = allocator.lock().alloc_page(mem_access_translation)?;
-            //     page_table[index] = TableDescriptor::new_entry(phys_addr, attributes).into();
-            //     phys_addr
-            // };
+            let phys_addr_table = if page_table[index].is_valid() {
+                page_table[index].next_level_table_address()
+            } else {
+                // need a new table
+                let phys_addr = allocator.lock().alloc_page(mem_access_translation)?;
+                page_table[index] = TableDescriptor::new_entry(phys_addr, attributes).into();
+                phys_addr
+            };
             self.map_level(
                 entry_target_range,
                 translation,
@@ -126,7 +139,7 @@ impl PageDirectory {
 impl crate::archs::PageDirectory for PageDirectory {
     fn map_translation(
         &mut self,
-        virt_addr_range: VirtAddrRange,
+        target_range: VirtAddrRange,
         translation: impl Translate + core::fmt::Debug,
         attributes: Attributes,
         allocator: &Locked<impl FrameAllocator>,
@@ -134,13 +147,13 @@ impl crate::archs::PageDirectory for PageDirectory {
     ) -> Result<VirtAddrRange> {
         info!(
             "map_translation(&mut self, va_range: {:?}, {:?}, {:?}, ...)",
-            virt_addr_range, translation, attributes
+            target_range, translation, attributes
         );
 
         use super::Arch;
 
         let (phys_addr_table, page_table_virt_addr_range_base, first_level) =
-            if virt_addr_range.base() < Arch::kernel_base() {
+            if target_range.base() < Arch::kernel_base() {
                 self.ttb0 = self
                     .ttb0
                     .or_else(|| allocator.lock().alloc_page(mem_access_translation).ok());
@@ -157,7 +170,7 @@ impl crate::archs::PageDirectory for PageDirectory {
             };
 
         self.map_level(
-            virt_addr_range,
+            target_range,
             &translation,
             first_level,
             phys_addr_table,
@@ -255,25 +268,12 @@ fn table_entries(virt_range: VirtAddrRange, level: u8, base: VirtAddr) -> PageTa
     result
 }
 
-/// Return the virtual address range for the required span for a page table entry to be contiguous.
-fn contiguous_virt_range(
-    level: u8,
-    index: usize,
-    page_table_virt_addr_range_base: VirtAddr,
-) -> VirtAddrRange {
-    const CONTIG_SPAN: usize = 16;
-
-    let level_offset = LEVEL_OFFSETS[level as usize];
-    let entry_size = 1usize << level_offset;
-    let index = index - index % CONTIG_SPAN;
-    let base = page_table_virt_addr_range_base.increment(index * entry_size);
-    let length = CONTIG_SPAN * entry_size;
-    VirtAddrRange::new(base, length)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::archs::aarch64::Arch;
+    use crate::pager::{FixedOffset, Identity};
+    use crate::util::result::Error::OutOfMemory;
 
     #[test]
     fn test_table_entries() {
@@ -318,5 +318,56 @@ mod tests {
             }
             assert_none!(i.next());
         }
+    }
+
+    use crate::archs::pager::PageDirectory;
+    use crate::pager::Page;
+
+    struct TestAllocator {
+        next: usize,
+        pages: [Page; 6],
+    }
+
+    impl TestAllocator {
+        pub fn new() -> Self {
+            Self {
+                next: 0,
+                pages: [Page::new(); 6],
+            }
+        }
+    }
+
+    impl FrameAllocator for TestAllocator {
+        fn alloc_page(&mut self, mem_access_translation: &impl Translate) -> Result<PhysAddr> {
+            if self.next > 5 {
+                return Err(OutOfMemory);
+            }
+            let result = mem_access_translation.translate(VirtAddr::from(&self.pages[self.next]));
+            self.next += 1;
+            Ok(result)
+        }
+    }
+
+    #[test]
+    fn test_mapping() {
+        let mut page_dir = super::PageDirectory::new();
+        assert_none!(page_dir.ttb0);
+        assert_none!(page_dir.ttb1);
+
+        let base = Arch::kernel_base();
+        let target_range = VirtAddrRange::new(base, 0x1000);
+        let translation = FixedOffset::new(PhysAddr::null(), base);
+        let attributes = Attributes::DEVICE;
+        let allocator = Locked::new(TestAllocator::new());
+        let mem_access_translation = Identity::new();
+
+        assert_ok!(page_dir.map_translation(
+            target_range,
+            translation,
+            attributes,
+            &allocator,
+            &mem_access_translation,
+        ));
+        assert_eq!(3, allocator.lock().next);
     }
 }

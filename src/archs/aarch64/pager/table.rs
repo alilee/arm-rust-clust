@@ -7,16 +7,28 @@ use crate::util::bitfield::{register_bitfields, Bitfield, FieldValue};
 
 use core::mem;
 use core::ops::{Index, IndexMut};
+use core::fmt::{Debug, Formatter};
 
 pub type PageTableEntryType = u64;
 
 /// An entry in one of the levels of an ARMv8 page table.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 pub struct PageTableEntry(PageTableEntryType);
+
+impl Debug for PageTableEntry {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        write!(f, "PageTableEntry({:#x})", self.0)
+    }
+}
 
 impl PageTableEntry {
     pub const fn is_valid(self) -> bool {
         0 != self.0 & 1
+    }
+
+    pub const fn next_level_table_address(self) -> PhysAddr {
+        const MASK: usize = ((1 << (48 - 12)) - 1) << 12;
+        PhysAddr::at((self.0 as usize) & MASK)
     }
 }
 
@@ -67,12 +79,45 @@ register_bitfields! {
 }
 
 pub type TableDescriptor = Bitfield<PageTableEntryType, TableDescriptorFields::Register>;
+type TableDescriptorMask = FieldValue<PageTableEntryType, TableDescriptorFields::Register>;
 
-impl TableDescriptor {}
+impl From<Attributes> for TableDescriptorMask {
+    fn from(attributes: Attributes) -> Self {
+        use AttributeField::*;
+        use TableDescriptorFields::*;
 
-impl From<PageTableEntry> for TableDescriptor {
-    fn from(pte: PageTableEntry) -> Self {
-        Self::new(pte.0)
+        const ATTRIBUTE_FIELD_MAP: &[(bool, AttributeField, TableDescriptorMask)] = &[
+            (false, UserExec, UXNTable::SET),
+            (false, KernelExec, PXNTable::SET),
+        ];
+
+        let mut result = Self::new(0, 0, 0);
+        for (agree, attribute, field) in ATTRIBUTE_FIELD_MAP {
+            if *agree == (attributes.is_set(*attribute)) {
+                result += *field;
+            }
+        }
+
+        result
+    }
+}
+
+impl TableDescriptor {
+    /// Create a new table descriptor entry from attributes.
+    pub fn new_entry(phys_addr: PhysAddr, attributes: Attributes) -> Self {
+        use TableDescriptorFields::*;
+
+        let mut field = TableDescriptorMask::from(attributes);
+        field += Valid::SET
+            + Type::Page
+            + NextLevelTableAddress.val(phys_addr.page() as PageTableEntryType);
+        Self::from(field)
+    }
+}
+
+impl From<TableDescriptor> for PageTableEntry {
+    fn from(desc: TableDescriptor) -> Self {
+        Self(desc.get())
     }
 }
 
@@ -112,21 +157,23 @@ type PageBlockDescriptorMask = FieldValue<PageTableEntryType, PageBlockDescripto
 
 impl From<Attributes> for PageBlockDescriptorMask {
     fn from(attributes: Attributes) -> Self {
-        use super::mair::MAIR;
         use AttributeField::*;
         use PageBlockDescriptorFields::*;
+        use super::mair::MAIR;
 
-        let mut result = Self::new(0, 0, 0);
-        if !attributes.is_set(UserExec) {
-            result += UXN::SET;
+        const ATTRIBUTE_FIELD_MAP: &[(bool, AttributeField, PageBlockDescriptorMask)] = &[
+            (false, UserExec, UXN::SET),
+            (false, KernelExec, PXN::SET),
+            (true, OnDemand, AF::SET),
+        ];
+
+        let mut result = Self::from(SH::OuterShareable);
+        for (agree, attribute, field) in ATTRIBUTE_FIELD_MAP {
+            if *agree == (attributes.is_set(*attribute)) {
+                result += *field;
+            }
         }
-        if !attributes.is_set(KernelExec) {
-            result += PXN::SET;
-        }
-        if attributes.is_set(OnDemand) {
-            result += AF::SET;
-        }
-        result += SH::OuterShareable;
+
         match (
             attributes.is_set(UserRead),
             attributes.is_set(UserWrite),
@@ -145,38 +192,44 @@ impl From<Attributes> for PageBlockDescriptorMask {
             (false, false, true, false) => {
                 result += AP::PrivReadOnly;
             }
+            (false, false, false, false) => { // presumably execute-only
+                result += AP::PrivReadOnly;
+            }
             _ => panic!(),
         }
+
         if attributes.is_set(Device) {
             result += AttrIndx.val(MAIR::DeviceStronglyOrdered as u64);
         } else {
             result += AttrIndx.val(MAIR::MemoryWriteThrough as u64);
         }
+
         result
     }
 }
 
 impl PageBlockDescriptor {
-    /// Create a new page block descriptor entry from attributes
+    /// Create a new page block descriptor entry from attributes.
     pub fn new_entry(
         level: u8,
         output_addr: PhysAddr,
         attributes: Attributes,
         contiguous: bool,
     ) -> Self {
+        use AttributeField::*;
         use PageBlockDescriptorFields::*;
 
-        let mut mask = PageBlockDescriptorMask::from(attributes);
-        mask += Valid::SET + OutputAddress.val(output_addr.page() as PageTableEntryType);
+        let mut field = PageBlockDescriptorMask::from(attributes);
+        if !attributes.is_set(OnDemand) {
+            field += Valid::SET + OutputAddress.val(output_addr.page() as PageTableEntryType);
+        }
         if contiguous {
-            mask += Contiguous::SET;
+            field += Contiguous::SET;
         }
         if level == 3 {
-            mask += Type::Block;
+            field += Type::Block;
         }
-        let mut result = Self::new(0);
-        result.modify(mask);
-        result
+        Self::from(field)
     }
 }
 
@@ -189,6 +242,34 @@ impl From<PageBlockDescriptor> for PageTableEntry {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_table_descriptor() {
+        let result = TableDescriptor::new(99);
+        assert_eq!(99, result.get());
+    }
+
+    #[test]
+    fn test_table_descriptor_entry() {
+        let next_level_table_addr = PhysAddr::at(0x123_0000);
+        let attributes = Attributes::DEVICE;
+        let result = TableDescriptor::new_entry(next_level_table_addr, attributes);
+        trace!("{:x}", result.get());
+        assert_eq!(0x1800000001230003, result.get());
+    }
+
+    #[test]
+    fn test_table_descriptor_mask() {
+        use crate::pager::Attributes;
+        let mut field = TableDescriptorMask::from(Attributes::DEVICE);
+
+        use TableDescriptorFields::*;
+        field += Valid::SET;
+
+        let result = TableDescriptor::from(field);
+        trace!("{:x}", result.get());
+        assert_eq!(0x1800000000000001, result.get())
+    }
 
     #[test]
     fn test_page_block_descriptor() {
@@ -215,8 +296,7 @@ mod tests {
         use PageBlockDescriptorFields::*;
         field += Contiguous::SET + Dirty::SET + nG::SET + Valid::SET;
 
-        let mut result = PageBlockDescriptor::new(0);
-        result.write(field);
+        let result = PageBlockDescriptor::from(field);
         trace!("{:x}", result.get());
         assert_eq!(0x78000000000a01, result.get())
     }

@@ -89,6 +89,12 @@ impl<T: IntLike, R: RegisterLongName> Debug for Bitfield<T, R> {
     }
 }
 
+impl<T: IntLike, R: RegisterLongName> From<FieldValue<T, R>> for Bitfield<T, R> {
+    fn from(field: FieldValue<T, R>) -> Self {
+        Self::new(field.value)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
