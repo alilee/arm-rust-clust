@@ -18,6 +18,7 @@ use crate::{Error, Result};
 
 /// Initialisation
 pub fn init() -> Result<()> {
+    info!("init");
     mair::init()
 }
 
@@ -77,25 +78,25 @@ impl PageDirectory {
                 entry_target_range,
                 entry_range,
             );
-            if level == 3 || ((1u8..=2u8).contains(&level) && attributes.get(AttributeField::Block))
+            if level == 3 || ((1u8..=2u8).contains(&level) && attributes.is_set(AttributeField::Block))
             {
                 // if the entry range is inside the 16-entry span contig range
                 let contiguous_range =
                     contiguous_virt_range(level, index, page_table_virt_addr_range_base);
                 let contiguous =
-                    attributes.get(AttributeField::Block) && target_range.covers(&contiguous_range);
+                    attributes.is_set(AttributeField::Block) && target_range.covers(&contiguous_range);
                 // if the entire entry_range is inside the virt_range
                 if level == 3 || entry_target_range.covers(&entry_range) {
                     // level 1: 1GB block
                     // level 2: 2MB block
                     // level 3: 4KB page
-                    // assert!(!page_table[index].is_valid());
+                    assert!(!page_table[index].is_valid());
                     let output_addr = translation.translate(entry_range.base());
                     trace!("{:?}+{:?}={:?}", entry_range, translation, output_addr);
-                    // page_table[index] =
-                    //     PageBlockDescriptor::new_entry(level, output_addr, attributes, contiguous)
-                    //         .into();
-                    // trace!("{:?}", page_table[index]);
+                    page_table[index] =
+                        PageBlockDescriptor::new_entry(level, output_addr, attributes, contiguous)
+                            .into();
+                    trace!("{:?}", page_table[index]);
                     continue;
                 }
             }
@@ -268,4 +269,54 @@ fn contiguous_virt_range(
     let base = page_table_virt_addr_range_base.increment(index * entry_size);
     let length = CONTIG_SPAN * entry_size;
     VirtAddrRange::new(base, length)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_table_entries() {
+        let base = VirtAddr::at(0x10000);
+        let range = VirtAddrRange::new(base, 0x10000);
+        {
+            let mut i = table_entries(range, 1, VirtAddr::at(0));
+            let (index, virt_range, entry_range) = i.next().unwrap();
+            assert_eq!(0, index);
+            assert_eq!(range, virt_range);
+            assert_eq!(
+                VirtAddrRange::between(VirtAddr::at(0x0), VirtAddr::at(0x4000_0000)),
+                entry_range
+            );
+            assert_none!(i.next());
+        }
+        {
+            let mut i = table_entries(range, 2, VirtAddr::at(0));
+            let (index, virt_range, entry_range) = i.next().unwrap();
+            assert_eq!(0, index);
+            assert_eq!(range, virt_range);
+            assert_eq!(
+                VirtAddrRange::between(VirtAddr::at(0x0), VirtAddr::at(0x20_0000)),
+                entry_range
+            );
+            assert_none!(i.next());
+        }
+        {
+            let mut i = table_entries(range, 3, VirtAddr::at(0));
+            let (index, virt_range, entry_range) = i.next().unwrap();
+            let range = VirtAddrRange::between(VirtAddr::at(0x1_0000), VirtAddr::at(0x1_1000));
+            assert_eq!(16, index);
+            assert_eq!(range, virt_range);
+            assert_eq!(range, entry_range);
+            let (index, virt_range, entry_range) = i.next().unwrap();
+            let range = range.step();
+            assert_eq!(17, index);
+            assert_eq!(range, virt_range);
+            assert_eq!(range, entry_range);
+            for _ in 18..32 {
+                assert_some!(i.next());
+            }
+            assert_none!(i.next());
+        }
+    }
 }

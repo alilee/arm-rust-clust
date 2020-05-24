@@ -3,6 +3,7 @@
 
 use super::VirtAddr;
 use core::fmt::{Debug, Error, Formatter};
+use crate::pager::PAGESIZE_BYTES;
 
 /// A local physical address
 #[derive(Copy, Clone, PartialOrd, PartialEq)]
@@ -65,6 +66,11 @@ impl PhysAddr {
     /// Aligned on a byte boundary.
     pub const fn aligned(&self, bytes: usize) -> bool {
         0 == self.0 & (bytes - 1)
+    }
+
+    /// Page number.
+    pub const fn page(&self) -> usize {
+        self.0 / PAGESIZE_BYTES
     }
 }
 

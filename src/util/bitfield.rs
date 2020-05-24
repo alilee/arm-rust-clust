@@ -2,9 +2,9 @@
 
 //! Page table data structures.
 
-pub use register::{register_bitfields, IntLike};
+pub use register::{register_bitfields, FieldValue, IntLike};
 
-use register::{Field, FieldValue, RegisterLongName, TryFromValue};
+use register::{Field, RegisterLongName, TryFromValue};
 
 use core::fmt::{Debug, Formatter};
 use core::marker::PhantomData;
@@ -28,7 +28,7 @@ impl<T: IntLike, R: RegisterLongName> Bitfield<T, R> {
 
     /// Retrieve the aggregate value.
     #[inline]
-    fn get(&self) -> T {
+    pub fn get(&self) -> T {
         self.value
     }
 

@@ -3,6 +3,7 @@
 use core::fmt::{Debug, Formatter};
 
 /// Flags for page attributes.
+#[derive(Copy, Clone)]
 pub enum AttributeField {
     /// Readable by user-space threads
     UserRead,
@@ -34,41 +35,34 @@ pub struct Attributes(u64);
 
 impl Debug for Attributes {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        const FIELD_DISPLAY: &[(AttributeField, &str)] = &[
+            (OnDemand, "Dmd "),
+            (Block, "Blk "),
+            (StreamIn, "StmI "),
+            (StreamOut, "StmO "),
+            (Device, "Dev "),
+            (KernelRead, "R"),
+            (KernelWrite, "W"),
+            (KernelExec, "X"),
+            (UserRead, "R"),
+            (UserWrite, "W"),
+            (UserExec, "X"),
+        ];
+
         write!(f, "Attributes(").unwrap();
-        if self.get(OnDemand) {
-            write!(f, "Dmd ").unwrap();
-        }
-        if self.get(Block) {
-            write!(f, "Blk ").unwrap();
-        }
-        if self.get(StreamIn) {
-            write!(f, "StmI ").unwrap();
-        }
-        if self.get(StreamOut) {
-            write!(f, "StmO ").unwrap();
-        }
-        if self.get(Device) {
-            write!(f, "Dev ").unwrap();
-        }
-        write!(f, "K:").unwrap();
-        if self.get(KernelRead) {
-            write!(f, "R").unwrap();
-        }
-        if self.get(KernelWrite) {
-            write!(f, "W").unwrap();
-        }
-        if self.get(KernelExec) {
-            write!(f, "X").unwrap();
-        }
-        write!(f, " U:").unwrap();
-        if self.get(UserRead) {
-            write!(f, "R").unwrap();
-        }
-        if self.get(UserWrite) {
-            write!(f, "W").unwrap();
-        }
-        if self.get(UserExec) {
-            write!(f, "X").unwrap();
+        for (field, display) in FIELD_DISPLAY {
+            match field {
+                KernelRead => {
+                    write!(f, "K:").unwrap();
+                }
+                UserRead => {
+                    write!(f, " U:").unwrap();
+                }
+                _ => (),
+            };
+            if self.is_set(*field) {
+                write!(f, "{}", *display).unwrap();
+            }
         }
         write!(f, ")")
     }
@@ -81,7 +75,7 @@ impl Attributes {
     }
 
     /// Read the presence of a specific attribute flag.
-    pub const fn get(self, field: AttributeField) -> bool {
+    pub const fn is_set(self, field: AttributeField) -> bool {
         0 != (self.0 & (1 << (field as u64)))
     }
 
@@ -108,9 +102,13 @@ impl Attributes {
         .set(KernelWrite)
         .set(Block);
     /// For kernel code
-    pub const KERNEL_EXEC: Attributes = Attributes::new().set(KernelExec);
-    /// For kernel data
-    pub const KERNEL_MEM: Attributes = Attributes::new()
+    pub const KERNEL_EXEC: Attributes = Attributes::new()
+        .set(KernelExec);
+    /// For kernel static
+    pub const KERNEL_STATIC: Attributes = Attributes::new()
+        .set(KernelRead);
+    /// For kernel stack and heap
+    pub const KERNEL_DYNAMIC: Attributes = Attributes::new()
         .set(KernelRead)
         .set(KernelWrite)
         .set(OnDemand);
@@ -126,7 +124,10 @@ impl Attributes {
         .set(KernelWrite)
         .set(UserExec);
     /// For user process data
-    pub const USER_MEM: Attributes = Attributes::new()
+    pub const USER_STATIC: Attributes = Attributes::new()
+        .set(UserRead);
+    /// For user process data
+    pub const USER_DYNAMIC: Attributes = Attributes::new()
         .set(UserRead)
         .set(UserWrite)
         .set(OnDemand);

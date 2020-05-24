@@ -2,8 +2,8 @@
 
 //! Page table data structures.
 
-use crate::pager::PAGESIZE_BYTES;
-use crate::util::bitfield::{register_bitfields, Bitfield};
+use crate::pager::{AttributeField, Attributes, PhysAddr, PAGESIZE_BYTES};
+use crate::util::bitfield::{register_bitfields, Bitfield, FieldValue};
 
 use core::mem;
 use core::ops::{Index, IndexMut};
@@ -11,7 +11,7 @@ use core::ops::{Index, IndexMut};
 pub type PageTableEntryType = u64;
 
 /// An entry in one of the levels of an ARMv8 page table.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct PageTableEntry(PageTableEntryType);
 
 impl PageTableEntry {
@@ -108,11 +108,116 @@ register_bitfields! {
 }
 
 pub type PageBlockDescriptor = Bitfield<PageTableEntryType, PageBlockDescriptorFields::Register>;
+type PageBlockDescriptorMask = FieldValue<PageTableEntryType, PageBlockDescriptorFields::Register>;
 
-impl PageBlockDescriptor {}
+impl From<Attributes> for PageBlockDescriptorMask {
+    fn from(attributes: Attributes) -> Self {
+        use super::mair::MAIR;
+        use AttributeField::*;
+        use PageBlockDescriptorFields::*;
 
-impl From<PageTableEntry> for PageBlockDescriptor {
-    fn from(pte: PageTableEntry) -> Self {
-        Self::new(pte.0)
+        let mut result = Self::new(0, 0, 0);
+        if !attributes.is_set(UserExec) {
+            result += UXN::SET;
+        }
+        if !attributes.is_set(KernelExec) {
+            result += PXN::SET;
+        }
+        if attributes.is_set(OnDemand) {
+            result += AF::SET;
+        }
+        result += SH::OuterShareable;
+        match (
+            attributes.is_set(UserRead),
+            attributes.is_set(UserWrite),
+            attributes.is_set(KernelRead),
+            attributes.is_set(KernelWrite),
+        ) {
+            (true, true, true, true) => {
+                result += AP::ReadWrite;
+            }
+            (false, false, true, true) => {
+                result += AP::PrivOnly;
+            }
+            (true, false, true, false) => {
+                result += AP::ReadOnly;
+            }
+            (false, false, true, false) => {
+                result += AP::PrivReadOnly;
+            }
+            _ => panic!(),
+        }
+        if attributes.is_set(Device) {
+            result += AttrIndx.val(MAIR::DeviceStronglyOrdered as u64);
+        } else {
+            result += AttrIndx.val(MAIR::MemoryWriteThrough as u64);
+        }
+        result
+    }
+}
+
+impl PageBlockDescriptor {
+    /// Create a new page block descriptor entry from attributes
+    pub fn new_entry(
+        level: u8,
+        output_addr: PhysAddr,
+        attributes: Attributes,
+        contiguous: bool,
+    ) -> Self {
+        use PageBlockDescriptorFields::*;
+
+        let mut mask = PageBlockDescriptorMask::from(attributes);
+        mask += Valid::SET + OutputAddress.val(output_addr.page() as PageTableEntryType);
+        if contiguous {
+            mask += Contiguous::SET;
+        }
+        if level == 3 {
+            mask += Type::Block;
+        }
+        let mut result = Self::new(0);
+        result.modify(mask);
+        result
+    }
+}
+
+impl From<PageBlockDescriptor> for PageTableEntry {
+    fn from(desc: PageBlockDescriptor) -> Self {
+        Self(desc.get())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_page_block_descriptor() {
+        let result = PageBlockDescriptor::new(99);
+        assert_eq!(99, result.get());
+    }
+
+    #[test]
+    fn test_page_block_descriptor_entry() {
+        let level = 3;
+        let output_addr = PhysAddr::at(0x123_0000);
+        let attributes = Attributes::DEVICE;
+        let contiguous = true;
+        let result = PageBlockDescriptor::new_entry(level, output_addr, attributes, contiguous);
+        trace!("{:x}", result.get());
+        assert_eq!(0x70000001230201, result.get());
+    }
+
+    #[test]
+    fn test_page_block_descriptor_mask() {
+        use crate::pager::Attributes;
+        let mut field = PageBlockDescriptorMask::from(Attributes::DEVICE);
+
+        use PageBlockDescriptorFields::*;
+        field += Contiguous::SET + Dirty::SET + nG::SET + Valid::SET;
+
+        let mut result = PageBlockDescriptor::new(0);
+        result.write(field);
+        trace!("{:x}", result.get());
+        assert_eq!(0x78000000000a01, result.get())
     }
 }

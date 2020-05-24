@@ -73,19 +73,19 @@ fn map_ranges(
         use layout::KernelRange::*;
 
         match kernel_range {
-            RAM(phys_range, offset, attributes) => {
+            RAM(virt_addr_range, translation, attributes) => {
                 page_directory.map_translation(
-                    phys_range,
-                    offset,
+                    virt_addr_range,
+                    translation,
                     attributes,
                     allocator,
                     mem_access_translation,
                 )?;
             }
-            Image(phys_range, offset, attributes) => {
+            Image(virt_addr_range, translation, attributes) => {
                 page_directory.map_translation(
-                    phys_range,
-                    offset,
+                    virt_addr_range,
+                    translation,
                     attributes,
                     allocator,
                     mem_access_translation,
@@ -94,24 +94,24 @@ fn map_ranges(
             Device(virt_range, _attributes) => {
                 alloc::add_device_range(virt_range)?;
             }
-            L3PageTables(virt_range, attributes) => {
+            L3PageTables(virt_addr_range, attributes) => {
                 page_directory.map_translation(
-                    virt_range,
+                    virt_addr_range,
                     NullTranslation::new(),
                     attributes,
                     allocator,
                     mem_access_translation,
                 )?;
             }
-            Heap(virt_range, attributes) => {
+            Heap(virt_addr_range, attributes) => {
                 page_directory.map_translation(
-                    virt_range,
+                    virt_addr_range,
                     NullTranslation::new(),
                     attributes,
                     allocator,
                     mem_access_translation,
                 )?;
-                alloc::add_heap_range(virt_range)?;
+                alloc::add_heap_range(virt_addr_range)?;
             }
         };
     }

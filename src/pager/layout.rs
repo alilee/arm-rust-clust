@@ -137,11 +137,11 @@ const LAYOUT: [KernelExtent; 5] = [
     },
     KernelExtent::L3PageTables {
         virt_addr_extent: 8 * GB,
-        attributes: Attributes::KERNEL_MEM,
+        attributes: Attributes::KERNEL_DYNAMIC,
     },
     KernelExtent::Heap {
         virt_addr_extent: 8 * GB,
-        attributes: Attributes::KERNEL_MEM,
+        attributes: Attributes::KERNEL_DYNAMIC,
     },
 ];
 
