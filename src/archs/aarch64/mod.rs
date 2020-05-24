@@ -2,6 +2,10 @@
 
 mod pager;
 
+/// Live hardware abstraction layer for integration tests and releases.
+#[cfg(not(test))]
+mod hal;
+
 /// Mock hardware abstraction layer for unit tests.
 #[cfg(test)]
 mod hal_test;
@@ -10,14 +14,10 @@ mod hal_test;
 #[cfg(test)]
 use hal_test as hal;
 
-/// Live hardware abstraction layer for integration tests and releases.
-#[cfg(not(test))]
-mod hal;
-
 use crate::pager::{PhysAddr, PhysAddrRange, VirtAddr};
 use crate::Result;
 
-/// Materialise empty struct implementating Arch trait.
+/// Materialise empty struct implementing Arch trait.
 pub struct Arch {}
 
 impl super::ArchTrait for Arch {
