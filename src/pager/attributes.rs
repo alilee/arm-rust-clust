@@ -34,7 +34,43 @@ pub struct Attributes(u64);
 
 impl Debug for Attributes {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "Attributes({:011b})", self.0)
+        write!(f, "Attributes(").unwrap();
+        if self.get(OnDemand) {
+            write!(f, "Dmd ").unwrap();
+        }
+        if self.get(Block) {
+            write!(f, "Blk ").unwrap();
+        }
+        if self.get(StreamIn) {
+            write!(f, "StmI ").unwrap();
+        }
+        if self.get(StreamOut) {
+            write!(f, "StmO ").unwrap();
+        }
+        if self.get(Device) {
+            write!(f, "Dev ").unwrap();
+        }
+        write!(f, "K:").unwrap();
+        if self.get(KernelRead) {
+            write!(f, "R").unwrap();
+        }
+        if self.get(KernelWrite) {
+            write!(f, "W").unwrap();
+        }
+        if self.get(KernelExec) {
+            write!(f, "X").unwrap();
+        }
+        write!(f, " U:").unwrap();
+        if self.get(UserRead) {
+            write!(f, "R").unwrap();
+        }
+        if self.get(UserWrite) {
+            write!(f, "W").unwrap();
+        }
+        if self.get(UserExec) {
+            write!(f, "X").unwrap();
+        }
+        write!(f, ")")
     }
 }
 

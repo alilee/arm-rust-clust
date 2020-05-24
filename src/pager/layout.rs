@@ -133,7 +133,7 @@ const LAYOUT: [KernelExtent; 5] = [
     },
     KernelExtent::Device {
         virt_addr_extent: 1 * GB,
-        attributes: Attributes::KERNEL_EXEC,
+        attributes: Attributes::DEVICE,
     },
     KernelExtent::L3PageTables {
         virt_addr_extent: 8 * GB,

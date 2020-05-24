@@ -4,19 +4,15 @@ mod pager;
 
 /// Mock hardware abstraction layer for unit tests.
 #[cfg(test)]
-pub mod hal_test;
+mod hal_test;
 
 /// Publish hardware abstraction layer for unit tests.
 #[cfg(test)]
-pub use hal_test as hal;
+use hal_test as hal;
 
 /// Live hardware abstraction layer for integration tests and releases.
 #[cfg(not(test))]
-pub mod hal_live;
-
-/// Publish hardware abstraction layer for integration tests and releases.
-#[cfg(not(test))]
-pub use hal_live as hal;
+mod hal;
 
 use crate::pager::{PhysAddr, PhysAddrRange, VirtAddr};
 use crate::Result;
