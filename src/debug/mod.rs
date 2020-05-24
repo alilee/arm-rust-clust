@@ -36,21 +36,25 @@ macro_rules! dbg {
 #[macro_export]
 macro_rules! log {
     ($lvl:expr, $string:expr) => ({
-        $crate::debug::logger::_print(format_args_nl!(
-            concat!("{:5}[{:>50} {:3}]  ", $string),
-            $lvl,
-            module_path!(),
-            line!(),
-        ));
+        if $crate::debug::logger::_is_enabled($lvl, module_path!()) {
+            $crate::debug::logger::_print(format_args_nl!(
+                concat!("{:5}[{:>50} {:3}]  ", $string),
+                $lvl,
+                module_path!().trim_start_matches("libkernel::").trim_start_matches("archs::"),
+                line!(),
+            ))
+        };
     });
     ($lvl:expr, $format_string:expr, $($arg:tt)*) => ({
-        $crate::debug::logger::_print(format_args_nl!(
-            concat!("{:5}[{:>50} {:3}]  ", $format_string),
-            $lvl,
-            module_path!(),
-            line!(),
-            $($arg)*
-        ));
+        if $crate::debug::logger::_is_enabled($lvl, module_path!()) {
+            $crate::debug::logger::_print(format_args_nl!(
+                concat!("{:5}[{:>50} {:3}]  ", $format_string),
+                $lvl,
+                module_path!().trim_start_matches("libkernel::").trim_start_matches("archs::"),
+                line!(),
+                $($arg)*
+            ))
+        };
     })
 }
 
@@ -97,3 +101,12 @@ macro_rules! trace {
         $crate::log!("TRACE", $format_string, $($arg)*);
     )
 }
+
+/// Log message filtering settings by module.
+///
+/// These are the defaults unless overridden in main or integration test.
+/// Referenced in `debug::logger::_is_enabled`.
+#[cfg(not(test))]
+#[no_mangle]
+#[linkage = "weak"]
+static LOG_LEVEL_SETTINGS: &[(&str, &str)] = &[];

@@ -7,6 +7,7 @@
 
 use crate::Result;
 
+/// Type for indexes into the MAIR register (referenced in page table).
 #[derive(Debug)]
 pub enum MAIR {
     DeviceStronglyOrdered = 0,
@@ -24,6 +25,7 @@ impl From<u64> for MAIR {
     }
 }
 
+/// Initialise the MAIR register.
 pub fn init() -> Result<()> {
     crate::archs::aarch64::hal::mair::init()
 }

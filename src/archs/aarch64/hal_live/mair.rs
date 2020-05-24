@@ -16,7 +16,7 @@ pub fn init() -> Result<()> {
             + Attr1_Normal_Inner::WriteThrough_NonTransient_ReadWriteAlloc,
     );
 
-    trace!("init -> MAIR_EL1 {:#b}", MAIR_EL1.get());
+    info!("init -> MAIR_EL1 {:#b}", MAIR_EL1.get());
 
     Ok(())
 }

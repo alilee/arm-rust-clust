@@ -11,8 +11,8 @@
 #[macro_use]
 extern crate libkernel;
 
-use test_macros::kernel_test;
 use libkernel::util::testing::exit_success;
+use test_macros::kernel_test;
 
 #[no_mangle]
 fn kernel_init() {
@@ -24,8 +24,12 @@ fn paging_init() {
     use libkernel::pager;
 
     fn next() -> ! {
-       exit_success()
+        exit_success()
     }
 
     pager::init(next)
 }
+
+#[no_mangle]
+static LOG_LEVEL_SETTINGS: &[(&str, &str)] =
+    &[("pager::frames", "INFO"), ("aarch64::pager", "INFO")];

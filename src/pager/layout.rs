@@ -9,6 +9,7 @@ use core::fmt::{Debug, Error, Formatter};
 /// Initialise
 pub fn init() -> Result<()> {
     info!("init");
+    info!("Kernel base: {:?}", Arch::kernel_base());
     Ok(())
 }
 
@@ -47,9 +48,9 @@ impl Debug for KernelExtent {
                 attributes,
             } => write!(
                 f,
-                "RAM {{ {:?}, {:?}, {:?} }}",
+                "RAM {{ {:?}, extent: {} GB, {:?} }}",
                 phys_addr_range(),
-                virt_addr_extent,
+                virt_addr_extent / GB,
                 attributes
             ),
             Image {
@@ -58,23 +59,38 @@ impl Debug for KernelExtent {
                 attributes,
             } => write!(
                 f,
-                "Image {{ {:?}, {:?}, {:?} }}",
+                "Image {{ {:?}, extent: {} GB, {:?} }}",
                 phys_addr_range(),
-                virt_addr_extent,
+                virt_addr_extent / GB,
                 attributes
             ),
             Device {
                 virt_addr_extent,
                 attributes,
-            } => write!(f, "Device {{ {:?}, {:?} }}", virt_addr_extent, attributes),
+            } => write!(
+                f,
+                "Device {{ extent: {} GB, {:?} }}",
+                virt_addr_extent / GB,
+                attributes
+            ),
             L3PageTables {
                 virt_addr_extent,
                 attributes,
-            } => write!(f, "Device {{ {:?}, {:?} }}", virt_addr_extent, attributes),
+            } => write!(
+                f,
+                "Device {{ extent: {} GB, {:?} }}",
+                virt_addr_extent / GB,
+                attributes
+            ),
             Heap {
                 virt_addr_extent,
                 attributes,
-            } => write!(f, "Heap {{ {:?}, {:?} }}", virt_addr_extent, attributes),
+            } => write!(
+                f,
+                "Heap {{ extent: {} GB, {:?} }}",
+                virt_addr_extent / GB,
+                attributes
+            ),
         }
     }
 }
@@ -204,6 +220,7 @@ impl Iterator for LayoutIterator {
         if self.i >= LAYOUT.len() {
             return None;
         }
+        trace!("{:?}: {:?}", self.next_base, &LAYOUT[self.i]);
         let result = Some(KernelRange::from(self.next_base, &LAYOUT[self.i]));
         self.next_base = self.next_base.increment(LAYOUT[self.i].virt_addr_extent());
         self.i += 1;

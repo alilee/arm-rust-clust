@@ -35,7 +35,6 @@ impl super::ArchTrait for Arch {
     fn kernel_base() -> VirtAddr {
         const UPPER_VA_BITS: usize = 39;
         let result = VirtAddr::at(!((1 << (UPPER_VA_BITS + 1)) - 1));
-        info!("KERNEL_BASE: {:?}", result);
         result
     }
 

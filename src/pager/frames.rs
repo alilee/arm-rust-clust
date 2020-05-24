@@ -15,13 +15,13 @@ pub trait Allocator {
 
 /// Initialise
 pub fn init() -> Result<()> {
-    info!("init");
+    log!("MAJOR", "init");
     Ok(())
 }
 
 /// Extend the frame table to include a range of physical addresses.
 pub fn add_ram_range(range: PhysAddrRange, mem_offset: &impl Translate) -> Result<()> {
-    info!("including: {:?}", range);
+    info!("including: {:?} ({} pages)", range, range.length()/PAGESIZE_BYTES);
     assert!(range.aligned(PAGESIZE_BYTES));
     let mut alloc = ALLOCATOR.lock();
     for phys_addr in range.chunks(PAGESIZE_BYTES) {
@@ -81,7 +81,8 @@ impl Allocator for StackAllocator {
             *top = None;
         };
         self.count -= 1;
-        debug!("{:?}", self);
+        debug!("Allocating {:?} - {} pages remaining", phys_addr, self.count);
+        trace!("{:?}", self);
         Ok(phys_addr)
     }
 }
