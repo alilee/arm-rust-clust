@@ -78,7 +78,7 @@ impl Debug for KernelExtent {
                 attributes,
             } => write!(
                 f,
-                "Device {{ extent: {} GB, {:?} }}",
+                "L3PageTables {{ extent: {} GB, {:?} }}",
                 virt_addr_extent / GB,
                 attributes
             ),

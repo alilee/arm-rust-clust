@@ -8,14 +8,22 @@
 use super::PhysAddr;
 use super::VirtAddr;
 
+use crate::{Error, Result};
+
 use core::fmt::{Debug, Formatter};
 
 /// Able to translate.
 pub trait Translate {
     /// Translate a virtual address to a physical address.
     fn translate(&self, virt_addr: VirtAddr) -> PhysAddr;
+
+    /// Translate a virtual address to an option physical address.
+    fn translate_maybe(&self, virt_addr: VirtAddr) -> Option<PhysAddr>;
+
     /// Reverse translate a physical address to a virtual address, if defined..
-    fn translate_phys(&self, phys_addr: PhysAddr) -> VirtAddr;
+    fn translate_phys(&self, _phys_addr: PhysAddr) -> Result<VirtAddr> {
+        Err(Error::Undefined)
+    }
 }
 
 /// Translation such that physical address is always null.
@@ -40,8 +48,8 @@ impl Translate for NullTranslation {
         PhysAddr::null()
     }
 
-    fn translate_phys(&self, _phys_addr: PhysAddr) -> VirtAddr {
-        unimplemented!()
+    fn translate_maybe(&self, _virt_addr: VirtAddr) -> Option<PhysAddr> {
+        None
     }
 }
 
@@ -66,8 +74,11 @@ impl Translate for Identity {
     fn translate(&self, virt_addr: VirtAddr) -> PhysAddr {
         PhysAddr::identity_mapped(virt_addr)
     }
-    fn translate_phys(&self, phys_addr: PhysAddr) -> VirtAddr {
-        unsafe { VirtAddr::identity_mapped(phys_addr) }
+    fn translate_maybe(&self, virt_addr: VirtAddr) -> Option<PhysAddr> {
+        Some(self.translate(virt_addr))
+    }
+    fn translate_phys(&self, phys_addr: PhysAddr) -> Result<VirtAddr> {
+        unsafe { Ok(VirtAddr::identity_mapped(phys_addr)) }
     }
 }
 
@@ -102,8 +113,11 @@ impl Translate for FixedOffset {
     fn translate(&self, virt_addr: VirtAddr) -> PhysAddr {
         PhysAddr::identity_mapped(virt_addr.decrement(self.0))
     }
-    fn translate_phys(&self, phys_addr: PhysAddr) -> VirtAddr {
-        unsafe { VirtAddr::identity_mapped(phys_addr).increment(self.0) }
+    fn translate_maybe(&self, virt_addr: VirtAddr) -> Option<PhysAddr> {
+        Some(self.translate(virt_addr))
+    }
+    fn translate_phys(&self, phys_addr: PhysAddr) -> Result<VirtAddr> {
+        unsafe { Ok(VirtAddr::identity_mapped(phys_addr).increment(self.0)) }
     }
 }
 
@@ -114,7 +128,10 @@ mod tests {
     #[test]
     fn null() {
         let virt_addr = VirtAddr::at(0x4800_0000);
-        assert_eq!(PhysAddr::null(), NullTranslation::new().translate(virt_addr));
+        assert_eq!(
+            PhysAddr::null(),
+            NullTranslation::new().translate(virt_addr)
+        );
     }
 
     #[test]

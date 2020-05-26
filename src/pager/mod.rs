@@ -54,6 +54,7 @@ pub fn init(next: fn() -> !) -> ! {
     let next: fn() -> ! = unsafe {
         kernel_image_offset
             .translate_phys(PhysAddr::from_ptr(next as *const u8))
+            .unwrap()
             .into()
     };
 
@@ -91,17 +92,17 @@ fn map_ranges(
                     mem_access_translation,
                 )?;
             }
-            Device(virt_range, _attributes) => {
-                alloc::add_device_range(virt_range)?;
+            Device(_virt_range, _attributes) => {
+                // alloc::add_device_range(virt_range)?;
             }
-            L3PageTables(virt_addr_range, attributes) => {
-                page_directory.map_translation(
-                    virt_addr_range,
-                    NullTranslation::new(),
-                    attributes,
-                    allocator,
-                    mem_access_translation,
-                )?;
+            L3PageTables(_virt_addr_range, _attributes) => {
+                // page_directory.map_translation(
+                //     virt_addr_range,
+                //     NullTranslation::new(),
+                //     attributes,
+                //     allocator,
+                //     mem_access_translation,
+                // )?;
             }
             Heap(virt_addr_range, attributes) => {
                 page_directory.map_translation(
@@ -111,7 +112,7 @@ fn map_ranges(
                     allocator,
                     mem_access_translation,
                 )?;
-                alloc::add_heap_range(virt_addr_range)?;
+                // alloc::add_heap_range(virt_addr_range)?;
             }
         };
     }

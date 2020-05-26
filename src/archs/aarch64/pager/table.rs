@@ -2,12 +2,13 @@
 
 //! Page table data structures.
 
-use crate::pager::{AttributeField, Attributes, PhysAddr, PAGESIZE_BYTES};
+use crate::archs::ArchTrait;
+use crate::pager::{AttributeField, Attributes, PhysAddr, VirtAddr, PAGESIZE_BYTES};
 use crate::util::bitfield::{register_bitfields, Bitfield, FieldValue};
 
+use core::fmt::{Debug, Formatter};
 use core::mem;
 use core::ops::{Index, IndexMut};
-use core::fmt::{Debug, Formatter};
 
 pub type PageTableEntryType = u64;
 
@@ -26,9 +27,17 @@ impl PageTableEntry {
         0 != self.0 & 1
     }
 
+    pub const fn is_null(self) -> bool {
+        0 == self.0
+    }
+
     pub const fn next_level_table_address(self) -> PhysAddr {
         const MASK: usize = ((1 << (48 - 12)) - 1) << 12;
         PhysAddr::at((self.0 as usize) & MASK)
+    }
+
+    pub const fn is_table(self, level: u8) -> bool {
+        level < 3 && self.0 & 0b10 != 0
     }
 }
 
@@ -71,8 +80,8 @@ register_bitfields! {
         PXNTable OFFSET(59) NUMBITS(1) [],
         NextLevelTableAddress OFFSET(12) NUMBITS(35) [],
         Type OFFSET(1) NUMBITS(1) [
-            Reserved = 0b0,
-            Page = 0b1
+            Reserved = 0b0,                          // Use PageBlockDescriptor
+            Table = 0b1
         ],
         Valid OFFSET(0) NUMBITS(1) []
     ]
@@ -80,6 +89,26 @@ register_bitfields! {
 
 pub type TableDescriptor = Bitfield<PageTableEntryType, TableDescriptorFields::Register>;
 type TableDescriptorMask = FieldValue<PageTableEntryType, TableDescriptorFields::Register>;
+
+impl Debug for TableDescriptor {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        use TableDescriptorFields::*;
+        write!(
+            f,
+            "Next-level table: {:?} (",
+            self.next_level_table_address(),
+        )?;
+
+        write!(f, " APTable({:02b})", self.read(APTable))?;
+        if self.is_set(UXNTable) {
+            write!(f, " UXNTable")?;
+        }
+        if self.is_set(PXNTable) {
+            write!(f, " PXNTable")?;
+        }
+        write!(f, " )")
+    }
+}
 
 impl From<Attributes> for TableDescriptorMask {
     fn from(attributes: Attributes) -> Self {
@@ -104,20 +133,55 @@ impl From<Attributes> for TableDescriptorMask {
 
 impl TableDescriptor {
     /// Create a new table descriptor entry from attributes.
-    pub fn new_entry(phys_addr: PhysAddr, attributes: Attributes) -> Self {
+    pub fn new_entry(maybe_phys_addr: Option<PhysAddr>, attributes: Attributes) -> Self {
         use TableDescriptorFields::*;
 
         let mut field = TableDescriptorMask::from(attributes);
-        field += Valid::SET
-            + Type::Page
-            + NextLevelTableAddress.val(phys_addr.page() as PageTableEntryType);
+        match maybe_phys_addr {
+            Some(phys_addr) => {
+                field +=
+                    Valid::SET + NextLevelTableAddress.val(phys_addr.page() as PageTableEntryType);
+            }
+            None => {}
+        }
+        field += Type::Table;
         Self::from(field)
+    }
+
+    /// Create a table descriptor which only separates user and kernel access.
+    pub fn new_neutral_entry(virt_addr: VirtAddr, phys_addr: PhysAddr) -> Self {
+        use super::super::Arch;
+        use TableDescriptorFields::*;
+        let mut field = TableDescriptorMask::from(
+            Type::Table
+                + Valid::SET
+                + NextLevelTableAddress.val(phys_addr.page() as PageTableEntryType),
+        );
+        if virt_addr < Arch::kernel_base() {
+            field += PXNTable::SET;
+        } else {
+            field += UXNTable::SET + APTable::PrivOnly;
+        }
+        Self::from(field)
+    }
+
+    pub fn next_level_table_address(self) -> PhysAddr {
+        PhysAddr::at(
+            (self.read(TableDescriptorFields::NextLevelTableAddress) * PAGESIZE_BYTES as u64)
+                as usize,
+        )
     }
 }
 
 impl From<TableDescriptor> for PageTableEntry {
     fn from(desc: TableDescriptor) -> Self {
         Self(desc.get())
+    }
+}
+
+impl From<PageTableEntry> for TableDescriptor {
+    fn from(pte: PageTableEntry) -> Self {
+        Self::new(pte.0)
     }
 }
 
@@ -145,8 +209,8 @@ register_bitfields! {
         ],
         AttrIndx OFFSET(2) NUMBITS(3) [],                  // Memory attributes index for MAIR_ELx
         Type OFFSET(1) NUMBITS(1) [
-            Block = 0b0,
-            Table = 0b1
+            Page = 0b1,
+            Block = 0b0
         ],
         Valid OFFSET(0) NUMBITS(1) []
     ]
@@ -155,16 +219,44 @@ register_bitfields! {
 pub type PageBlockDescriptor = Bitfield<PageTableEntryType, PageBlockDescriptorFields::Register>;
 type PageBlockDescriptorMask = FieldValue<PageTableEntryType, PageBlockDescriptorFields::Register>;
 
+impl Debug for PageBlockDescriptor {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        use super::mair::MAIR;
+        use PageBlockDescriptorFields::*;
+
+        write!(f, "OA: {:?} (", self.output_address())?;
+        if self.is_set(UXN) {
+            write!(f, " UXN")?;
+        }
+        if self.is_set(PXN) {
+            write!(f, " PXN")?;
+        }
+        if self.is_set(Contiguous) {
+            write!(f, " Contig")?;
+        }
+        if self.is_set(nG) {
+            write!(f, " nG")?;
+        }
+        if self.is_set(AF) {
+            write!(f, " AF")?;
+        }
+        write!(f, " SH({:02b})", self.read(SH))?;
+        write!(f, " AP({:02b})", self.read(AP))?;
+        write!(f, " {:?}", MAIR::from(self.read(AttrIndx)))?;
+        write!(f, " )")
+    }
+}
+
 impl From<Attributes> for PageBlockDescriptorMask {
     fn from(attributes: Attributes) -> Self {
+        use super::mair::MAIR;
         use AttributeField::*;
         use PageBlockDescriptorFields::*;
-        use super::mair::MAIR;
 
         const ATTRIBUTE_FIELD_MAP: &[(bool, AttributeField, PageBlockDescriptorMask)] = &[
             (false, UserExec, UXN::SET),
             (false, KernelExec, PXN::SET),
-            (true, OnDemand, AF::SET),
+            (true, Device, AF::SET),
         ];
 
         let mut result = Self::from(SH::OuterShareable);
@@ -192,7 +284,8 @@ impl From<Attributes> for PageBlockDescriptorMask {
             (false, false, true, false) => {
                 result += AP::PrivReadOnly;
             }
-            (false, false, false, false) => { // presumably execute-only
+            (false, false, false, false) => {
+                // presumably execute-only
                 result += AP::PrivReadOnly;
             }
             _ => panic!(),
@@ -212,30 +305,41 @@ impl PageBlockDescriptor {
     /// Create a new page block descriptor entry from attributes.
     pub fn new_entry(
         level: u8,
-        output_addr: PhysAddr,
+        maybe_output_addr: Option<PhysAddr>,
         attributes: Attributes,
         contiguous: bool,
     ) -> Self {
-        use AttributeField::*;
         use PageBlockDescriptorFields::*;
 
         let mut field = PageBlockDescriptorMask::from(attributes);
-        if !attributes.is_set(OnDemand) {
+        if let Some(output_addr) = maybe_output_addr {
             field += Valid::SET + OutputAddress.val(output_addr.page() as PageTableEntryType);
         }
         if contiguous {
             field += Contiguous::SET;
         }
         if level == 3 {
-            field += Type::Block;
+            field += Type::Page;
         }
         Self::from(field)
+    }
+
+    pub fn output_address(self) -> PhysAddr {
+        PhysAddr::at(
+            (self.read(PageBlockDescriptorFields::OutputAddress) * PAGESIZE_BYTES as u64) as usize,
+        )
     }
 }
 
 impl From<PageBlockDescriptor> for PageTableEntry {
     fn from(desc: PageBlockDescriptor) -> Self {
         Self(desc.get())
+    }
+}
+
+impl From<PageTableEntry> for PageBlockDescriptor {
+    fn from(pte: PageTableEntry) -> Self {
+        Self::new(pte.0)
     }
 }
 
@@ -253,7 +357,7 @@ mod tests {
     fn test_table_descriptor_entry() {
         let next_level_table_addr = PhysAddr::at(0x123_0000);
         let attributes = Attributes::DEVICE;
-        let result = TableDescriptor::new_entry(next_level_table_addr, attributes);
+        let result = TableDescriptor::new_entry(Some(next_level_table_addr), attributes);
         trace!("{:x}", result.get());
         assert_eq!(0x1800000001230003, result.get());
     }
@@ -283,9 +387,10 @@ mod tests {
         let output_addr = PhysAddr::at(0x123_0000);
         let attributes = Attributes::DEVICE;
         let contiguous = true;
-        let result = PageBlockDescriptor::new_entry(level, output_addr, attributes, contiguous);
+        let result =
+            PageBlockDescriptor::new_entry(level, Some(output_addr), attributes, contiguous);
         trace!("{:x}", result.get());
-        assert_eq!(0x70000001230201, result.get());
+        assert_eq!(0x70000001230603, result.get());
     }
 
     #[test]
@@ -298,6 +403,6 @@ mod tests {
 
         let result = PageBlockDescriptor::from(field);
         trace!("{:x}", result.get());
-        assert_eq!(0x78000000000a01, result.get())
+        assert_eq!(0x78000000000e01, result.get())
     }
 }

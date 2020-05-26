@@ -37,7 +37,7 @@ impl Uart {
     #[allow(unused_unsafe)]
     pub unsafe fn translate(&mut self, remap: impl Translate) -> Result<()> {
         let pa = unsafe { PhysAddr::from_ptr(self.dr_addr as *const u8) };
-        let va = remap.translate_phys(pa);
+        let va = remap.translate_phys(pa).expect("translate_phys");
         self.dr_addr = va.into();
         Ok(())
     }

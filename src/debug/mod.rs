@@ -8,24 +8,12 @@ pub mod logger;
 #[macro_export]
 macro_rules! dbg {
     () => {
-        $crate::debug::logger::_print(format_args_nl!(
-            "DEBUG[{:>50} {:3}]  dbg!()",
-            module_path!(),
-            line!(),
-        ));
+        $crate::log!("DEBUG", "");
     };
     ($val:expr) => {
-        // Use of `match` here is intentional because it affects the lifetimes
-        // of temporaries - https://stackoverflow.com/a/48732525/1063961
         match $val {
             tmp => {
-                $crate::debug::logger::_print(format_args_nl!(
-                    "DEBUG[{:>50} {:3}]  {} = {:#?}",
-                    module_path!(),
-                    line!(),
-                    stringify!($val),
-                    &tmp
-                ));
+                $crate::log!("DEBUG", concat!(stringify!($val), " = {:?}"), &tmp);
                 tmp
             }
         }
@@ -110,3 +98,17 @@ macro_rules! trace {
 #[no_mangle]
 #[linkage = "weak"]
 static LOG_LEVEL_SETTINGS: &[(&str, &str)] = &[];
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn logging() {
+        dbg!();
+        dbg!(1);
+        log!("MAJOR", "{}", 1);
+        error!("error");
+        info!("info");
+        debug!("debug");
+        trace!("trace");
+    }
+}

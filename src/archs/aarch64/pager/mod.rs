@@ -8,6 +8,7 @@ mod table;
 use table::{PageBlockDescriptor, PageTable, TableDescriptor, LEVEL_OFFSETS, LEVEL_WIDTH};
 
 use crate::archs::ArchTrait;
+use crate::pager::AttributeField::OnDemand;
 use crate::pager::{
     AttributeField, Attributes, FrameAllocator, PhysAddr, Translate, VirtAddr, VirtAddrRange,
 };
@@ -19,6 +20,12 @@ pub fn init() -> Result<()> {
     info!("init");
     mair::init()
 }
+
+/// Starting level of kernel range.
+const TTB0_FIRST_LEVEL: u8 = 0;
+
+/// Starting level of user range.
+const TTB1_FIRST_LEVEL: u8 = 1;
 
 /// Aarch64 implementation of a page directory
 pub struct PageDirectory {
@@ -70,7 +77,7 @@ impl PageDirectory {
         );
         let page_table = unsafe {
             mem_access_translation
-                .translate_phys(phys_addr_table)
+                .translate_phys(phys_addr_table)?
                 .as_mut_ref::<PageTable>()
         };
         for (index, entry_target_range, entry_range) in
@@ -84,11 +91,9 @@ impl PageDirectory {
             // entry_target_range: the all or part of this entry to map pages for
             // target_range: the span of entries in this table to map pages for
             // page_table_virt_addr_range_base: the va of pt[0]
-            trace!(
+            debug!(
                 "  index: {}, entry_target_range: {:?}, entry_range: {:?}",
-                index,
-                entry_target_range,
-                entry_range,
+                index, entry_target_range, entry_range,
             );
             if level == 3
                 || ((1u8..=2u8).contains(&level) && attributes.is_set(AttributeField::Block))
@@ -103,36 +108,109 @@ impl PageDirectory {
                     // level 1: 1GB block
                     // level 2: 2MB block
                     // level 3: 4KB page
-                    assert!(!page_table[index].is_valid());
-                    let output_addr = translation.translate(entry_range.base());
-                    trace!("{:?}+{:?}={:?}", entry_range, translation, output_addr);
-                    page_table[index] =
-                        PageBlockDescriptor::new_entry(level, output_addr, attributes, contiguous)
-                            .into();
+                    assert!(!page_table[index].is_valid()); // FIXME: re-mapping
+                    let maybe_output_addr = translation.translate_maybe(entry_range.base());
+                    trace!(
+                        "{:?}+{:?}={:?}",
+                        entry_range,
+                        translation,
+                        maybe_output_addr
+                    );
+                    page_table[index] = PageBlockDescriptor::new_entry(
+                        level,
+                        maybe_output_addr,
+                        attributes,
+                        contiguous,
+                    )
+                    .into();
                     trace!("{:?}", page_table[index]);
                     continue;
                 }
             }
-            let phys_addr_table = if page_table[index].is_valid() {
-                page_table[index].next_level_table_address()
+            let maybe_phys_addr_table = if page_table[index].is_valid() {
+                // FIXME: check that new attributes are compatible with existing
+                Some(page_table[index].next_level_table_address())
             } else {
-                // need a new table
-                let phys_addr = allocator.lock().alloc_page(mem_access_translation)?;
-                page_table[index] = TableDescriptor::new_entry(phys_addr, attributes).into();
-                phys_addr
+                // target range continues down levels
+                // FIXME: only restrict table attributes if the mapped range covers the lower table
+                let maybe_phys_addr =
+                    if attributes.is_set(OnDemand) && target_range.covers(&entry_range) {
+                        // No frame needed for next level table yet.
+                        None
+                    } else {
+                        Some(allocator.lock().alloc_page(mem_access_translation)?)
+                    };
+                page_table[index] = if target_range.covers(&entry_range) {
+                    TableDescriptor::new_entry(maybe_phys_addr, attributes).into()
+                } else {
+                    TableDescriptor::new_neutral_entry(entry_range.base(), maybe_phys_addr.unwrap())
+                        .into()
+                };
+                maybe_phys_addr
             };
-            self.map_level(
-                entry_target_range,
-                translation,
-                level + 1,
-                phys_addr_table,
-                entry_range.base(),
-                attributes,
-                allocator,
-                mem_access_translation,
-            )?;
+            if let Some(phys_addr_table) = maybe_phys_addr_table {
+                self.map_level(
+                    entry_target_range,
+                    translation,
+                    level + 1,
+                    phys_addr_table,
+                    entry_range.base(),
+                    attributes,
+                    allocator,
+                    mem_access_translation,
+                )?;
+            }
         }
         Ok(target_range)
+    }
+
+    pub fn dump(&self, mem_access_translation: &impl Translate) {
+        fn dump_level(phys_addr: PhysAddr, level: usize, mem_access_translation: &impl Translate) {
+            const LEVEL_BUFFERS: [&str; 4] = ["", " ", "  ", "   "];
+
+            debug!("dumping table at {:?} being level {}", phys_addr, level);
+            let page_table = unsafe {
+                mem_access_translation
+                    .translate_phys(phys_addr)
+                    .unwrap()
+                    .as_ref::<PageTable>()
+            };
+            let mut null_count = 0u16;
+            for i in 0..512 {
+                let entry = page_table[i];
+                if entry.is_null() {
+                    null_count += 1;
+                } else {
+                    if null_count > 0 {
+                        debug!("{} [...] {} null entries", LEVEL_BUFFERS[level], null_count);
+                        null_count = 0;
+                    }
+                    if entry.is_table(level as u8) {
+                        let entry = TableDescriptor::from(entry);
+                        debug!("{} [{:>3}] {:?}", LEVEL_BUFFERS[level], i, entry);
+                    } else {
+                        let entry = PageBlockDescriptor::from(entry);
+                        debug!("{} [{:>3}] {:?}", LEVEL_BUFFERS[level], i, entry);
+                    }
+                    if level < 3 && entry.is_valid() {
+                        dump_level(
+                            entry.next_level_table_address(),
+                            level + 1,
+                            mem_access_translation,
+                        );
+                    }
+                }
+            }
+            if null_count > 0 {
+                debug!("{} [...] {} null entries", LEVEL_BUFFERS[level], null_count);
+            }
+        }
+        if self.ttb0.is_some() {
+            dump_level(self.ttb0.unwrap(), TTB0_FIRST_LEVEL.into(), mem_access_translation);
+        }
+        if self.ttb1.is_some() {
+            dump_level(self.ttb1.unwrap(), TTB1_FIRST_LEVEL.into(), mem_access_translation);
+        }
     }
 }
 
@@ -157,7 +235,11 @@ impl crate::archs::PageDirectory for PageDirectory {
                 self.ttb0 = self
                     .ttb0
                     .or_else(|| allocator.lock().alloc_page(mem_access_translation).ok());
-                (self.ttb0.ok_or(Error::OutOfMemory)?, VirtAddr::null(), 0u8)
+                (
+                    self.ttb0.ok_or(Error::OutOfMemory)?,
+                    VirtAddr::null(),
+                    TTB0_FIRST_LEVEL,
+                )
             } else {
                 self.ttb1 = self
                     .ttb1
@@ -165,7 +247,7 @@ impl crate::archs::PageDirectory for PageDirectory {
                 (
                     self.ttb1.ok_or(Error::OutOfMemory)?,
                     Arch::kernel_base(),
-                    1u8,
+                    TTB1_FIRST_LEVEL,
                 )
             };
 
@@ -329,9 +411,10 @@ mod tests {
     }
 
     impl TestAllocator {
-        pub fn new() -> Self {
+        pub fn new(length: usize) -> Self {
+            assert!(length <= 6);
             Self {
-                next: 0,
+                next: 6 - length,
                 pages: [Page::new(); 6],
             }
         }
@@ -358,7 +441,7 @@ mod tests {
         let target_range = VirtAddrRange::new(base, 0x1000);
         let translation = FixedOffset::new(PhysAddr::null(), base);
         let attributes = Attributes::DEVICE;
-        let allocator = Locked::new(TestAllocator::new());
+        let allocator = Locked::new(TestAllocator::new(3));
         let mem_access_translation = Identity::new();
 
         assert_ok!(page_dir.map_translation(
@@ -368,6 +451,34 @@ mod tests {
             &allocator,
             &mem_access_translation,
         ));
-        assert_eq!(3, allocator.lock().next);
+
+        page_dir.dump(&mem_access_translation);
+
+        assert!(false);
+    }
+
+    #[test]
+    fn test_attribute_compatibility() {
+        // TODO: test that later allocations which rely on l1 PTE settings
+        // are not incompatible.
+    }
+
+    #[test]
+    fn test_demand_mapping() {
+        let mut page_dir = super::PageDirectory::new();
+        let base = Arch::kernel_base();
+        let target_range = VirtAddrRange::new(base, 0x10_0000_0000);
+        let translation = FixedOffset::new(PhysAddr::null(), base);
+        let attributes = Attributes::KERNEL_DYNAMIC;
+        let allocator = Locked::new(TestAllocator::new(1));
+        let mem_access_translation = Identity::new();
+
+        assert_ok!(page_dir.map_translation(
+            target_range,
+            translation,
+            attributes,
+            &allocator,
+            &mem_access_translation,
+        ));
     }
 }

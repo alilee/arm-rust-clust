@@ -6,7 +6,6 @@ pub use register::{register_bitfields, FieldValue, IntLike};
 
 use register::{Field, RegisterLongName, TryFromValue};
 
-use core::fmt::{Debug, Formatter};
 use core::marker::PhantomData;
 
 /// A in-memory bit struct that fits into integer.
@@ -83,12 +82,6 @@ impl<T: IntLike, R: RegisterLongName> Bitfield<T, R> {
     }
 }
 
-impl<T: IntLike, R: RegisterLongName> Debug for Bitfield<T, R> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "Bitfield")
-    }
-}
-
 impl<T: IntLike, R: RegisterLongName> From<FieldValue<T, R>> for Bitfield<T, R> {
     fn from(field: FieldValue<T, R>) -> Self {
         Self::new(field.value)
@@ -117,7 +110,7 @@ mod tests {
         use TestFields::*;
         let mut v = TestBF::new(0u64);
         v.write(flag1::SET + field1::value1b);
-        trace!("{:?}", v);
+        trace!("{:?}", v.get());
         assert_eq!(v.get(), 0x3);
     }
 }

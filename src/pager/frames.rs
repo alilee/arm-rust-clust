@@ -21,7 +21,11 @@ pub fn init() -> Result<()> {
 
 /// Extend the frame table to include a range of physical addresses.
 pub fn add_ram_range(range: PhysAddrRange, mem_offset: &impl Translate) -> Result<()> {
-    info!("including: {:?} ({} pages)", range, range.length()/PAGESIZE_BYTES);
+    info!(
+        "including: {:?} ({} pages)",
+        range,
+        range.length() / PAGESIZE_BYTES
+    );
     assert!(range.aligned(PAGESIZE_BYTES));
     let mut alloc = ALLOCATOR.lock();
     for phys_addr in range.chunks(PAGESIZE_BYTES) {
@@ -52,7 +56,7 @@ impl StackAllocator {
     }
 
     fn push(&mut self, phys_addr: PhysAddr, mem_offset: &impl Translate) -> Result<()> {
-        let top: *mut Option<PhysAddr> = mem_offset.translate_phys(phys_addr).into();
+        let top: *mut Option<PhysAddr> = mem_offset.translate_phys(phys_addr).unwrap().into();
         unsafe {
             *top = self.top;
             self.top = Some(phys_addr);
@@ -76,12 +80,15 @@ impl Allocator for StackAllocator {
     fn alloc_page(&mut self, mem_offset: &impl Translate) -> Result<PhysAddr> {
         let phys_addr = self.top.ok_or(Error::OutOfMemory)?;
         unsafe {
-            let top: *mut Option<PhysAddr> = mem_offset.translate_phys(phys_addr).into();
+            let top: *mut Option<PhysAddr> = mem_offset.translate_phys(phys_addr).unwrap().into();
             self.top = *top;
             *top = None;
         };
         self.count -= 1;
-        debug!("Allocating {:?} - {} pages remaining", phys_addr, self.count);
+        debug!(
+            "Allocating {:?} - {} pages remaining",
+            phys_addr, self.count
+        );
         trace!("{:?}", self);
         Ok(phys_addr)
     }

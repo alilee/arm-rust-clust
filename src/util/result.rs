@@ -13,6 +13,8 @@ pub enum Error {
     UnknownError,
     /// Function failed because not implemented
     Unimplemented,
+    /// Function failed because function is undefined
+    Undefined,
 }
 
 /// Default error type for kernel functions.
