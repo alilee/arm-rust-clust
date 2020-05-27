@@ -5,10 +5,6 @@
 use crate::pager::VirtAddrRange;
 use crate::Result;
 
-pub fn _add_device_range(_virt_addr_range: VirtAddrRange) -> Result<()> {
-    unimplemented!()
-}
-
 pub fn _add_heap_range(_virt_addr_range: VirtAddrRange) -> Result<()> {
     unimplemented!()
 }

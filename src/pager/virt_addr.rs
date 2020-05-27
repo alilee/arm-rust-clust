@@ -5,6 +5,7 @@
 use super::PhysAddr;
 
 use core::fmt::{Debug, Error, Formatter};
+use crate::pager::PAGESIZE_BYTES;
 
 /// A local (if kernel range), or a cluster-wide (if low range) virtual address.
 #[derive(Copy, Clone, PartialOrd, PartialEq)]
@@ -152,6 +153,11 @@ impl VirtAddrRange {
         self.length
     }
 
+    /// Length of the range in bytes.
+    pub const fn length_in_pages(&self) -> usize {
+        (self.length + PAGESIZE_BYTES - 1) / PAGESIZE_BYTES
+    }
+
     /// Get the top of the range.
     pub const fn top(self: &Self) -> VirtAddr {
         VirtAddr(self.base.0 + self.length)
@@ -220,6 +226,7 @@ mod tests {
         let range = base.extend(0x1_0000);
         assert_eq!(base, range.base());
         assert_eq!(0x1_0000, range.length());
+        assert_eq!(0x10, range.length_in_pages());
     }
 
     #[test]

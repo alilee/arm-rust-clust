@@ -165,6 +165,7 @@ impl TableDescriptor {
         Self::from(field)
     }
 
+    /// Extract table address at next level.
     pub fn next_level_table_address(self) -> PhysAddr {
         PhysAddr::at(
             (self.read(TableDescriptorFields::NextLevelTableAddress) * PAGESIZE_BYTES as u64)
@@ -324,6 +325,7 @@ impl PageBlockDescriptor {
         Self::from(field)
     }
 
+    /// Extract the output address of the physical page frame.
     pub fn output_address(self) -> PhysAddr {
         PhysAddr::at(
             (self.read(PageBlockDescriptorFields::OutputAddress) * PAGESIZE_BYTES as u64) as usize,

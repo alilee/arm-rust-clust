@@ -164,6 +164,7 @@ impl PageDirectory {
         Ok(target_range)
     }
 
+    #[allow(dead_code)]
     pub fn dump(&self, mem_access_translation: &impl Translate) {
         fn dump_level(phys_addr: PhysAddr, level: usize, mem_access_translation: &impl Translate) {
             const LEVEL_BUFFERS: [&str; 4] = ["", " ", "  ", "   "];
@@ -453,8 +454,6 @@ mod tests {
         ));
 
         page_dir.dump(&mem_access_translation);
-
-        assert!(false);
     }
 
     #[test]

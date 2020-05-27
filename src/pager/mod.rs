@@ -4,6 +4,7 @@
 
 mod alloc;
 mod attributes;
+mod bump;
 mod frames;
 mod layout;
 mod page;
@@ -23,9 +24,13 @@ use crate::archs::{arch, arch::Arch, ArchTrait, PageDirectory};
 use crate::debug;
 use crate::util::locked::Locked;
 use crate::Result;
+use crate::pager::bump::PageBumpAllocator;
 
 /// Number of bytes in a cluster-wide atomic page.
 pub const PAGESIZE_BYTES: usize = 4096;
+
+/// Available virtual memory within device range.
+pub static DEVICE_MEM_ALLOCATOR: Locked<PageBumpAllocator> = Locked::new(PageBumpAllocator::new());
 
 /// Initialise the virtual memory manager and jump to the kernel in high memory.
 ///
@@ -92,8 +97,8 @@ fn map_ranges(
                     mem_access_translation,
                 )?;
             }
-            Device(_virt_range, _attributes) => {
-                // alloc::add_device_range(virt_range)?;
+            Device(virt_range, _attributes) => {
+                DEVICE_MEM_ALLOCATOR.lock().reset(virt_range)?;
             }
             L3PageTables(_virt_addr_range, _attributes) => {
                 // page_directory.map_translation(
