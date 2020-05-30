@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: Unlicense
 
 //! Type-checked virtual addresses.
+//!
+//! ```rust
+//! sandwich;
+//! let virt_addr = VirtAddr::nullddd();
+//! assert!(false);
+//! ```
 
 use super::PhysAddr;
 
@@ -54,6 +60,12 @@ impl VirtAddr {
     /// Create a virtual address range that spans from this address up by length.
     pub const fn extend(self, length: usize) -> VirtAddrRange {
         VirtAddrRange::new(self, length)
+    }
+
+    /// Nearest higher address with given alignment.
+    pub const fn align_up(self, align: usize) -> Self {
+        assert!(align.is_power_of_two());
+        Self(self.0 + (align - 1) & !(align - 1))
     }
 
     /// Get the offset from memory base in bytes.
@@ -143,13 +155,18 @@ impl VirtAddrRange {
         }
     }
 
+    /// Range same base different length.
+    pub const fn resize(self, length: usize) -> VirtAddrRange {
+        VirtAddrRange::new(self.base, length)
+    }
+
     /// Get the base of the range.
     pub const fn base(self) -> VirtAddr {
         self.base
     }
 
     /// Length of the range in bytes.
-    pub const fn length(&self) -> usize {
+    pub const fn length(self) -> usize {
         self.length
     }
 

@@ -108,7 +108,7 @@ impl Attributes {
     pub const KERNEL_STATIC: Attributes = Attributes::new()
         .set(KernelRead);
     /// For kernel stack and heap
-    pub const KERNEL_DYNAMIC: Attributes = Attributes::new()
+    pub const KERNEL_DATA: Attributes = Attributes::new()
         .set(KernelRead)
         .set(KernelWrite)
         .set(OnDemand);
@@ -127,7 +127,7 @@ impl Attributes {
     pub const USER_STATIC: Attributes = Attributes::new()
         .set(UserRead);
     /// For user process data
-    pub const USER_DYNAMIC: Attributes = Attributes::new()
+    pub const USER_DATA: Attributes = Attributes::new()
         .set(UserRead)
         .set(UserWrite)
         .set(OnDemand);

@@ -67,8 +67,22 @@ pub unsafe extern "C" fn _reset() -> ! {
     unreachable!()
 }
 
-#[no_mangle]
-pub static image_base: u8 = 0u8;
+use crate::pager::Page;
 
 #[no_mangle]
-pub static image_end: u8 = 0u8;
+pub static text_base: Page = Page::new();
+
+#[no_mangle]
+pub static text_end: Page = Page::new();
+
+#[no_mangle]
+pub static static_base: Page = Page::new();
+
+#[no_mangle]
+pub static static_end: Page = Page::new();
+
+#[no_mangle]
+pub static data_base: Page = Page::new();
+
+#[no_mangle]
+pub static data_end: Page = Page::new();

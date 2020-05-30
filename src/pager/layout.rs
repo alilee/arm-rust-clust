@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 
-use super::{Attributes, FixedOffset, PhysAddrRange, VirtAddr, VirtAddrRange};
+use super::{Attributes, PhysAddrRange, VirtAddr, VirtAddrRange};
 use crate::archs::{arch::Arch, ArchTrait};
 use crate::Result;
 
@@ -13,181 +13,113 @@ pub fn init() -> Result<()> {
     Ok(())
 }
 
-enum KernelExtent {
-    RAM {
-        phys_addr_range: &'static dyn Fn() -> PhysAddrRange,
-        virt_addr_extent: usize,
-        attributes: Attributes,
-    },
-    Image {
-        phys_addr_range: &'static dyn Fn() -> PhysAddrRange,
-        virt_addr_extent: usize,
-        attributes: Attributes,
-    },
-    Device {
-        virt_addr_extent: usize,
-        attributes: Attributes,
-    },
-    L3PageTables {
-        virt_addr_extent: usize,
-        attributes: Attributes,
-    },
-    Heap {
-        virt_addr_extent: usize,
-        attributes: Attributes,
-    },
+/// Content within Range.
+#[derive(Copy, Clone, Debug)]
+pub enum RangeContent {
+    RAM,
+    KernelImage,
+    Device,
+    L3PageTables,
+    Heap,
+}
+
+/// Range requiring to be mapped.
+#[derive(Copy, Clone)]
+struct KernelExtent {
+    content: RangeContent,
+    virt_range_align: usize,
+    virt_range_min_extent: usize,
+    phys_addr_range: &'static dyn Fn() -> Option<PhysAddrRange>,
+    attributes: Attributes,
 }
 
 impl Debug for KernelExtent {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        use KernelExtent::*;
-        match self {
-            RAM {
-                phys_addr_range,
-                virt_addr_extent,
-                attributes,
-            } => write!(
-                f,
-                "RAM {{ {:?}, extent: {} GB, {:?} }}",
-                phys_addr_range(),
-                virt_addr_extent / GB,
-                attributes
-            ),
-            Image {
-                phys_addr_range,
-                virt_addr_extent,
-                attributes,
-            } => write!(
-                f,
-                "Image {{ {:?}, extent: {} GB, {:?} }}",
-                phys_addr_range(),
-                virt_addr_extent / GB,
-                attributes
-            ),
-            Device {
-                virt_addr_extent,
-                attributes,
-            } => write!(
-                f,
-                "Device {{ extent: {} GB, {:?} }}",
-                virt_addr_extent / GB,
-                attributes
-            ),
-            L3PageTables {
-                virt_addr_extent,
-                attributes,
-            } => write!(
-                f,
-                "L3PageTables {{ extent: {} GB, {:?} }}",
-                virt_addr_extent / GB,
-                attributes
-            ),
-            Heap {
-                virt_addr_extent,
-                attributes,
-            } => write!(
-                f,
-                "Heap {{ extent: {} GB, {:?} }}",
-                virt_addr_extent / GB,
-                attributes
-            ),
-        }
-    }
-}
-
-impl KernelExtent {
-    fn virt_addr_extent(&self) -> usize {
-        use KernelExtent::*;
-        match self {
-            RAM {
-                virt_addr_extent, ..
-            } => *virt_addr_extent,
-            Image {
-                virt_addr_extent, ..
-            } => *virt_addr_extent,
-            Device {
-                virt_addr_extent, ..
-            } => *virt_addr_extent,
-            L3PageTables {
-                virt_addr_extent, ..
-            } => *virt_addr_extent,
-            Heap {
-                virt_addr_extent, ..
-            } => *virt_addr_extent,
-        }
+        write!(f, "KernelExtent {{ {:?}, {:#x}, {:#x}, {:?}, {:?} }}", self.content, self.virt_range_align, self.virt_range_min_extent, (self.phys_addr_range)(), self.attributes)
     }
 }
 
 const GB: usize = 1024 * 1024 * 1024;
 
-const LAYOUT: [KernelExtent; 5] = [
-    KernelExtent::RAM {
-        phys_addr_range: &{ || Arch::ram_range().expect("Arch::ram_range") },
-        virt_addr_extent: 4 * GB,
+const LAYOUT: [KernelExtent; 7] = [
+    KernelExtent {
+        content: RangeContent::RAM,
+        virt_range_align: 1 * GB,
+        virt_range_min_extent: 8 * GB,
+        phys_addr_range: &{ || Some(Arch::ram_range().expect("Arch::ram_range")) },
         attributes: Attributes::RAM,
     },
-    KernelExtent::Image {
-        phys_addr_range: &{ || PhysAddrRange::boot_image() },
-        virt_addr_extent: 1 * GB,
+    KernelExtent {
+        content: RangeContent::KernelImage,
+        virt_range_align: 1 * GB,
+        virt_range_min_extent: 0,
+        phys_addr_range: &{ || Some(PhysAddrRange::text_image()) },
         attributes: Attributes::KERNEL_EXEC,
     },
-    KernelExtent::Device {
-        virt_addr_extent: 1 * GB,
+    KernelExtent {
+        content: RangeContent::KernelImage,
+        virt_range_align: 0,
+        virt_range_min_extent: 0,
+        phys_addr_range: &{ || Some(PhysAddrRange::static_image()) },
+        attributes: Attributes::KERNEL_STATIC,
+    },
+    KernelExtent {
+        content: RangeContent::KernelImage,
+        virt_range_align: 0,
+        virt_range_min_extent: 0,
+        phys_addr_range: &{ || Some(PhysAddrRange::data_image()) },
+        attributes: Attributes::KERNEL_DATA,
+    },
+    KernelExtent {
+        content: RangeContent::Device,
+        virt_range_align: 1 * GB,
+        virt_range_min_extent: 1 * GB,
+        phys_addr_range: &{ || None },
         attributes: Attributes::DEVICE,
     },
-    KernelExtent::L3PageTables {
-        virt_addr_extent: 8 * GB,
-        attributes: Attributes::KERNEL_DYNAMIC,
+    KernelExtent {
+        content: RangeContent::L3PageTables,
+        virt_range_align: 1 * GB,
+        virt_range_min_extent: 8 * GB,
+        phys_addr_range: &{ || None },
+        attributes: Attributes::KERNEL_DATA,
     },
-    KernelExtent::Heap {
-        virt_addr_extent: 8 * GB,
-        attributes: Attributes::KERNEL_DYNAMIC,
+    KernelExtent {
+        content: RangeContent::Heap,
+        virt_range_align: 1 * GB,
+        virt_range_min_extent: 8 * GB,
+        phys_addr_range: &{ || None },
+        attributes: Attributes::KERNEL_DATA,
     },
 ];
 
-/// Range requiring to be mapped
+/// Range requiring to be mapped.
 #[derive(Debug)]
-pub enum KernelRange {
-    RAM(VirtAddrRange, FixedOffset, Attributes),
-    Image(VirtAddrRange, FixedOffset, Attributes),
-    Device(VirtAddrRange, Attributes),
-    L3PageTables(VirtAddrRange, Attributes),
-    Heap(VirtAddrRange, Attributes),
+pub struct KernelRange {
+    pub content: RangeContent,
+    pub virt_addr_range: VirtAddrRange,
+    pub phys_addr_range: Option<PhysAddrRange>,
+    pub attributes: Attributes,
 }
 
 impl KernelRange {
     fn from(virt_addr: VirtAddr, extent: &KernelExtent) -> Self {
-        match extent {
-            KernelExtent::RAM {
-                phys_addr_range,
-                attributes,
-                ..
-            } => KernelRange::RAM(
-                VirtAddrRange::new(virt_addr, phys_addr_range().length()),
-                FixedOffset::new(phys_addr_range().base(), virt_addr),
-                *attributes,
-            ),
-            KernelExtent::Image {
-                phys_addr_range,
-                attributes,
-                ..
-            } => KernelRange::Image(
-                VirtAddrRange::new(virt_addr, phys_addr_range().length()),
-                FixedOffset::new(phys_addr_range().base(), virt_addr),
-                *attributes,
-            ),
-            KernelExtent::Device {
-                virt_addr_extent,
-                attributes,
-            } => KernelRange::Device(virt_addr.extend(*virt_addr_extent), *attributes),
-            KernelExtent::L3PageTables {
-                virt_addr_extent,
-                attributes,
-            } => KernelRange::L3PageTables(virt_addr.extend(*virt_addr_extent), *attributes),
-            KernelExtent::Heap {
-                virt_addr_extent,
-                attributes,
-            } => KernelRange::Heap(virt_addr.extend(*virt_addr_extent), *attributes),
+        let base = if extent.virt_range_align > 0 {
+            virt_addr.align_up(extent.virt_range_align)
+        } else {
+            virt_addr
+        };
+        let phys_addr_range = (extent.phys_addr_range)();
+        let length = if let Some(phys_addr_range) = phys_addr_range {
+            core::cmp::max(phys_addr_range.length(), extent.virt_range_min_extent)
+        } else {
+            extent.virt_range_min_extent
+        };
+        Self {
+            content: extent.content,
+            virt_addr_range: VirtAddrRange::new(base, length),
+            phys_addr_range,
+            attributes: extent.attributes,
         }
     }
 }
@@ -221,10 +153,10 @@ impl Iterator for LayoutIterator {
             return None;
         }
         trace!("{:?}: {:?}", self.next_base, &LAYOUT[self.i]);
-        let result = Some(KernelRange::from(self.next_base, &LAYOUT[self.i]));
-        self.next_base = self.next_base.increment(LAYOUT[self.i].virt_addr_extent());
+        let result = KernelRange::from(self.next_base, &LAYOUT[self.i]);
+        self.next_base = result.virt_addr_range.step().base();
         self.i += 1;
-        result
+        Some(result)
     }
 }
 

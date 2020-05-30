@@ -46,16 +46,16 @@ pub fn init(next: fn() -> !) -> ! {
     let mut page_directory = pd.lock();
 
     let ram_range = Arch::ram_range().expect("arch::ram_range");
-    let image_range = PhysAddrRange::boot_image();
+    let image_base = PhysAddrRange::text_image().base();
     let mem_offset = &Identity::new();
 
     // TODO: put all available RAM into frame table
-    let low_ram = PhysAddrRange::between(ram_range.base(), image_range.base());
+    let low_ram = PhysAddrRange::between(ram_range.base(), image_base);
     frames::add_ram_range(low_ram, mem_offset).expect("pager::frames::include low_ram");
 
     map_ranges(&mut (*page_directory), &frames::ALLOCATOR).expect("pager::map_ranges");
 
-    let kernel_image_offset = FixedOffset::new(image_range.base(), Arch::kernel_base());
+    let kernel_image_offset = FixedOffset::new(image_base, Arch::kernel_base());
     let next: fn() -> ! = unsafe {
         kernel_image_offset
             .translate_phys(PhysAddr::from_ptr(next as *const u8))
@@ -76,48 +76,25 @@ fn map_ranges(
     let mem_access_translation = &Identity::new();
 
     for kernel_range in layout::layout().expect("layout::layout") {
-        use layout::KernelRange::*;
+        use layout::RangeContent::*;
 
-        match kernel_range {
-            RAM(virt_addr_range, translation, attributes) => {
+        debug!("{:?}", kernel_range);
+
+        match kernel_range.content {
+            RAM | KernelImage => {
+                let phys_addr_range = kernel_range.phys_addr_range.expect("kernel_range.phys_addr_range");
                 page_directory.map_translation(
-                    virt_addr_range,
-                    translation,
-                    attributes,
+                    kernel_range.virt_addr_range.resize(phys_addr_range.length()),
+                    FixedOffset::new(phys_addr_range.base(), kernel_range.virt_addr_range.base()),
+                    kernel_range.attributes,
                     allocator,
                     mem_access_translation,
                 )?;
+            },
+            Device => {
+                DEVICE_MEM_ALLOCATOR.lock().reset(kernel_range.virt_addr_range)?;
             }
-            Image(virt_addr_range, translation, attributes) => {
-                page_directory.map_translation(
-                    virt_addr_range,
-                    translation,
-                    attributes,
-                    allocator,
-                    mem_access_translation,
-                )?;
-            }
-            Device(virt_range, _attributes) => {
-                DEVICE_MEM_ALLOCATOR.lock().reset(virt_range)?;
-            }
-            L3PageTables(_virt_addr_range, _attributes) => {
-                // page_directory.map_translation(
-                //     virt_addr_range,
-                //     NullTranslation::new(),
-                //     attributes,
-                //     allocator,
-                //     mem_access_translation,
-                // )?;
-            }
-            Heap(virt_addr_range, attributes) => {
-                page_directory.map_translation(
-                    virt_addr_range,
-                    NullTranslation::new(),
-                    attributes,
-                    allocator,
-                    mem_access_translation,
-                )?;
-                // alloc::add_heap_range(virt_addr_range)?;
+            L3PageTables | Heap => {
             }
         };
     }

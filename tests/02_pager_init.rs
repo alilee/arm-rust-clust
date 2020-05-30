@@ -32,4 +32,6 @@ fn paging_init() {
 
 #[no_mangle]
 static LOG_LEVEL_SETTINGS: &[(&str, &str)] =
-    &[("pager::frames", "INFO"), ("aarch64::pager", "INFO")];
+    &[("pager::frames", "INFO"),
+        ("aarch64::pager", "MAJOR"),
+        ("pager::layout", "INFO")];

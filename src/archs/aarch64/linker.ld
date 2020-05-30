@@ -12,19 +12,23 @@ SECTIONS
 
     .text :
     {
+        text_base = .;
         *(.startup)
         *(.handler)
         *(.text*)
     }
 
-    .rodata :
+    .rodata ALIGN(0x1000) :
     {
+        text_end = .;
+        static_base = .;
         *(.rodata*)
     }
 
-    .data :
-    ALIGN(0x1000)
+    .data ALIGN(0x1000) :
     {
+        static_end = .;
+        data_base = .;
         stack = .;
         . = . + 0x1000;
         STACK_TOP = .;
@@ -33,10 +37,11 @@ SECTIONS
         . = . + 0x1000;    /* separates data and linker globals for debugging */
     }
 
-    .bss :
+    .bss ALIGN(0x1000) :
     {
         *(.bss*)
     }
 
-    image_end = ALIGN(4096);
+    image_end = ALIGN(0x1000);
+    data_end = .;
 }

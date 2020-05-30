@@ -101,17 +101,38 @@ pub struct PhysAddrRangeIterator {
 }
 
 impl PhysAddrRange {
-    /// Get the physical address range of the kernel boot image (using linker symbols)
-    pub fn boot_image() -> Self {
+    /// Create a range from static refs.
+    fn from_linker_symbols(sym_base: &'static u8, sym_top: &'static u8) -> Self {
+        let base = PhysAddr::from_linker_symbol(&sym_base);
+        let top = PhysAddr::from_linker_symbol(&sym_top);
+        Self::new(base, top.offset_from(base))
+    }
+
+    /// Text section of the kernel boot image (using linker symbols)
+    pub fn text_image() -> Self {
         extern "C" {
-            static image_base: u8;
-            static image_end: u8;
+            static text_base: u8;
+            static text_end: u8;
         }
-        unsafe {
-            let base = PhysAddr::from_linker_symbol(&image_base);
-            let top = PhysAddr::from_linker_symbol(&image_end);
-            Self::new(base, top.offset_from(base))
+        unsafe { Self::from_linker_symbols(&text_base, &text_end) }
+    }
+
+    /// ROdata section of the kernel boot image (using linker symbols)
+    pub fn static_image() -> Self {
+        extern "C" {
+            static static_base: u8;
+            static static_end: u8;
         }
+        unsafe { Self::from_linker_symbols(&static_base, &static_end) }
+    }
+
+    /// Data section of the kernel boot image (using linker symbols)
+    pub fn data_image() -> Self {
+        extern "C" {
+            static data_base: u8;
+            static data_end: u8;
+        }
+        unsafe { Self::from_linker_symbols(&data_base, &data_end) }
     }
 
     /// Range of length starting at base
@@ -193,7 +214,7 @@ mod tests {
     fn phys_addr_range() {
         let base = PhysAddr(0x345_0000);
         let _image_range = PhysAddrRange::new(base, 0x1_0000);
-        let _boot_image_range = PhysAddrRange::boot_image();
+        let _boot_image_range = PhysAddrRange::text_image();
         let top = PhysAddr(0x346_0000);
         let between_range = PhysAddrRange::between(base, top);
         assert_eq!(base, between_range.base());

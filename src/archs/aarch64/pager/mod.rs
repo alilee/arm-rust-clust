@@ -468,7 +468,7 @@ mod tests {
         let base = Arch::kernel_base();
         let target_range = VirtAddrRange::new(base, 0x10_0000_0000);
         let translation = FixedOffset::new(PhysAddr::null(), base);
-        let attributes = Attributes::KERNEL_DYNAMIC;
+        let attributes = Attributes::KERNEL_DATA;
         let allocator = Locked::new(TestAllocator::new(1));
         let mem_access_translation = Identity::new();
 
