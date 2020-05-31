@@ -8,10 +8,9 @@
 //! assert!(false);
 //! ```
 
-use super::PhysAddr;
+use super::{Addr, AddrRange, PhysAddr, PAGESIZE_BYTES};
 
 use core::fmt::{Debug, Error, Formatter};
-use crate::pager::PAGESIZE_BYTES;
 
 /// A local (if kernel range), or a cluster-wide (if low range) virtual address.
 #[derive(Copy, Clone, PartialOrd, PartialEq)]
@@ -23,54 +22,28 @@ impl Debug for VirtAddr {
     }
 }
 
+impl Addr<VirtAddr, VirtAddrRange> for VirtAddr {
+    fn get(&self) -> usize {
+        self.0
+    }
+
+    fn at(addr: usize) -> Self {
+        Self(addr)
+    }
+}
+
 impl VirtAddr {
     /// Construct bottom of virtual address range.
     pub const fn null() -> Self {
         Self(0)
-    }
-    /// Construct at literal address.
-    pub const fn at(addr: usize) -> Self {
-        Self(addr)
     }
 
     /// Create a virtual address from a physical address.
     ///
     /// UNSAFE: virtual address can only be derefed when identity mapping is in place
     /// before paging is enabled or if physical memory is identity mapped.
-    pub const unsafe fn identity_mapped(phys_addr: PhysAddr) -> Self {
+    pub unsafe fn identity_mapped(phys_addr: PhysAddr) -> Self {
         Self(phys_addr.get())
-    }
-
-    /// A virtual address that is higher than this by a given number of bytes.
-    pub const fn increment_to(self, higher: VirtAddr) -> usize {
-        // assert!(higher.0 >= self.0); # checked in subtraction
-        higher.0 - self.0
-    }
-
-    /// A virtual address that is lower than this by a given number of bytes.
-    pub const fn decrement(self, offset: usize) -> Self {
-        Self(self.0 - offset)
-    }
-
-    /// A virtual address that is higher than this by a given number of bytes.
-    pub const fn increment(self, offset: usize) -> Self {
-        Self(self.0 + offset)
-    }
-
-    /// Create a virtual address range that spans from this address up by length.
-    pub const fn extend(self, length: usize) -> VirtAddrRange {
-        VirtAddrRange::new(self, length)
-    }
-
-    /// Nearest higher address with given alignment.
-    pub const fn align_up(self, align: usize) -> Self {
-        assert!(align.is_power_of_two());
-        Self(self.0 + (align - 1) & !(align - 1))
-    }
-
-    /// Get the offset from memory base in bytes.
-    pub const fn get(self) -> usize {
-        self.0
     }
 
     /// Consume the virtual address as reference.
@@ -140,44 +113,24 @@ impl Debug for VirtAddrRange {
     }
 }
 
-impl VirtAddrRange {
-    /// Construct from base and length.
-    pub const fn new(base: VirtAddr, length: usize) -> Self {
+impl AddrRange<VirtAddr, VirtAddrRange> for VirtAddrRange {
+    fn new(base: VirtAddr, length: usize) -> Self {
         Self { base, length }
     }
 
-    /// Range between two addresses.
-    pub const fn between(base: VirtAddr, top: VirtAddr) -> Self {
-        // assert!(low < high); # depends on checked subtraction in offset_from
-        Self {
-            base,
-            length: base.increment_to(top),
-        }
-    }
-
-    /// Range same base different length.
-    pub const fn resize(self, length: usize) -> VirtAddrRange {
-        VirtAddrRange::new(self.base, length)
-    }
-
-    /// Get the base of the range.
-    pub const fn base(self) -> VirtAddr {
+    fn base(&self) -> VirtAddr {
         self.base
     }
 
-    /// Length of the range in bytes.
-    pub const fn length(self) -> usize {
+    fn length(&self) -> usize {
         self.length
     }
+}
 
+impl VirtAddrRange {
     /// Length of the range in bytes.
     pub const fn length_in_pages(&self) -> usize {
         (self.length + PAGESIZE_BYTES - 1) / PAGESIZE_BYTES
-    }
-
-    /// Get the top of the range.
-    pub const fn top(self: &Self) -> VirtAddr {
-        VirtAddr(self.base.0 + self.length)
     }
 
     /// Length of the range in bytes.
@@ -222,8 +175,8 @@ mod tests {
         let phys_addr = PhysAddr::at(0x345_0000);
         let virt_id = unsafe { VirtAddr::identity_mapped(phys_addr) };
         let base = VirtAddr(0x345_0000);
-        let high = base.increment(0x1_0000);
-        assert_eq!(0x1_0000, base.increment_to(high));
+        let top = base.increment(0x1_0000);
+        assert_eq!(0x1_0000, base.offset_below(top));
 
         let _base1: fn() -> ! = virt_id.into();
         let _base2: *mut u32 = virt_id.into();
@@ -240,7 +193,7 @@ mod tests {
     #[test]
     fn virt_addr_range() {
         let base = VirtAddr(0x345_0000);
-        let range = base.extend(0x1_0000);
+        let range = VirtAddrRange::new(base, 0x1_0000);
         assert_eq!(base, range.base());
         assert_eq!(0x1_0000, range.length());
         assert_eq!(0x10, range.length_in_pages());

@@ -14,7 +14,7 @@ mod hal_test;
 #[cfg(test)]
 use hal_test as hal;
 
-use crate::pager::{PhysAddr, PhysAddrRange, VirtAddr};
+use crate::pager::{Addr, AddrRange, PhysAddr, PhysAddrRange, VirtAddr};
 use crate::Result;
 
 /// Materialise empty struct implementing Arch trait.

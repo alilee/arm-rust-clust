@@ -5,8 +5,7 @@
 //! At different times during the boot sequence, accessible memory may be mapped
 //! at the same or different virtual addresses.
 
-use super::PhysAddr;
-use super::VirtAddr;
+use super::{Addr, PhysAddr, VirtAddr};
 
 use crate::{Error, Result};
 
@@ -103,7 +102,7 @@ impl FixedOffset {
         unsafe {
             let nominal_phys_addr = VirtAddr::identity_mapped(phys_addr);
             assert!(nominal_phys_addr <= virt_addr);
-            Self(nominal_phys_addr.increment_to(virt_addr))
+            Self(virt_addr.offset_above(nominal_phys_addr))
         }
     }
 }

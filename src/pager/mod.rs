@@ -2,6 +2,7 @@
 
 //! Managing virtual address space, address translation and page faults.
 
+mod addr;
 mod alloc;
 mod attributes;
 mod bump;
@@ -12,6 +13,7 @@ mod phys_addr;
 mod translation;
 mod virt_addr;
 
+pub use addr::*;
 pub use attributes::*;
 pub use page::*;
 pub use phys_addr::*;
@@ -19,6 +21,7 @@ pub use translation::*;
 pub use virt_addr::*;
 
 pub use frames::Allocator as FrameAllocator;
+pub use frames::Purpose as FramePurpose;
 
 use crate::archs::{arch, arch::Arch, ArchTrait, PageDirectory};
 use crate::debug;
@@ -45,16 +48,9 @@ pub fn init(next: fn() -> !) -> ! {
     let pd = Locked::new(arch::new_page_directory());
     let mut page_directory = pd.lock();
 
-    let ram_range = Arch::ram_range().expect("arch::ram_range");
-    let image_base = PhysAddrRange::text_image().base();
-    let mem_offset = &Identity::new();
-
-    // TODO: put all available RAM into frame table
-    let low_ram = PhysAddrRange::between(ram_range.base(), image_base);
-    frames::add_ram_range(low_ram, mem_offset).expect("pager::frames::include low_ram");
-
     map_ranges(&mut (*page_directory), &frames::ALLOCATOR).expect("pager::map_ranges");
 
+    let image_base = PhysAddrRange::text_image().base();
     let kernel_image_offset = FixedOffset::new(image_base, Arch::kernel_base());
     let next: fn() -> ! = unsafe {
         kernel_image_offset

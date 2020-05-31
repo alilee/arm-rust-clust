@@ -4,7 +4,7 @@
 //!
 //! Suited for device MMIO range.
 
-use super::{VirtAddr, VirtAddrRange, PAGESIZE_BYTES};
+use super::{Addr, AddrRange, VirtAddr, VirtAddrRange, PAGESIZE_BYTES};
 use crate::Result;
 
 use core::fmt::{Debug, Formatter};
@@ -24,7 +24,7 @@ impl PageBumpAllocator {
     pub const fn new() -> Self {
         Self {
             limit: 0,
-            top: VirtAddr::at(0),
+            top: VirtAddr::null(),
         }
     }
 

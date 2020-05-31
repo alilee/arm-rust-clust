@@ -9,6 +9,10 @@ pub enum Error {
     Success,
     /// Out of memory to allocate
     OutOfMemory,
+    /// No pages available of requested type
+    OutOfPages,
+    /// Function failed because required initialisation not performed
+    UnInitialised,
     /// Function failed with undefined error
     UnknownError,
     /// Function failed because not implemented

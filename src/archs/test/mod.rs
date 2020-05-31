@@ -3,7 +3,8 @@
 //! Dead-bat implementation of an architecture to allow tests to compile.
 
 use crate::pager::{
-    Attributes, FrameAllocator, PhysAddr, PhysAddrRange, Translate, VirtAddr, VirtAddrRange,
+    Addr, AddrRange, Attributes, FrameAllocator, PhysAddr, PhysAddrRange, Translate, VirtAddr,
+    VirtAddrRange,
 };
 use crate::util::locked::Locked;
 use crate::Result;

@@ -29,12 +29,13 @@ SECTIONS
     {
         static_end = .;
         data_base = .;
-        stack = .;
+        stack = ALIGN(0x1000);
         . = . + 0x1000;
         STACK_TOP = .;
         . = . + 0x1000;
         data_gap = .;
         . = . + 0x1000;    /* separates data and linker globals for debugging */
+        *(.data*)
     }
 
     .bss ALIGN(0x1000) :

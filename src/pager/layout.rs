@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 
-use super::{Attributes, PhysAddrRange, VirtAddr, VirtAddrRange};
+use super::{Addr, AddrRange, Attributes, PhysAddrRange, VirtAddr, VirtAddrRange};
 use crate::archs::{arch::Arch, ArchTrait};
 use crate::Result;
 
@@ -35,7 +35,15 @@ struct KernelExtent {
 
 impl Debug for KernelExtent {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "KernelExtent {{ {:?}, {:#x}, {:#x}, {:?}, {:?} }}", self.content, self.virt_range_align, self.virt_range_min_extent, (self.phys_addr_range)(), self.attributes)
+        write!(
+            f,
+            "KernelExtent {{ {:?}, {:#x}, {:#x}, {:?}, {:?} }}",
+            self.content,
+            self.virt_range_align,
+            self.virt_range_min_extent,
+            (self.phys_addr_range)(),
+            self.attributes
+        )
     }
 }
 

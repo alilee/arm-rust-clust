@@ -3,7 +3,9 @@
 //! Page table data structures.
 
 use crate::archs::ArchTrait;
-use crate::pager::{AttributeField, Attributes, PhysAddr, VirtAddr, PAGESIZE_BYTES};
+use crate::pager::{
+    Addr, AttributeField, Attributes, PhysAddr, VirtAddr, PAGESIZE_BYTES,
+};
 use crate::util::bitfield::{register_bitfields, Bitfield, FieldValue};
 
 use core::fmt::{Debug, Formatter};
@@ -31,7 +33,7 @@ impl PageTableEntry {
         0 == self.0
     }
 
-    pub const fn next_level_table_address(self) -> PhysAddr {
+    pub fn next_level_table_address(self) -> PhysAddr {
         const MASK: usize = ((1 << (48 - 12)) - 1) << 12;
         PhysAddr::at((self.0 as usize) & MASK)
     }

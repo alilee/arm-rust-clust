@@ -32,6 +32,5 @@ use crate::archs::arch::_reset;
 
 // extern crate alloc;
 
-#[cfg(test)]
 #[macro_use]
 extern crate claim;

@@ -10,7 +10,8 @@ use table::{PageBlockDescriptor, PageTable, TableDescriptor, LEVEL_OFFSETS, LEVE
 use crate::archs::ArchTrait;
 use crate::pager::AttributeField::OnDemand;
 use crate::pager::{
-    AttributeField, Attributes, FrameAllocator, PhysAddr, Translate, VirtAddr, VirtAddrRange,
+    Addr, AddrRange, AttributeField, Attributes, FrameAllocator, FramePurpose, PhysAddr, Translate,
+    VirtAddr, VirtAddrRange,
 };
 use crate::util::locked::Locked;
 use crate::{Error, Result};
@@ -29,7 +30,8 @@ const TTB1_FIRST_LEVEL: u8 = 1;
 
 /// Aarch64 implementation of a page directory
 pub struct PageDirectory {
-    ttb0: Option<PhysAddr>, // physical address of the root table for user space
+    ttb0: Option<PhysAddr>,
+    // physical address of the root table for user space
     ttb1: Option<PhysAddr>, // physical address of the root table for kernel space
 }
 
@@ -128,17 +130,25 @@ impl PageDirectory {
                 }
             }
             let maybe_phys_addr_table = if page_table[index].is_valid() {
-                // FIXME: check that new attributes are compatible with existing
+                // FIXME: check that new attributes are compatible with parent tables
                 Some(page_table[index].next_level_table_address())
             } else {
-                // target range continues down levels
-                // FIXME: only restrict table attributes if the mapped range covers the lower table
+                // FIXME: PageTable for the entry may have just been paged out
                 let maybe_phys_addr =
                     if attributes.is_set(OnDemand) && target_range.covers(&entry_range) {
                         // No frame needed for next level table yet.
                         None
                     } else {
-                        Some(allocator.lock().alloc_page(mem_access_translation)?)
+                        // PageBlock when level 2 or (covers and attrs.is_block)
+                        let purpose = if (1u8..=2).contains(&level)
+                            || (attributes.is_set(AttributeField::Block)
+                                && target_range.covers(&entry_range))
+                        {
+                            FramePurpose::LeafPageTable
+                        } else {
+                            FramePurpose::BranchPageTable
+                        };
+                        Some(allocator.lock().alloc_zeroed(purpose)?)
                     };
                 page_table[index] = if target_range.covers(&entry_range) {
                     TableDescriptor::new_entry(maybe_phys_addr, attributes).into()
@@ -207,10 +217,18 @@ impl PageDirectory {
             }
         }
         if self.ttb0.is_some() {
-            dump_level(self.ttb0.unwrap(), TTB0_FIRST_LEVEL.into(), mem_access_translation);
+            dump_level(
+                self.ttb0.unwrap(),
+                TTB0_FIRST_LEVEL.into(),
+                mem_access_translation,
+            );
         }
         if self.ttb1.is_some() {
-            dump_level(self.ttb1.unwrap(), TTB1_FIRST_LEVEL.into(), mem_access_translation);
+            dump_level(
+                self.ttb1.unwrap(),
+                TTB1_FIRST_LEVEL.into(),
+                mem_access_translation,
+            );
         }
     }
 }
@@ -233,18 +251,24 @@ impl crate::archs::PageDirectory for PageDirectory {
 
         let (phys_addr_table, page_table_virt_addr_range_base, first_level) =
             if target_range.base() < Arch::kernel_base() {
-                self.ttb0 = self
-                    .ttb0
-                    .or_else(|| allocator.lock().alloc_page(mem_access_translation).ok());
+                self.ttb0 = self.ttb0.or_else(|| {
+                    allocator
+                        .lock()
+                        .alloc_zeroed(FramePurpose::BranchPageTable)
+                        .ok()
+                });
                 (
                     self.ttb0.ok_or(Error::OutOfMemory)?,
                     VirtAddr::null(),
                     TTB0_FIRST_LEVEL,
                 )
             } else {
-                self.ttb1 = self
-                    .ttb1
-                    .or_else(|| allocator.lock().alloc_page(mem_access_translation).ok());
+                self.ttb1 = self.ttb1.or_else(|| {
+                    allocator
+                        .lock()
+                        .alloc_zeroed(FramePurpose::BranchPageTable)
+                        .ok()
+                });
                 (
                     self.ttb1.ok_or(Error::OutOfMemory)?,
                     Arch::kernel_base(),
@@ -422,11 +446,11 @@ mod tests {
     }
 
     impl FrameAllocator for TestAllocator {
-        fn alloc_page(&mut self, mem_access_translation: &impl Translate) -> Result<PhysAddr> {
+        fn alloc_zeroed(&mut self, _purpose: FramePurpose) -> Result<PhysAddr> {
             if self.next > 5 {
                 return Err(OutOfMemory);
             }
-            let result = mem_access_translation.translate(VirtAddr::from(&self.pages[self.next]));
+            let result = Identity::new().translate(VirtAddr::from(&self.pages[self.next]));
             self.next += 1;
             Ok(result)
         }
