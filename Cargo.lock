@@ -109,9 +109,9 @@ dependencies = [
 
 [[package]]
 name = "register"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e10c2ba523bc81270ecb9b6ca6704f42cd1efec89fddbfe0e520ad0e218f401"
+checksum = "deaba5b0e477d21f61a57504bb5cef4a1e86de30300b457d38971c1cfc98b815"
 dependencies = [
  "tock-registers",
 ]
@@ -124,9 +124,9 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
 name = "syn"
-version = "1.0.27"
+version = "1.0.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef781e621ee763a2a40721a8861ec519cb76966aee03bb5d00adb6a31dc1c1de"
+checksum = "bb37da98a55b1d08529362d9cbb863be17556873df2585904ab9d2bc951291d0"
 dependencies = [
  "proc-macro2",
  "quote",

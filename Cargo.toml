@@ -17,7 +17,7 @@ test = false
 test-types = { path = "test-types" }
 qemu-exit = { path = "../qemu-exit" }
 spin = "0.5.2"
-register = "0.5.0"
+register = "0.5.1"
 enum-map = "0.6.2"
 claim = "0.3.1"
 
