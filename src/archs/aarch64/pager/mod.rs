@@ -173,64 +173,6 @@ impl PageDirectory {
         }
         Ok(target_range)
     }
-
-    #[allow(dead_code)]
-    pub fn dump(&self, mem_access_translation: &impl Translate) {
-        fn dump_level(phys_addr: PhysAddr, level: usize, mem_access_translation: &impl Translate) {
-            const LEVEL_BUFFERS: [&str; 4] = ["", " ", "  ", "   "];
-
-            debug!("dumping table at {:?} being level {}", phys_addr, level);
-            let page_table = unsafe {
-                mem_access_translation
-                    .translate_phys(phys_addr)
-                    .unwrap()
-                    .as_ref::<PageTable>()
-            };
-            let mut null_count = 0u16;
-            for i in 0..512 {
-                let entry = page_table[i];
-                if entry.is_null() {
-                    null_count += 1;
-                } else {
-                    if null_count > 0 {
-                        debug!("{} [...] {} null entries", LEVEL_BUFFERS[level], null_count);
-                        null_count = 0;
-                    }
-                    if entry.is_table(level as u8) {
-                        let entry = TableDescriptor::from(entry);
-                        debug!("{} [{:>3}] {:?}", LEVEL_BUFFERS[level], i, entry);
-                    } else {
-                        let entry = PageBlockDescriptor::from(entry);
-                        debug!("{} [{:>3}] {:?}", LEVEL_BUFFERS[level], i, entry);
-                    }
-                    if level < 3 && entry.is_valid() {
-                        dump_level(
-                            entry.next_level_table_address(),
-                            level + 1,
-                            mem_access_translation,
-                        );
-                    }
-                }
-            }
-            if null_count > 0 {
-                debug!("{} [...] {} null entries", LEVEL_BUFFERS[level], null_count);
-            }
-        }
-        if self.ttb0.is_some() {
-            dump_level(
-                self.ttb0.unwrap(),
-                TTB0_FIRST_LEVEL.into(),
-                mem_access_translation,
-            );
-        }
-        if self.ttb1.is_some() {
-            dump_level(
-                self.ttb1.unwrap(),
-                TTB1_FIRST_LEVEL.into(),
-                mem_access_translation,
-            );
-        }
-    }
 }
 
 impl crate::archs::PageDirectory for PageDirectory {
@@ -286,6 +228,64 @@ impl crate::archs::PageDirectory for PageDirectory {
             allocator,
             mem_access_translation,
         )
+    }
+
+    #[allow(dead_code)]
+    fn dump(&self, mem_access_translation: &impl Translate) {
+        fn dump_level(phys_addr: PhysAddr, level: usize, mem_access_translation: &impl Translate) {
+            const LEVEL_BUFFERS: [&str; 4] = ["", " ", "  ", "   "];
+
+            debug!("dumping table at {:?} being level {}", phys_addr, level);
+            let page_table = unsafe {
+                mem_access_translation
+                    .translate_phys(phys_addr)
+                    .unwrap()
+                    .as_ref::<PageTable>()
+            };
+            let mut null_count = 0u16;
+            for i in 0..512 {
+                let entry = page_table[i];
+                if entry.is_null() {
+                    null_count += 1;
+                } else {
+                    if null_count > 0 {
+                        debug!("{} [...] {} null entries", LEVEL_BUFFERS[level], null_count);
+                        null_count = 0;
+                    }
+                    if entry.is_table(level as u8) {
+                        let entry = TableDescriptor::from(entry);
+                        debug!("{} [{:>3}] {:?}", LEVEL_BUFFERS[level], i, entry);
+                    } else {
+                        let entry = PageBlockDescriptor::from(entry);
+                        debug!("{} [{:>3}] {:?}", LEVEL_BUFFERS[level], i, entry);
+                    }
+                    if level < 3 && entry.is_valid() {
+                        dump_level(
+                            entry.next_level_table_address(),
+                            level + 1,
+                            mem_access_translation,
+                        );
+                    }
+                }
+            }
+            if null_count > 0 {
+                debug!("{} [...] {} null entries", LEVEL_BUFFERS[level], null_count);
+            }
+        }
+        if self.ttb0.is_some() {
+            dump_level(
+                self.ttb0.unwrap(),
+                TTB0_FIRST_LEVEL.into(),
+                mem_access_translation,
+            );
+        }
+        if self.ttb1.is_some() {
+            dump_level(
+                self.ttb1.unwrap(),
+                TTB1_FIRST_LEVEL.into(),
+                mem_access_translation,
+            );
+        }
     }
 }
 

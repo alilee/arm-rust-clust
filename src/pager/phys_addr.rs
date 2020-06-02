@@ -50,7 +50,7 @@ impl PhysAddr {
     ///
     /// UNSAFE: pointer must be to physical memory ie. before paging is enabled or under
     /// identity mapping.
-    pub unsafe fn from_fn(f: fn()) -> Self {
+    pub unsafe fn from_fn(f: fn() -> !) -> Self {
         Self::from_ptr(f as *const u8)
     }
 
@@ -182,6 +182,10 @@ impl Iterator for PhysAddrRangeIterator {
 mod tests {
     use super::*;
 
+    fn foo() -> ! {
+        unimplemented!()
+    }
+
     #[test]
     fn phys_addr() {
         let null = PhysAddr::null();
@@ -195,7 +199,7 @@ mod tests {
 
         unsafe {
             PhysAddr::from_ptr(&c);
-            PhysAddr::from_fn(phys_addr);
+            PhysAddr::from_fn(foo);
         };
         PhysAddr::from_linker_symbol(&SYM);
     }

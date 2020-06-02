@@ -59,7 +59,11 @@ impl Default for FrameDeque {
 
 impl Debug for FrameDeque {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "FrameDeque {{ head: {:?}, tail: {:?}, count: {} }}", self.head, self.tail, self.count)
+        write!(
+            f,
+            "FrameDeque {{ head: {:?}, tail: {:?}, count: {} }}",
+            self.head, self.tail, self.count
+        )
     }
 }
 
@@ -90,11 +94,18 @@ impl FrameDeque {
         count: usize,
         table: &mut [FrameTableNode],
     ) -> Result<()> {
-        assert!(!FrameTableNode::is_clear(table[i].prev()));
+        info!("move_range(i: {}, count: {}, ...)", i, count);
+        if FrameTableNode::is_clear(table[i].prev()) {
+            // Can't detach head from another list.
+            unimplemented!()
+        }
         let prev = table[i].prev();
-        let next = table[i + count].next();
+        let tail = i + count - 1;
+        let next = table[tail].next();
         table[prev].set_next(next);
         table[next].set_prev(prev);
+        table[tail].clear_next();
+        dbg!(self.tail);
         match self.tail {
             None => {
                 assert_eq!(self.count, 0);
@@ -109,7 +120,7 @@ impl FrameDeque {
                 table[i].set_prev(tail);
             }
         }
-        self.tail = Some(i + count);
+        self.tail = Some(tail);
         self.count += count;
         Ok(())
     }
@@ -160,40 +171,69 @@ pub struct FrameTable {
 
 impl Debug for FrameTable {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        use crate::debug::BUFFER;
         use core::mem::size_of_val;
 
         writeln!(f, "FrameTable {{ ").unwrap();
-        writeln!(f, "                                                                   ram_base: {:?},", self.ram_base).unwrap();
+        writeln!(f, "{}    ram_base: {:?},", BUFFER, self.ram_base).unwrap();
         match &self.maybe_frame_lists {
-            None => writeln!(f, "                                                                   lists: {:?}", self.maybe_frame_lists).unwrap(),
+            None => writeln!(f, "{}    lists: {:?}", BUFFER, self.maybe_frame_lists).unwrap(),
             Some(frame_lists) => {
                 for (frame_use, _) in frame_lists.iter() {
                     let table = self.maybe_table.as_deref().unwrap();
                     let frame_lists = self.maybe_frame_lists.as_ref().unwrap();
                     let frame_list = &frame_lists[frame_use];
                     if frame_list.count > 0 {
-                        writeln!(f, "                                                                   {:>15?} ({}):", frame_use, frame_list.count).unwrap();
-                        write!(f, "                                                                       [").unwrap();
+                        writeln!(
+                            f,
+                            "{}    {:>15?} (h: {}, t: {}, c: {}):",
+                            BUFFER,
+                            frame_use,
+                            frame_list.head.unwrap(),
+                            frame_list.tail.unwrap(),
+                            frame_list.count
+                        )
+                        .unwrap();
+                        write!(f, "{}        [", BUFFER).unwrap();
                         let mut i = frame_list.head.unwrap_or(u32::MAX as usize);
-                        let mut count = 20;
+                        let mut seq_length = 0;
+                        let mut count = 0usize;
                         while i != u32::MAX as usize {
-                            if count == 0 {
-                                write!(f, "...").unwrap();
-                                break;
+                            let next = table[i].next();
+                            if next == i + 1 {
+                                seq_length += 1;
                             }
-                            write!(f, "{}, ", i).unwrap();
-                            i = table[i].next();
-                            count -= 1;
+                            if seq_length < 4 || next != i + 1 {
+                                write!(f, "{}, ", i).unwrap();
+                            } else if seq_length == 4 {
+                                write!(f, "...").unwrap();
+                            }
+                            if next != i + 1 {
+                                seq_length = 0;
+                                if next == u32::MAX as usize {
+                                    // assert_eq!(frame_list.tail.unwrap(), i);
+                                }
+                            }
+                            i = next;
+                            count += 1;
                         }
+                        // FIXME: Why does this hang?
+                        // assert_eq!(count, frame_list.count);
                         writeln!(f, "]").unwrap();
                     }
                 }
-            },
+            }
         }
         if let Some(_) = self.maybe_table {
-            writeln!(f, "                                                                   size_of(table): {:?} bytes", size_of_val(*self.maybe_table.as_ref().unwrap())).unwrap();
+            writeln!(
+                f,
+                "{}    size_of(table): {:?} bytes",
+                BUFFER,
+                size_of_val(*self.maybe_table.as_ref().unwrap())
+            )
+            .unwrap();
         }
-        writeln!(f, "                                                               }}")
+        write!(f, "{}}}", BUFFER)
     }
 }
 
@@ -275,7 +315,7 @@ impl FrameTableNode {
 /// Initialise
 ///
 /// Take the first n pages as a frame table.
-pub fn init() -> Result<()> {
+pub fn init() -> Result<PhysAddrRange> {
     use crate::archs::{arch::Arch, ArchTrait};
 
     log!("MAJOR", "init");
@@ -299,10 +339,13 @@ pub fn init() -> Result<()> {
         );
     }
 
+    trace!("{:?}", *lock);
     (*lock).move_range(image_range, FrameUse::KernelHot)?;
+    trace!("{:?}", *lock);
     (*lock).move_range(frame_table_range, FrameUse::KernelHot)?;
+    trace!("{:?}", *lock);
 
-    Ok(())
+    Ok(frame_table_range)
 }
 
 impl FrameTable {
@@ -317,7 +360,9 @@ impl FrameTable {
 
     fn new(frame_table: FrameTableNodes, ram_base: PhysAddr) -> Self {
         let mut frame_lists: EnumMap<FrameUse, FrameDeque> = EnumMap::new();
-        frame_lists[FrameUse::Free].reset(frame_table).expect("FrameDeque::reset");
+        frame_lists[FrameUse::Free]
+            .reset(frame_table)
+            .expect("FrameDeque::reset");
         let result = Self {
             ram_base,
             maybe_table: Some(frame_table),
@@ -333,8 +378,14 @@ impl FrameTable {
         &mut self,
         frame_use: FrameUse,
     ) -> Result<(&mut [FrameTableNode], &mut FrameDeque)> {
-        let table = self.maybe_table.as_deref_mut().ok_or(Error::UnInitialised)?;
-        let frame_lists = self.maybe_frame_lists.as_mut().ok_or(Error::UnInitialised)?;
+        let table = self
+            .maybe_table
+            .as_deref_mut()
+            .ok_or(Error::UnInitialised)?;
+        let frame_lists = self
+            .maybe_frame_lists
+            .as_mut()
+            .ok_or(Error::UnInitialised)?;
         let frame_list = &mut frame_lists[frame_use];
 
         Ok((table, frame_list))
@@ -389,7 +440,8 @@ mod tests {
     }
 
     const FRAME_TABLE_LENGTH: usize = 3;
-    static mut FRAME_TABLE_NODES: [FrameTableNode; FRAME_TABLE_LENGTH] = [FrameTableNode::null(); FRAME_TABLE_LENGTH];
+    static mut FRAME_TABLE_NODES: [FrameTableNode; FRAME_TABLE_LENGTH] =
+        [FrameTableNode::null(); FRAME_TABLE_LENGTH];
 
     #[test]
     fn allocating_same() {

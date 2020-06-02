@@ -8,7 +8,7 @@
 //! assert!(false);
 //! ```
 
-use super::{Addr, AddrRange, PhysAddr, PAGESIZE_BYTES};
+use super::{Addr, AddrRange, PhysAddr, PhysAddrRange, PAGESIZE_BYTES};
 
 use core::fmt::{Debug, Error, Formatter};
 
@@ -128,6 +128,14 @@ impl AddrRange<VirtAddr, VirtAddrRange> for VirtAddrRange {
 }
 
 impl VirtAddrRange {
+    /// Identity mapped from physical address range.
+    pub unsafe fn identity_mapped(phys_addr_range: PhysAddrRange) -> Self {
+        Self::new(
+            VirtAddr::identity_mapped(phys_addr_range.base()),
+            phys_addr_range.length(),
+        )
+    }
+
     /// Length of the range in bytes.
     pub const fn length_in_pages(&self) -> usize {
         (self.length + PAGESIZE_BYTES - 1) / PAGESIZE_BYTES
@@ -197,6 +205,16 @@ mod tests {
         assert_eq!(base, range.base());
         assert_eq!(0x1_0000, range.length());
         assert_eq!(0x10, range.length_in_pages());
+
+        let phys_addr_range = PhysAddrRange::new(PhysAddr::at(0x1000_0000), 0x1000);
+        unsafe {
+            let range = VirtAddrRange::identity_mapped(phys_addr_range);
+            assert_eq!(
+                range.base(),
+                VirtAddr::identity_mapped(phys_addr_range.base())
+            );
+            assert_eq!(range.length(), phys_addr_range.length());
+        }
     }
 
     #[test]

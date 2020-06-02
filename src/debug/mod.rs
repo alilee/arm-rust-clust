@@ -4,6 +4,9 @@
 
 pub mod logger;
 
+/// Buffer to match logging indent.
+pub const BUFFER: &str = "                                                               ";
+
 /// The dbg macro.
 #[macro_export]
 macro_rules! dbg {

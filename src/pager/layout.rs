@@ -6,10 +6,15 @@ use crate::Result;
 
 use core::fmt::{Debug, Error, Formatter};
 
+static mut FRAME_TABLE_RANGE: Option<PhysAddrRange> = None;
+
 /// Initialise
-pub fn init() -> Result<()> {
+pub fn init(frame_table_range: PhysAddrRange) -> Result<()> {
     info!("init");
     info!("Kernel base: {:?}", Arch::kernel_base());
+    unsafe {
+        FRAME_TABLE_RANGE = Some(frame_table_range);
+    }
     Ok(())
 }
 
@@ -49,7 +54,7 @@ impl Debug for KernelExtent {
 
 const GB: usize = 1024 * 1024 * 1024;
 
-const LAYOUT: [KernelExtent; 7] = [
+const LAYOUT: [KernelExtent; 8] = [
     KernelExtent {
         content: RangeContent::RAM,
         virt_range_align: 1 * GB,
@@ -76,6 +81,13 @@ const LAYOUT: [KernelExtent; 7] = [
         virt_range_align: 0,
         virt_range_min_extent: 0,
         phys_addr_range: &{ || Some(PhysAddrRange::data_image()) },
+        attributes: Attributes::KERNEL_DATA,
+    },
+    KernelExtent {
+        content: RangeContent::KernelImage,
+        virt_range_align: 1 * GB,
+        virt_range_min_extent: 1 * GB,
+        phys_addr_range: &{ || unsafe { Some(FRAME_TABLE_RANGE.expect("FRAME_TABLE_RANGE")) } },
         attributes: Attributes::KERNEL_DATA,
     },
     KernelExtent {
@@ -187,9 +199,13 @@ impl IntoIterator for Layout {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pager::PhysAddr;
 
     #[test]
     fn calculate() {
+        unsafe {
+            FRAME_TABLE_RANGE = Some(PhysAddrRange::new(PhysAddr::at(0x4000_0000), 0x1000))
+        }
         for item in layout().unwrap() {
             info!("{:?}", item);
         }

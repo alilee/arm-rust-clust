@@ -25,9 +25,9 @@ pub use frames::Purpose as FramePurpose;
 
 use crate::archs::{arch, arch::Arch, ArchTrait, PageDirectory};
 use crate::debug;
+use crate::pager::bump::PageBumpAllocator;
 use crate::util::locked::Locked;
 use crate::Result;
-use crate::pager::bump::PageBumpAllocator;
 
 /// Number of bytes in a cluster-wide atomic page.
 pub const PAGESIZE_BYTES: usize = 4096;
@@ -41,14 +41,18 @@ pub static DEVICE_MEM_ALLOCATOR: Locked<PageBumpAllocator> = Locked::new(PageBum
 pub fn init(next: fn() -> !) -> ! {
     info!("init");
 
-    frames::init().expect("pager::frames::init");
-    layout::init().expect("pager::layout::init");
+    let frame_table_range = frames::init().expect("pager::frames::init");
+    layout::init(frame_table_range).expect("pager::layout::init");
 
     Arch::pager_init().expect("arch::pager::init");
-    let pd = Locked::new(arch::new_page_directory());
-    let mut page_directory = pd.lock();
+    let page_directory = Locked::new(arch::new_page_directory());
+    let mut page_directory = page_directory.lock();
 
     map_ranges(&mut (*page_directory), &frames::ALLOCATOR).expect("pager::map_ranges");
+    // FIXME: Access to logging enabled.
+    if crate::debug::logger::_is_enabled("DEBUG", module_path!()) {
+        page_directory.dump(&Identity::new());
+    }
 
     let image_base = PhysAddrRange::text_image().base();
     let kernel_image_offset = FixedOffset::new(image_base, Arch::kernel_base());
@@ -78,21 +82,35 @@ fn map_ranges(
 
         match kernel_range.content {
             RAM | KernelImage => {
-                let phys_addr_range = kernel_range.phys_addr_range.expect("kernel_range.phys_addr_range");
+                let phys_addr_range = kernel_range
+                    .phys_addr_range
+                    .expect("kernel_range.phys_addr_range");
                 page_directory.map_translation(
-                    kernel_range.virt_addr_range.resize(phys_addr_range.length()),
+                    kernel_range
+                        .virt_addr_range
+                        .resize(phys_addr_range.length()),
                     FixedOffset::new(phys_addr_range.base(), kernel_range.virt_addr_range.base()),
                     kernel_range.attributes,
                     allocator,
                     mem_access_translation,
                 )?;
-            },
+            }
             Device => {
-                DEVICE_MEM_ALLOCATOR.lock().reset(kernel_range.virt_addr_range)?;
+                DEVICE_MEM_ALLOCATOR
+                    .lock()
+                    .reset(kernel_range.virt_addr_range)?;
             }
-            L3PageTables | Heap => {
-            }
+            L3PageTables | Heap => {}
         };
     }
+
+    page_directory.map_translation(
+        unsafe { VirtAddrRange::identity_mapped(PhysAddrRange::text_image()) },
+        Identity::new(),
+        Attributes::KERNEL_EXEC,
+        allocator,
+        mem_access_translation,
+    )?;
+
     Ok(())
 }

@@ -57,6 +57,10 @@ impl super::PageDirectory for PageDirectory {
     ) -> Result<VirtAddrRange> {
         unimplemented!()
     }
+
+    fn dump(&self, mem_access_translation: &impl Translate) {
+        unimplemented!()
+    }
 }
 
 pub fn new_page_directory() -> impl super::PageDirectory {
