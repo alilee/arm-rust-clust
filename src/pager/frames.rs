@@ -3,10 +3,13 @@
 use crate::util::locked::Locked;
 use crate::{Error, Result};
 
-use super::{Addr, AddrRange, PhysAddr, PhysAddrRange, VirtAddr, PAGESIZE_BYTES};
+use super::{
+    Addr, AddrRange, FixedOffset, Identity, PhysAddr, PhysAddrRange, VirtAddr, PAGESIZE_BYTES,
+};
 
 use enum_map::{Enum, EnumMap};
 
+use crate::pager::Translate;
 use core::default::Default;
 use core::fmt::{Debug, Formatter};
 
@@ -167,6 +170,8 @@ pub struct FrameTable {
     ram_base: PhysAddr,
     maybe_frame_lists: Option<EnumMap<FrameUse, FrameDeque>>,
     maybe_table: Option<FrameTableNodes>,
+    // FIXME: impl Translate
+    mem_access_translation: FixedOffset,
 }
 
 impl Debug for FrameTable {
@@ -197,7 +202,8 @@ impl Debug for FrameTable {
                         write!(f, "{}        [", BUFFER).unwrap();
                         let mut i = frame_list.head.unwrap_or(u32::MAX as usize);
                         let mut seq_length = 0;
-                        let mut count = 0usize;
+                        #[allow(unused_variables)]
+                        let mut count_check = 0usize;
                         while i != u32::MAX as usize {
                             let next = table[i].next();
                             if next == i + 1 {
@@ -215,10 +221,10 @@ impl Debug for FrameTable {
                                 }
                             }
                             i = next;
-                            count += 1;
+                            count_check += 1;
                         }
                         // FIXME: Why does this hang?
-                        // assert_eq!(count, frame_list.count);
+                        // assert_eq!(count_check, frame_list.count);
                         writeln!(f, "]").unwrap();
                     }
                 }
@@ -325,7 +331,7 @@ pub fn init() -> Result<PhysAddrRange> {
     let image_range = PhysAddrRange::boot_image();
     let frame_table_range = PhysAddrRange::new(
         image_range.top(),
-        len * core::mem::size_of::<FrameTableNode>() / PAGESIZE_BYTES,
+        len * core::mem::size_of::<FrameTableNode>(),
     );
 
     let mut lock = ALLOCATOR.lock();
@@ -336,14 +342,12 @@ pub fn init() -> Result<PhysAddrRange> {
         *lock = FrameTable::new(
             core::slice::from_raw_parts_mut(frame_table_ptr, len),
             ram_range.base(),
+            Identity::new().into(),
         );
     }
 
-    trace!("{:?}", *lock);
     (*lock).move_range(image_range, FrameUse::KernelHot)?;
-    trace!("{:?}", *lock);
     (*lock).move_range(frame_table_range, FrameUse::KernelHot)?;
-    trace!("{:?}", *lock);
 
     Ok(frame_table_range)
 }
@@ -354,11 +358,20 @@ impl FrameTable {
             ram_base: PhysAddr::null(),
             maybe_table: None,
             maybe_frame_lists: None,
+            mem_access_translation: FixedOffset::identity(),
         };
         result
     }
 
-    fn new(frame_table: FrameTableNodes, ram_base: PhysAddr) -> Self {
+    fn phys_addr(&self, i: usize) -> PhysAddr {
+        self.ram_base.increment(i * PAGESIZE_BYTES)
+    }
+
+    fn new(
+        frame_table: FrameTableNodes,
+        ram_base: PhysAddr,
+        mem_access_translation: FixedOffset,
+    ) -> Self {
         let mut frame_lists: EnumMap<FrameUse, FrameDeque> = EnumMap::new();
         frame_lists[FrameUse::Free]
             .reset(frame_table)
@@ -367,6 +380,7 @@ impl FrameTable {
             ram_base,
             maybe_table: Some(frame_table),
             maybe_frame_lists: Some(frame_lists),
+            mem_access_translation,
         };
         result
     }
@@ -412,10 +426,32 @@ impl FrameTable {
 
 impl Allocator for FrameTable {
     fn alloc_zeroed(&mut self, purpose: Purpose) -> Result<PhysAddr> {
-        let i = self.pop(FrameUse::Zeroed).or(Err(Error::OutOfMemory))?;
-        self.push(i, purpose.into())?;
+        let mut zero_required = false;
+        let i = self.pop(FrameUse::Zeroed).or_else(|e| match e {
+            Error::OutOfPages => {
+                let result = self.pop(FrameUse::Free);
+                zero_required = true;
+                result
+            }
+            _ => Err(e),
+        })?;
 
-        let phys_addr = self.ram_base.increment(i * PAGESIZE_BYTES);
+        let phys_addr = self.phys_addr(i);
+        if zero_required {
+            log!(
+                "DEBUG",
+                "No zeroed free memory. Just-in-time zeroing on alloc."
+            );
+            let page: *mut u8 = self
+                .mem_access_translation
+                .translate_phys(phys_addr)?
+                .into();
+            unsafe {
+                core::ptr::write_bytes(page, 0, PAGESIZE_BYTES);
+            }
+        }
+
+        self.push(i, purpose.into())?;
         Ok(phys_addr)
     }
 
@@ -423,7 +459,7 @@ impl Allocator for FrameTable {
         let i = self.pop(FrameUse::Free).or(Err(Error::OutOfMemory))?;
         self.push(i, purpose.into())?;
 
-        let phys_addr = self.ram_base.increment(i * PAGESIZE_BYTES);
+        let phys_addr = self.phys_addr(i);
         Ok(phys_addr)
     }
 }
@@ -431,11 +467,12 @@ impl Allocator for FrameTable {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pager::Identity;
 
     #[test]
     fn empty() {
-        let mut alloc = ALLOCATOR.lock();
-        trace!("{:?}", *alloc);
+        let mut alloc = FrameTable::null();
+        trace!("{:?}", alloc);
         assert_err!(alloc.alloc_zeroed(Purpose::User));
     }
 
@@ -445,24 +482,29 @@ mod tests {
 
     #[test]
     fn allocating_same() {
-        {
-            let mut lock = ALLOCATOR.lock();
-            unsafe {
-                *lock = FrameTable::new(&mut FRAME_TABLE_NODES, PhysAddr::at(0x4000_0000));
-            }
+        use crate::pager::Page;
+        use Purpose::*;
+
+        let mut pages = [Page::new(); 3];
+
+        let mut alloc = FrameTable::null();
+        unsafe {
+            alloc = FrameTable::new(
+                &mut FRAME_TABLE_NODES,
+                PhysAddr::from_ptr(&mut pages),
+                Identity::new().into(),
+            );
         }
+
         unsafe {
             assert_eq!((&mut FRAME_TABLE_NODES).len(), FRAME_TABLE_LENGTH);
         }
-        {
-            use Purpose::*;
-            let mut alloc = ALLOCATOR.lock();
-            assert_err!(alloc.alloc_zeroed(User));
-            assert_ok!(alloc.alloc_for_overwrite(Kernel));
-            assert_ok!(alloc.alloc_for_overwrite(Kernel));
-            assert_ok!(alloc.alloc_for_overwrite(Kernel));
-            assert_err!(alloc.alloc_for_overwrite(LeafPageTable));
-            trace!("{:?}", *alloc);
-        }
+
+        assert_ok!(alloc.alloc_for_overwrite(Kernel));
+        assert_ok!(alloc.alloc_zeroed(User));
+        assert_ok!(alloc.alloc_for_overwrite(Kernel));
+        assert_err!(alloc.alloc_for_overwrite(LeafPageTable));
+        assert_err!(alloc.alloc_zeroed(LeafPageTable));
+        trace!("{:?}", alloc);
     }
 }

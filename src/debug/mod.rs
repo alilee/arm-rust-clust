@@ -100,7 +100,7 @@ macro_rules! trace {
 #[cfg(not(test))]
 #[no_mangle]
 #[linkage = "weak"]
-static LOG_LEVEL_SETTINGS: &[(&str, &str)] = &[];
+static LOG_LEVEL_SETTINGS: &[(&str, &str)] = &[("aarch64::pager", "DEBUG")];
 
 #[cfg(test)]
 mod tests {

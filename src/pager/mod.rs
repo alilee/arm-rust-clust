@@ -49,6 +49,8 @@ pub fn init(next: fn() -> !) -> ! {
     let mut page_directory = page_directory.lock();
 
     map_ranges(&mut (*page_directory), &frames::ALLOCATOR).expect("pager::map_ranges");
+
+    debug!("{:?}", *frames::ALLOCATOR.lock());
     // FIXME: Access to logging enabled.
     if crate::debug::logger::_is_enabled("DEBUG", module_path!()) {
         page_directory.dump(&Identity::new());
@@ -81,7 +83,7 @@ fn map_ranges(
         debug!("{:?}", kernel_range);
 
         match kernel_range.content {
-            RAM | KernelImage => {
+            RAM | KernelText | KernelStatic | KernelData | FrameTable => {
                 let phys_addr_range = kernel_range
                     .phys_addr_range
                     .expect("kernel_range.phys_addr_range");

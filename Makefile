@@ -43,8 +43,8 @@ $(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -semihosting -dtb qemu.dtb -k
 set result $$status
 if test $$result -ne 0
 	cat $$argv[1].out
-	$(OBJDUMP) -dS $$argv[1] > $$argv[1].code
-	$(OBJDUMP) -d $$argv[1] > $$argv[1].s
+#	$(OBJDUMP) -dS $$argv[1] > $$argv[1].code
+#	$(OBJDUMP) -d $$argv[1] > $$argv[1].s
 end
 exit $$result
 endef

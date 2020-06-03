@@ -94,6 +94,12 @@ impl Debug for FixedOffset {
     }
 }
 
+impl From<Identity> for FixedOffset {
+    fn from(_: Identity) -> Self {
+        Self(0)
+    }
+}
+
 impl FixedOffset {
     /// Define translation as difference between reference physical and virtual addresses.
     ///
@@ -104,6 +110,13 @@ impl FixedOffset {
             assert!(nominal_phys_addr <= virt_addr);
             Self(virt_addr.offset_above(nominal_phys_addr))
         }
+    }
+
+    /// Create null fixed offset - identity mapping.
+    ///
+    /// TODO: Remove use of FixedOffset where identity would be preferred.
+    pub const fn identity() -> Self {
+        Self(0)
     }
 }
 

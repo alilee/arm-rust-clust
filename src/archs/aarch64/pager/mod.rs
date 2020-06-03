@@ -94,7 +94,7 @@ impl PageDirectory {
             // target_range: the span of entries in this table to map pages for
             // page_table_virt_addr_range_base: the va of pt[0]
             debug!(
-                "  index: {}, entry_target_range: {:?}, entry_range: {:?}",
+                "  index: {:03}, entry_target_range: {:?}, entry_range: {:?}",
                 index, entry_target_range, entry_range,
             );
             if level == 3
@@ -259,7 +259,7 @@ impl crate::archs::PageDirectory for PageDirectory {
                         let entry = PageBlockDescriptor::from(entry);
                         debug!("{} [{:>3}] {:?}", LEVEL_BUFFERS[level], i, entry);
                     }
-                    if level < 3 && entry.is_valid() {
+                    if level < 3 && entry.is_valid() && entry.is_table(level as u8) {
                         dump_level(
                             entry.next_level_table_address(),
                             level + 1,
@@ -272,7 +272,9 @@ impl crate::archs::PageDirectory for PageDirectory {
                 debug!("{} [...] {} null entries", LEVEL_BUFFERS[level], null_count);
             }
         }
+        debug!("PageDirectory");
         if self.ttb0.is_some() {
+            debug!("TTBO");
             dump_level(
                 self.ttb0.unwrap(),
                 TTB0_FIRST_LEVEL.into(),
@@ -280,12 +282,14 @@ impl crate::archs::PageDirectory for PageDirectory {
             );
         }
         if self.ttb1.is_some() {
+            debug!("TTB1");
             dump_level(
                 self.ttb1.unwrap(),
                 TTB1_FIRST_LEVEL.into(),
                 mem_access_translation,
             );
         }
+        debug!("PageDirectory done");
     }
 }
 

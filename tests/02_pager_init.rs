@@ -23,8 +23,8 @@ fn kernel_init() {
 }
 
 fn next() -> ! {
+    use libkernel::archs::{arch::Arch, ArchTrait};
     use libkernel::pager::*;
-    use libkernel::archs::{ArchTrait, arch::Arch};
 
     unsafe {
         assert_lt!(PhysAddr::from_fn(next).get(), Arch::kernel_base().get());
@@ -35,13 +35,15 @@ fn next() -> ! {
 
 #[kernel_test]
 fn paging_init() {
-    use libkernel::pager::*;
+    use libkernel::pager;
 
-    init(next)
+    pager::init(next)
 }
 
 #[no_mangle]
-static LOG_LEVEL_SETTINGS: &[(&str, &str)] =
-    &[("pager::frames", "TRACE"),
-        ("aarch64::pager", "TRACE"),
-        ("pager::layout", "TRACE")];
+static LOG_LEVEL_SETTINGS: &[(&str, &str)] = &[
+    ("pager::frames", "INFO"),
+    ("aarch64::pager", "INFO"),
+    ("pager::layout", "DEBUG"),
+    ("aarch64::hal::mair", "INFO"),
+];

@@ -42,7 +42,7 @@ impl PhysAddr {
     ///
     /// UNSAFE: pointer must be to physical memory ie. before paging is enabled or under
     /// identity mapping.
-    pub unsafe fn from_ptr(p: *const u8) -> Self {
+    pub unsafe fn from_ptr<T>(p: *const T) -> Self {
         Self(p as usize)
     }
 
