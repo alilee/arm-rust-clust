@@ -2,9 +2,24 @@
 
 //! Interface for paging functions.
 
-use crate::pager::{Attributes, FrameAllocator, Translate, VirtAddrRange};
+use crate::pager::{
+    Addr, AddrRange, Attributes, FrameAllocator, PhysAddrRange, Translate, VirtAddr, VirtAddrRange,
+};
 use crate::util::locked::Locked;
 use crate::Result;
+
+/// Each architecture must supply the following entry points for paging..
+pub trait PagerTrait {
+    /// Physical address range of ram
+    fn ram_range() -> Result<PhysAddrRange>;
+    /// Base virtual address of kernel address space
+    fn kernel_base() -> VirtAddr;
+
+    /// Initialise virtual memory management.
+    fn pager_init() -> Result<()>;
+    /// Enable virtual memory management.
+    fn enable_paging(page_directory: &impl PageDirectory);
+}
 
 /// Methods to maintain a directory of virtual to physical addresses.
 pub trait PageDirectory {

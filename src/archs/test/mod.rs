@@ -12,7 +12,7 @@ use crate::Result;
 pub struct Arch {}
 
 #[allow(unused_variables)]
-impl super::ArchTrait for Arch {
+impl super::PagerTrait for Arch {
     fn ram_range() -> Result<PhysAddrRange> {
         Ok(PhysAddrRange::between(
             PhysAddr::at(0x4000_0000),
@@ -29,18 +29,6 @@ impl super::ArchTrait for Arch {
     }
 
     fn enable_paging(page_directory: &impl super::PageDirectory) {}
-
-    fn handler_init() -> Result<()> {
-        Ok(())
-    }
-
-    fn thread_init() -> Result<()> {
-        Ok(())
-    }
-
-    fn wait_forever() -> ! {
-        loop {}
-    }
 }
 
 pub struct PageDirectory {}
@@ -66,6 +54,14 @@ impl super::PageDirectory for PageDirectory {
 pub fn new_page_directory() -> impl super::PageDirectory {
     PageDirectory {}
 }
+
+impl super::DeviceTrait for Arch {
+    fn debug_uart() -> Result<PhysAddrRange> {
+        unimplemented!()
+    }
+}
+
+impl super::HandlerTrait for Arch {}
 
 #[no_mangle]
 pub unsafe extern "C" fn _reset() -> ! {

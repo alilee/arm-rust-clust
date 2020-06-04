@@ -3,7 +3,7 @@
 //! Panic handling.
 
 #[cfg(not(test))]
-use crate::archs::{ArchTrait, arch::Arch};
+use crate::archs::{HandlerTrait, arch::Arch};
 
 /// The point of exit for the "standard" (non-testing) `libkernel`.
 ///

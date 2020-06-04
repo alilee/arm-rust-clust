@@ -23,7 +23,7 @@ pub use virt_addr::*;
 pub use frames::Allocator as FrameAllocator;
 pub use frames::Purpose as FramePurpose;
 
-use crate::archs::{arch, arch::Arch, ArchTrait, PageDirectory};
+use crate::archs::{arch, arch::Arch, DeviceTrait, PageDirectory, PagerTrait};
 use crate::debug;
 use crate::pager::bump::PageBumpAllocator;
 use crate::util::locked::Locked;
@@ -52,7 +52,7 @@ pub fn init(next: fn() -> !) -> ! {
 
     debug!("{:?}", *frames::ALLOCATOR.lock());
     // FIXME: Access to logging enabled.
-    if crate::debug::logger::_is_enabled("DEBUG", module_path!()) {
+    if crate::debug::logger::_is_enabled("TRACE", module_path!()) {
         page_directory.dump(&Identity::new());
     }
 
@@ -106,10 +106,20 @@ fn map_ranges(
         };
     }
 
+    // Kernel text identity-mapped
     page_directory.map_translation(
         unsafe { VirtAddrRange::identity_mapped(PhysAddrRange::text_image()) },
         Identity::new(),
         Attributes::KERNEL_EXEC,
+        allocator,
+        mem_access_translation,
+    )?;
+
+    // Debug output device identity-mapped
+    page_directory.map_translation(
+        unsafe { VirtAddrRange::identity_mapped(Arch::debug_uart()?) },
+        Identity::new(),
+        Attributes::DEVICE,
         allocator,
         mem_access_translation,
     )?;

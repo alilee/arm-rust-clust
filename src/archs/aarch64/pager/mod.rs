@@ -7,19 +7,39 @@ mod table;
 
 use table::{PageBlockDescriptor, PageTable, TableDescriptor, LEVEL_OFFSETS, LEVEL_WIDTH};
 
-use crate::archs::ArchTrait;
+use super::Arch;
+
+use crate::archs::PagerTrait;
 use crate::pager::AttributeField::OnDemand;
 use crate::pager::{
-    Addr, AddrRange, AttributeField, Attributes, FrameAllocator, FramePurpose, PhysAddr, Translate,
-    VirtAddr, VirtAddrRange,
+    Addr, AddrRange, AttributeField, Attributes, FrameAllocator, FramePurpose, PhysAddr,
+    PhysAddrRange, Translate, VirtAddr, VirtAddrRange,
 };
 use crate::util::locked::Locked;
 use crate::{Error, Result};
 
-/// Initialisation
-pub fn init() -> Result<()> {
-    info!("init");
-    mair::init()
+impl PagerTrait for Arch {
+    fn ram_range() -> Result<PhysAddrRange> {
+        // FIXME: Collect from DTB
+        Ok(PhysAddrRange::between(
+            PhysAddr::at(0x4000_0000),
+            PhysAddr::at(0x5000_0000),
+        ))
+    }
+    fn kernel_base() -> VirtAddr {
+        const UPPER_VA_BITS: usize = 39;
+        let result = VirtAddr::at(!((1 << (UPPER_VA_BITS + 1)) - 1));
+        result
+    }
+
+    fn pager_init() -> Result<()> {
+        info!("init");
+        mair::init()
+    }
+
+    fn enable_paging(_page_directory: &impl crate::archs::PageDirectory) {
+        unimplemented!()
+    }
 }
 
 /// Starting level of kernel range.
@@ -139,14 +159,9 @@ impl PageDirectory {
                         // No frame needed for next level table yet.
                         None
                     } else {
-                        // PageBlock when level 2 or (covers and attrs.is_block)
-                        let purpose = if (1u8..=2).contains(&level)
-                            || (attributes.is_set(AttributeField::Block)
-                                && target_range.covers(&entry_range))
-                        {
-                            FramePurpose::LeafPageTable
-                        } else {
-                            FramePurpose::BranchPageTable
+                        let purpose = match level {
+                            2 => FramePurpose::LeafPageTable,
+                            _ => FramePurpose::BranchPageTable,
                         };
                         Some(allocator.lock().alloc_zeroed(purpose)?)
                     };
@@ -188,8 +203,6 @@ impl crate::archs::PageDirectory for PageDirectory {
             "map_translation(&mut self, va_range: {:?}, {:?}, {:?}, ...)",
             target_range, translation, attributes
         );
-
-        use super::Arch;
 
         let (phys_addr_table, page_table_virt_addr_range_base, first_level) =
             if target_range.base() < Arch::kernel_base() {
@@ -235,7 +248,7 @@ impl crate::archs::PageDirectory for PageDirectory {
         fn dump_level(phys_addr: PhysAddr, level: usize, mem_access_translation: &impl Translate) {
             const LEVEL_BUFFERS: [&str; 4] = ["", " ", "  ", "   "];
 
-            debug!("dumping table at {:?} being level {}", phys_addr, level);
+            info!("dumping table at {:?} being level {}", phys_addr, level);
             let page_table = unsafe {
                 mem_access_translation
                     .translate_phys(phys_addr)
@@ -249,15 +262,15 @@ impl crate::archs::PageDirectory for PageDirectory {
                     null_count += 1;
                 } else {
                     if null_count > 0 {
-                        debug!("{} [...] {} null entries", LEVEL_BUFFERS[level], null_count);
+                        info!("{} [...] {} null entries", LEVEL_BUFFERS[level], null_count);
                         null_count = 0;
                     }
                     if entry.is_table(level as u8) {
                         let entry = TableDescriptor::from(entry);
-                        debug!("{} [{:>3}] {:?}", LEVEL_BUFFERS[level], i, entry);
+                        info!("{} [{:>3}] {:?}", LEVEL_BUFFERS[level], i, entry);
                     } else {
                         let entry = PageBlockDescriptor::from(entry);
-                        debug!("{} [{:>3}] {:?}", LEVEL_BUFFERS[level], i, entry);
+                        info!("{} [{:>3}] {:?}", LEVEL_BUFFERS[level], i, entry);
                     }
                     if level < 3 && entry.is_valid() && entry.is_table(level as u8) {
                         dump_level(
@@ -269,12 +282,12 @@ impl crate::archs::PageDirectory for PageDirectory {
                 }
             }
             if null_count > 0 {
-                debug!("{} [...] {} null entries", LEVEL_BUFFERS[level], null_count);
+                info!("{} [...] {} null entries", LEVEL_BUFFERS[level], null_count);
             }
         }
-        debug!("PageDirectory");
+        info!("PageDirectory");
         if self.ttb0.is_some() {
-            debug!("TTBO");
+            info!("TTBO");
             dump_level(
                 self.ttb0.unwrap(),
                 TTB0_FIRST_LEVEL.into(),
@@ -282,14 +295,14 @@ impl crate::archs::PageDirectory for PageDirectory {
             );
         }
         if self.ttb1.is_some() {
-            debug!("TTB1");
+            info!("TTB1");
             dump_level(
                 self.ttb1.unwrap(),
                 TTB1_FIRST_LEVEL.into(),
                 mem_access_translation,
             );
         }
-        debug!("PageDirectory done");
+        info!("PageDirectory ends");
     }
 }
 

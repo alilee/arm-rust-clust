@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Unlicense
 
-
 use super::{Addr, AddrRange, VirtAddr, PAGESIZE_BYTES};
 
 use core::fmt::{Debug, Error, Formatter};
@@ -16,14 +15,14 @@ impl Debug for PhysAddr {
 }
 
 impl Addr<PhysAddr, PhysAddrRange> for PhysAddr {
-    /// Get address as an integer.
-    fn get(&self) -> usize {
-        self.0
-    }
-
     /// At literal address.
     fn at(addr: usize) -> Self {
         Self(addr)
+    }
+
+    /// Get address as an integer.
+    fn get(&self) -> usize {
+        self.0
     }
 }
 
@@ -169,7 +168,7 @@ impl Iterator for PhysAddrRangeIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.length == 0 {
-            return None
+            return None;
         }
         let result = self.base;
         self.base += self.bytes;

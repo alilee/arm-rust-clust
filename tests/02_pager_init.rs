@@ -23,11 +23,11 @@ fn kernel_init() {
 }
 
 fn next() -> ! {
-    use libkernel::archs::{arch::Arch, ArchTrait};
+    use libkernel::archs::{arch::Arch, PagerTrait};
     use libkernel::pager::*;
 
     unsafe {
-        assert_lt!(PhysAddr::from_fn(next).get(), Arch::kernel_base().get());
+        assert_gt!(PhysAddr::from_fn(next).get(), Arch::kernel_base().get());
     }
     assert!(false);
     exit_success()

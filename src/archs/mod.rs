@@ -8,34 +8,16 @@
 //!
 //! The target architecture for the build is usable at archs::arch
 
+mod device;
+mod handler;
 mod pager;
 
+pub use device::*;
+pub use handler::*;
 pub use pager::*;
 
 use crate::pager::{PhysAddrRange, VirtAddr};
 use crate::Result;
-
-/// Each architecture must supply the following entry points.
-pub trait ArchTrait {
-    /// Physical address range of ram
-    fn ram_range() -> Result<PhysAddrRange>;
-    /// Base virtual address of kernel address space
-    fn kernel_base() -> VirtAddr;
-
-    /// Initialise virtual memory management.
-    fn pager_init() -> Result<()>;
-    /// Enable virtual memory management.
-    fn enable_paging(page_directory: &impl PageDirectory);
-
-    /// Initialise the exception handler.
-    fn handler_init() -> Result<()>;
-
-    /// Initialise tasking and multi-processing.
-    fn thread_init() -> Result<()>;
-
-    /// Initialise tasking and multi-processing.
-    fn wait_forever() -> !;
-}
 
 /// A mock architecture for use during unit testing.
 #[cfg(test)]

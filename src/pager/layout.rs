@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 
 use super::{Addr, AddrRange, Attributes, PhysAddrRange, VirtAddr, VirtAddrRange};
-use crate::archs::{arch::Arch, ArchTrait};
+use crate::archs::{arch::Arch, PagerTrait};
 use crate::Result;
 
 use core::fmt::{Debug, Error, Formatter};

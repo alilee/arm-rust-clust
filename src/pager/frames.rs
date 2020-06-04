@@ -322,7 +322,7 @@ impl FrameTableNode {
 ///
 /// Take the first n pages as a frame table.
 pub fn init() -> Result<PhysAddrRange> {
-    use crate::archs::{arch::Arch, ArchTrait};
+    use crate::archs::{arch::Arch, PagerTrait};
 
     log!("MAJOR", "init");
 

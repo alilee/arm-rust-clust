@@ -2,7 +2,7 @@
 
 //! Page table data structures.
 
-use crate::archs::ArchTrait;
+use crate::archs::PagerTrait;
 use crate::pager::{
     Addr, AttributeField, Attributes, PhysAddr, VirtAddr, PAGESIZE_BYTES,
 };

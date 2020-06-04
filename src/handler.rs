@@ -3,7 +3,7 @@
 //! Register exception handlers and service exceptions.
 
 use crate::Result;
-use crate::archs::{ArchTrait, arch::Arch};
+use crate::archs::{HandlerTrait, arch::Arch};
 
 /// Initialise the exception handling module.
 pub fn init() -> Result<()> {
