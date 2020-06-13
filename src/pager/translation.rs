@@ -118,6 +118,11 @@ impl FixedOffset {
     pub const fn identity() -> Self {
         Self(0)
     }
+
+    /// Get the offset for the translation
+    pub const fn offset(self) -> usize {
+        self.0
+    }
 }
 
 impl Translate for FixedOffset {
@@ -161,6 +166,7 @@ mod tests {
         let virt_addr = VirtAddr::at(0x1_4800_0000);
         let fixed = FixedOffset::new(phys_addr, virt_addr);
         assert_eq!(phys_addr, fixed.translate(virt_addr));
+        assert_eq!(fixed.offset(), 0x1_0000_0000);
 
         let virt_addr = VirtAddr::at(0x1_5800_0000);
         assert_eq!(PhysAddr::at(0x5800_0000), fixed.translate(virt_addr));

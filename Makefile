@@ -14,7 +14,7 @@ kernel := target/$(TARGET)/debug/kernel
 linker.ld := src/archs/aarch64/linker.ld
 SOURCES := $(shell find . -name '*.rs') $(linker.ld)
 
-.PHONY: all check build unit_test eg_test test clean qemu gdb run real_clean
+.PHONY: all check build unit_test doctest test clean qemu gdb run real_clean
 
 all: test build
 
@@ -29,10 +29,10 @@ build: $(kernel).bin
 $(kernel): $(SOURCES)
 	cargo build
 
-eg_test:
-	cargo test --examples --target=$(HOST)
+doctest:
+	cargo test --doc --target=$(HOST)
 
-unit_test:
+unit_test: doctest
 	cargo test --quiet --lib --target=$(HOST)
 
 define KERNEL_TEST_RUNNER
@@ -44,7 +44,7 @@ set result $$status
 if test $$result -ne 0
 	cat $$argv[1].out
 #	$(OBJDUMP) -dS $$argv[1] > $$argv[1].code
-#	$(OBJDUMP) -d $$argv[1] > $$argv[1].s
+	$(OBJDUMP) -d $$argv[1] > $$argv[1].s
 end
 exit $$result
 endef
@@ -55,7 +55,7 @@ target/kernel_test_runner.sh: Makefile
 	@echo "$$KERNEL_TEST_RUNNER" > target/kernel_test_runner.sh
 	@chmod +x target/kernel_test_runner.sh
 
-test: unit_test eg_test qemu.dtb target/kernel_test_runner.sh
+test: unit_test qemu.dtb target/kernel_test_runner.sh
 	cargo test --tests
 
 clean:
@@ -63,7 +63,7 @@ clean:
 
 %.bin: % $(linker.ld)
 	$(OBJCOPY) -O binary $< $@
-	$(OBJDUMP) -dS $< > $*.code
+	echo $(OBJDUMP) -dS $< > $*.code
 	$(OBJDUMP) -d $< > $*.s
 
 

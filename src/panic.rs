@@ -18,8 +18,8 @@ fn _panic_exit() -> ! {
     #[cfg(target_arch = "aarch64")]
     qemu_exit::aarch64::exit_failure();
 
-    #[cfg(target_arch = "x86_64")]
-    qemu_exit::x86::exit_failure();
+    // #[cfg(target_arch = "x86_64")]
+    // qemu_exit::x86::exit(2);
 
     Arch::wait_forever()
 }

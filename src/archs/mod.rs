@@ -16,11 +16,8 @@ pub use device::*;
 pub use handler::*;
 pub use pager::*;
 
-use crate::pager::{PhysAddrRange, VirtAddr};
-use crate::Result;
-
 /// A mock architecture for use during unit testing.
-#[cfg(test)]
+#[cfg(any(test, target_arch = "x86_64"))]
 pub mod test;
 
 /// ARM architecture v8 (64-bit)
@@ -33,6 +30,9 @@ pub mod aarch64;
 
 // publish the target arch at Arch
 #[cfg(test)]
+pub use test as arch;
+
+#[cfg(all(not(test), target_arch = "x86_64"))]
 pub use test as arch;
 
 #[cfg(all(not(test), target_arch = "aarch64"))]

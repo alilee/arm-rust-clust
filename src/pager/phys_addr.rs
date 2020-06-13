@@ -220,6 +220,8 @@ mod tests {
         assert!(!base.is_aligned(0x100));
         let top = PhysAddr(0x1000_1000);
         assert!(top.is_aligned(0x100));
+        assert_eq!(top.align_down(0x1000_0000).get(), 0x1000_0000);
+        assert_eq!(top.align_up(0x1000_0000).get(), 0x2000_0000);
         let range = PhysAddrRange::between(base, top);
         assert!(!range.is_aligned(0x100));
     }

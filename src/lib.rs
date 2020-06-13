@@ -3,6 +3,7 @@
 //! Kernel as library, to facilitate integration testing.
 
 #![no_std]
+
 #![feature(naked_functions)] // for _reset
 #![feature(panic_info_message)]
 #![feature(format_args_nl)]  // for debug logging macros
@@ -12,6 +13,9 @@
 #![feature(const_transmute)] // for virt addr mem::transmute
 #![feature(const_if_match)] // for assertions in const functions (eg. VirtAddr::align_up)
 #![feature(const_panic)] // for assertions in const functions (eg. VirtAddr::align_up)
+#![feature(asm)] // used throughout archs
+#![feature(global_asm)] // for exception handler and return
+
 #![warn(missing_docs)]
 
 #[macro_use]

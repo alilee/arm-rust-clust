@@ -19,7 +19,7 @@ pub fn init(frame_table_range: PhysAddrRange) -> Result<()> {
 }
 
 /// Content within Range.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum RangeContent {
     RAM,
     KernelText,
@@ -37,6 +37,7 @@ struct KernelExtent {
     content: RangeContent,
     virt_range_align: usize,
     virt_range_min_extent: usize,
+    virt_range_gap: &'static dyn Fn() -> Option<usize>,
     phys_addr_range: &'static dyn Fn() -> Option<PhysAddrRange>,
     attributes: Attributes,
 }
@@ -62,6 +63,7 @@ const LAYOUT: [KernelExtent; 8] = [
         content: RangeContent::RAM,
         virt_range_align: 1 * GB,
         virt_range_min_extent: 8 * GB,
+        virt_range_gap: &{ || None },
         phys_addr_range: &{ || Some(Arch::ram_range().expect("Arch::ram_range")) },
         attributes: Attributes::RAM,
     },
@@ -69,6 +71,15 @@ const LAYOUT: [KernelExtent; 8] = [
         content: RangeContent::KernelText,
         virt_range_align: 1 * GB,
         virt_range_min_extent: 0,
+        virt_range_gap: &{
+            || {
+                Some(
+                    PhysAddrRange::text_image()
+                        .base()
+                        .offset_above(Arch::ram_range().expect("Arch::ram_range").base()),
+                )
+            }
+        },
         phys_addr_range: &{ || Some(PhysAddrRange::text_image()) },
         attributes: Attributes::KERNEL_EXEC,
     },
@@ -76,6 +87,7 @@ const LAYOUT: [KernelExtent; 8] = [
         content: RangeContent::KernelStatic,
         virt_range_align: 0,
         virt_range_min_extent: 0,
+        virt_range_gap: &{ || None },
         phys_addr_range: &{ || Some(PhysAddrRange::static_image()) },
         attributes: Attributes::KERNEL_STATIC,
     },
@@ -83,6 +95,7 @@ const LAYOUT: [KernelExtent; 8] = [
         content: RangeContent::KernelData,
         virt_range_align: 0,
         virt_range_min_extent: 0,
+        virt_range_gap: &{ || None },
         phys_addr_range: &{ || Some(PhysAddrRange::data_image()) },
         attributes: Attributes::KERNEL_DATA,
     },
@@ -90,6 +103,7 @@ const LAYOUT: [KernelExtent; 8] = [
         content: RangeContent::FrameTable,
         virt_range_align: 1 * GB,
         virt_range_min_extent: 1 * GB,
+        virt_range_gap: &{ || None },
         phys_addr_range: &{ || unsafe { Some(FRAME_TABLE_RANGE.expect("FRAME_TABLE_RANGE")) } },
         attributes: Attributes::KERNEL_DATA,
     },
@@ -97,6 +111,7 @@ const LAYOUT: [KernelExtent; 8] = [
         content: RangeContent::Device,
         virt_range_align: 1 * GB,
         virt_range_min_extent: 1 * GB,
+        virt_range_gap: &{ || None },
         phys_addr_range: &{ || None },
         attributes: Attributes::DEVICE,
     },
@@ -104,6 +119,7 @@ const LAYOUT: [KernelExtent; 8] = [
         content: RangeContent::L3PageTables,
         virt_range_align: 1 * GB,
         virt_range_min_extent: 8 * GB,
+        virt_range_gap: &{ || None },
         phys_addr_range: &{ || None },
         attributes: Attributes::KERNEL_DATA,
     },
@@ -111,6 +127,7 @@ const LAYOUT: [KernelExtent; 8] = [
         content: RangeContent::Heap,
         virt_range_align: 1 * GB,
         virt_range_min_extent: 8 * GB,
+        virt_range_gap: &{ || None },
         phys_addr_range: &{ || None },
         attributes: Attributes::KERNEL_DATA,
     },
@@ -131,6 +148,11 @@ impl KernelRange {
             virt_addr.align_up(extent.virt_range_align)
         } else {
             virt_addr
+        };
+        let virt_range_gap = (extent.virt_range_gap)();
+        let base = match virt_range_gap {
+            Some(gap) => base.increment(gap),
+            None => base,
         };
         let phys_addr_range = (extent.phys_addr_range)();
         let length = if let Some(phys_addr_range) = phys_addr_range {
@@ -206,9 +228,7 @@ mod tests {
 
     #[test]
     fn calculate() {
-        unsafe {
-            FRAME_TABLE_RANGE = Some(PhysAddrRange::new(PhysAddr::at(0x4000_0000), 0x1000))
-        }
+        unsafe { FRAME_TABLE_RANGE = Some(PhysAddrRange::new(PhysAddr::at(0x4000_0000), 0x1000)) }
         for item in layout().unwrap() {
             info!("{:?}", item);
         }

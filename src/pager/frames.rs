@@ -323,8 +323,9 @@ impl FrameTableNode {
 /// Take the first n pages as a frame table.
 pub fn init() -> Result<PhysAddrRange> {
     use crate::archs::{arch::Arch, PagerTrait};
+    use crate::debug::Level;
 
-    log!("MAJOR", "init");
+    log!(Level::Major, "init");
 
     let ram_range = Arch::ram_range()?;
     let len = ram_range.length_in_pages();
@@ -438,10 +439,7 @@ impl Allocator for FrameTable {
 
         let phys_addr = self.phys_addr(i);
         if zero_required {
-            log!(
-                "DEBUG",
-                "No zeroed free memory. Just-in-time zeroing on alloc."
-            );
+            debug!("No zeroed free memory. Just-in-time zeroing on alloc.");
             let page: *mut u8 = self
                 .mem_access_translation
                 .translate_phys(phys_addr)?
@@ -487,14 +485,13 @@ mod tests {
 
         let mut pages = [Page::new(); 3];
 
-        let mut alloc = FrameTable::null();
-        unsafe {
-            alloc = FrameTable::new(
+        let mut alloc = unsafe {
+            FrameTable::new(
                 &mut FRAME_TABLE_NODES,
                 PhysAddr::from_ptr(&mut pages),
                 Identity::new().into(),
-            );
-        }
+            )
+        };
 
         unsafe {
             assert_eq!((&mut FRAME_TABLE_NODES).len(), FRAME_TABLE_LENGTH);

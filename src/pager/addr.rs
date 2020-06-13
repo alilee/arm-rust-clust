@@ -46,6 +46,12 @@ pub trait Addr<A: Addr<A, R> + core::marker::Copy + core::clone::Clone, R: AddrR
         assert!(boundary.is_power_of_two());
         A::at(self.get() + (boundary - 1) & !(boundary - 1))
     }
+
+    /// Nearest lower address with given alignment.
+    fn align_down(&self, boundary: usize) -> A {
+        assert!(boundary.is_power_of_two());
+        A::at(self.get() & !(boundary - 1))
+    }
 }
 
 /// A contiguous range bounded by two of either virtual or physical addresses.

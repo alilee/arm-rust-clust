@@ -33,5 +33,5 @@ panic = 'abort'
 test-macros = { path = "test-macros" }
 
 [profile.release]
-opt-level = 2
+opt-level = 3
 panic = 'abort'

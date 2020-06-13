@@ -3,8 +3,7 @@
 //! Type-checked virtual addresses.
 //!
 //! ```rust
-//! sandwich;
-//! let virt_addr = VirtAddr::nullddd();
+//! let a = 3;
 //! assert!(false);
 //! ```
 

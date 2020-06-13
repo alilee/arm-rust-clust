@@ -2,6 +2,8 @@
 
 //! Debug logging to serial available from kernel_init
 
+use super::Level;
+
 use crate::pager::Translate;
 use crate::Result;
 
@@ -26,37 +28,17 @@ pub fn _print(args: Arguments) {
 
 /// True iff logs at level should be displayed for logging from the module_path.
 #[cfg(not(test))]
-pub fn _is_enabled(level: &str, module_path: &str) -> bool {
-    fn ord(level: &str) -> u8 {
-        match level {
-            "CRIT" => 6u8,
-            "ERROR" => 5u8,
-            "MAJOR" => 4u8,
-            "WARN" => 3u8,
-            "INFO" => 2u8,
-            "DEBUG" => 1u8,
-            "TRACE" => 0u8,
-            _ => 255u8,
-        }
-    }
-
-    let ord_level = ord(level);
-
-    extern "Rust" {
-        #[no_mangle]
-        static LOG_LEVEL_SETTINGS: &'static [(&'static str, &'static str)];
-    }
-
-    let setting = unsafe {
-        LOG_LEVEL_SETTINGS.into_iter().fold(0, |base, (pat, level)| {
+pub fn _is_enabled(level: Level, module_path: &str) -> bool {
+    let setting = LOG_LEVEL_SETTINGS
+        .into_iter()
+        .fold(Level::Trace, |base, (pat, level)| {
             if module_path.ends_with(pat) {
-                ord(level)
+                *level
             } else {
                 base
             }
-        })
-    };
-    ord_level >= setting
+        });
+    level >= setting
 }
 
 #[cfg(test)]
@@ -86,3 +68,9 @@ pub fn offset(remap: impl Translate) -> Result<()> {
     }
     Ok(())
 }
+
+/// Log message filtering settings by module.
+///
+/// Referenced in `_is_enabled`.
+#[cfg(not(test))]
+const LOG_LEVEL_SETTINGS: &[(&str, Level)] = &[("aarch64::pager", Level::Debug)];

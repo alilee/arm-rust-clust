@@ -2,9 +2,8 @@
 
 //! Page table data structures.
 
-use crate::archs::PagerTrait;
 use crate::pager::{
-    Addr, AttributeField, Attributes, PhysAddr, VirtAddr, PAGESIZE_BYTES,
+    Addr, AttributeField, Attributes, PhysAddr, PAGESIZE_BYTES,
 };
 use crate::util::bitfield::{register_bitfields, Bitfield, FieldValue};
 
@@ -150,23 +149,6 @@ impl TableDescriptor {
         Self::from(field)
     }
 
-    /// Create a table descriptor which only separates user and kernel access.
-    pub fn new_neutral_entry(virt_addr: VirtAddr, phys_addr: PhysAddr) -> Self {
-        use super::super::Arch;
-        use TableDescriptorFields::*;
-        let mut field = TableDescriptorMask::from(
-            Type::Table
-                + Valid::SET
-                + NextLevelTableAddress.val(phys_addr.page() as PageTableEntryType),
-        );
-        if virt_addr < Arch::kernel_base() {
-            field += PXNTable::SET;
-        } else {
-            field += UXNTable::SET + APTable::PrivOnly;
-        }
-        Self::from(field)
-    }
-
     /// Extract table address at next level.
     pub fn next_level_table_address(self) -> PhysAddr {
         PhysAddr::at(
@@ -260,6 +242,7 @@ impl From<Attributes> for PageBlockDescriptorMask {
             (false, UserExec, UXN::SET),
             (false, KernelExec, PXN::SET),
             (true, Device, AF::SET),
+            (true, Accessed, AF::SET)
         ];
 
         let mut result = Self::from(SH::OuterShareable);

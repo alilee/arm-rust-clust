@@ -2,8 +2,7 @@
 
 //! A stream sink which writes to the serial port.
 
-use crate::archs::{arch::Arch, DeviceTrait};
-use crate::pager::{Addr, AddrRange, PhysAddr, PhysAddrRange, Translate, VirtAddr};
+use crate::pager::{PhysAddr, Translate};
 use crate::Result;
 
 use core::fmt;
@@ -21,7 +20,7 @@ impl Uart {
     /// Create a Uart structure for UART0 id_mapped.
     pub const fn debug() -> Uart {
         // FIXME: Get this const from Arch
-        let dr_addr: *mut u32 = unsafe { 0x900_0000 as *mut u32 };
+        let dr_addr: *mut u32 = 0x900_0000 as *mut u32;
         Uart { dr_addr }
     }
 

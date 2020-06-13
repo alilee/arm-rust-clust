@@ -27,6 +27,8 @@ pub enum AttributeField {
     Block,
     /// Back mapping with memory only when accessed
     OnDemand,
+    /// Ensure access does not fault due to page entry flags
+    Accessed,
 }
 
 /// Bit flags for page attributes.
@@ -47,6 +49,7 @@ impl Debug for Attributes {
             (UserRead, "R"),
             (UserWrite, "W"),
             (UserExec, "X"),
+            (Accessed, "A"),
         ];
 
         write!(f, "Attributes(").unwrap();
@@ -112,6 +115,12 @@ impl Attributes {
         .set(KernelRead)
         .set(KernelWrite)
         .set(OnDemand);
+    /// For kernel identity map on init
+    pub const KERNEL_RWX: Attributes = Attributes::new()
+        .set(KernelRead)
+        .set(KernelWrite)
+        .set(KernelExec)
+        .set(Block);
     /// For memory mapped devices
     pub const DEVICE: Attributes = Attributes::new()
         .set(KernelRead)

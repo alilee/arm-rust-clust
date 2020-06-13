@@ -7,16 +7,43 @@ pub mod logger;
 /// Buffer to match logging indent.
 pub const BUFFER: &str = "                                                               ";
 
+/// Decreasingly verbose levels of debug logging.
+///
+/// NOTE: Widened to five characters for display.
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub enum Level {
+    /// Log everything.
+    Trace,
+    /// Detailed understanding of events.
+    Debug,
+    /// Notable milestone..
+    Info,
+    /// Unusual conditions.
+    Warn,
+    /// Significant milestones.
+    Major,
+    /// Something went wrong.
+    Error,
+    /// Major failure.
+    Crit,
+}
+
+/// True if logging is enabled for this module at this level.
+#[macro_export]
+macro_rules! log_enabled {
+    ($lvl:expr) => ($crate::debug::logger::_is_enabled($lvl, module_path!()));
+}
+
 /// The dbg macro.
 #[macro_export]
 macro_rules! dbg {
     () => {
-        $crate::log!("DEBUG", "");
+        $crate::log!($crate::debug::Level::Debug, "");
     };
     ($val:expr) => {
         match $val {
             tmp => {
-                $crate::log!("DEBUG", concat!(stringify!($val), " = {:?}"), &tmp);
+                $crate::log!($crate::debug::Level::Debug, concat!(stringify!($val), " = {:?}"), &tmp);
                 tmp
             }
         }
@@ -29,7 +56,7 @@ macro_rules! log {
     ($lvl:expr, $string:expr) => ({
         if $crate::debug::logger::_is_enabled($lvl, module_path!()) {
             $crate::debug::logger::_print(format_args_nl!(
-                concat!("{:5}[{:>50} {:3}]  ", $string),
+                concat!("{:5?}[{:>50} {:3}]  ", $string),
                 $lvl,
                 module_path!().trim_start_matches("libkernel::").trim_start_matches("archs::"),
                 line!(),
@@ -39,7 +66,7 @@ macro_rules! log {
     ($lvl:expr, $format_string:expr, $($arg:tt)*) => ({
         if $crate::debug::logger::_is_enabled($lvl, module_path!()) {
             $crate::debug::logger::_print(format_args_nl!(
-                concat!("{:5}[{:>50} {:3}]  ", $format_string),
+                concat!("{:5?}[{:>50} {:3}]  ", $format_string),
                 $lvl,
                 module_path!().trim_start_matches("libkernel::").trim_start_matches("archs::"),
                 line!(),
@@ -53,10 +80,10 @@ macro_rules! log {
 #[macro_export]
 macro_rules! error {
     ($string:expr) => (
-        $crate::log!("ERROR", $string);
+        $crate::log!($crate::debug::Level::Error, $string);
     );
     ($format_string:expr, $($arg:tt)*) => (
-        $crate::log!("ERROR", $format_string, $($arg)*);
+        $crate::log!($crate::debug::Level::Error, $format_string, $($arg)*);
     )
 }
 
@@ -64,10 +91,10 @@ macro_rules! error {
 #[macro_export]
 macro_rules! info {
     ($string:expr) => (
-        $crate::log!("INFO", $string);
+        $crate::log!($crate::debug::Level::Info, $string);
     );
     ($format_string:expr, $($arg:tt)*) => (
-        $crate::log!("INFO", $format_string, $($arg)*);
+        $crate::log!($crate::debug::Level::Info, $format_string, $($arg)*);
     )
 }
 
@@ -75,10 +102,10 @@ macro_rules! info {
 #[macro_export]
 macro_rules! debug {
     ($string:expr) => (
-        $crate::log!("DEBUG", $string);
+        $crate::log!($crate::debug::Level::Debug, $string);
     );
     ($format_string:expr, $($arg:tt)*) => (
-        $crate::log!("DEBUG", $format_string, $($arg)*);
+        $crate::log!($crate::debug::Level::Debug, $format_string, $($arg)*);
     )
 }
 
@@ -86,21 +113,12 @@ macro_rules! debug {
 #[macro_export]
 macro_rules! trace {
     ($string:expr) => (
-        $crate::log!("TRACE", $string);
+        $crate::log!($crate::debug::Level::Trace, $string);
     );
     ($format_string:expr, $($arg:tt)*) => (
-        $crate::log!("TRACE", $format_string, $($arg)*);
+        $crate::log!($crate::debug::Level::Trace, $format_string, $($arg)*);
     )
 }
-
-/// Log message filtering settings by module.
-///
-/// These are the defaults unless overridden in main or integration test.
-/// Referenced in `debug::logger::_is_enabled`.
-#[cfg(not(test))]
-#[no_mangle]
-#[linkage = "weak"]
-static LOG_LEVEL_SETTINGS: &[(&str, &str)] = &[("aarch64::pager", "DEBUG")];
 
 #[cfg(test)]
 mod tests {
@@ -108,7 +126,7 @@ mod tests {
     fn logging() {
         dbg!();
         dbg!(1);
-        log!("MAJOR", "{}", 1);
+        log!(super::Level::Major, "{}", 1);
         error!("error");
         info!("info");
         debug!("debug");

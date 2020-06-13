@@ -5,18 +5,22 @@
 mod mair;
 mod table;
 
+pub use table::TABLE_ENTRIES;
+
 use table::{PageBlockDescriptor, PageTable, TableDescriptor, LEVEL_OFFSETS, LEVEL_WIDTH};
 
 use super::Arch;
 
-use crate::archs::PagerTrait;
+use crate::archs::{DeviceTrait, PagerTrait};
 use crate::pager::AttributeField::OnDemand;
 use crate::pager::{
-    Addr, AddrRange, AttributeField, Attributes, FrameAllocator, FramePurpose, PhysAddr,
-    PhysAddrRange, Translate, VirtAddr, VirtAddrRange,
+    Addr, AddrRange, AttributeField, Attributes, FixedOffset, FrameAllocator, FramePurpose,
+    PhysAddr, PhysAddrRange, Translate, VirtAddr, VirtAddrRange,
 };
 use crate::util::locked::Locked;
 use crate::{Error, Result};
+
+use core::any::Any;
 
 impl PagerTrait for Arch {
     fn ram_range() -> Result<PhysAddrRange> {
@@ -27,8 +31,7 @@ impl PagerTrait for Arch {
         ))
     }
     fn kernel_base() -> VirtAddr {
-        const UPPER_VA_BITS: usize = 39;
-        let result = VirtAddr::at(!((1 << (UPPER_VA_BITS + 1)) - 1));
+        let result = VirtAddr::at(!((1 << super::UPPER_VA_BITS) - 1));
         result
     }
 
@@ -37,8 +40,22 @@ impl PagerTrait for Arch {
         mair::init()
     }
 
-    fn enable_paging(_page_directory: &impl crate::archs::PageDirectory) {
-        unimplemented!()
+    fn enable_paging(
+        page_directory: &impl crate::archs::PageDirectory,
+        stack_offset: FixedOffset,
+    ) -> Result<()> {
+        use super::hal;
+        info!("enable");
+
+        let page_directory = page_directory
+            .as_any()
+            .downcast_ref::<PageDirectory>()
+            .expect("PageDirectory downcast");
+
+        let ttb1 = page_directory.ttb1().unwrap().get() as u64;
+        let ttb0 = page_directory.ttb0().unwrap().get() as u64;
+
+        hal::enable_paging(ttb1, ttb0, 0, stack_offset.offset())
     }
 }
 
@@ -61,6 +78,16 @@ impl PageDirectory {
             ttb0: None,
             ttb1: None,
         }
+    }
+
+    /// Physical address of kernel address space directory.
+    fn ttb0(&self) -> Option<PhysAddr> {
+        self.ttb0
+    }
+
+    /// Physical address of kernel address space directory.
+    fn ttb1(&self) -> Option<PhysAddr> {
+        self.ttb1
     }
 
     /// Return the virtual address range for the required span for a page table entry to be contiguous.
@@ -165,12 +192,7 @@ impl PageDirectory {
                         };
                         Some(allocator.lock().alloc_zeroed(purpose)?)
                     };
-                page_table[index] = if target_range.covers(&entry_range) {
-                    TableDescriptor::new_entry(maybe_phys_addr, attributes).into()
-                } else {
-                    TableDescriptor::new_neutral_entry(entry_range.base(), maybe_phys_addr.unwrap())
-                        .into()
-                };
+                page_table[index] = TableDescriptor::new_entry(maybe_phys_addr, attributes).into();
                 maybe_phys_addr
             };
             if let Some(phys_addr_table) = maybe_phys_addr_table {
@@ -191,6 +213,10 @@ impl PageDirectory {
 }
 
 impl crate::archs::PageDirectory for PageDirectory {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn map_translation(
         &mut self,
         target_range: VirtAddrRange,
@@ -308,6 +334,28 @@ impl crate::archs::PageDirectory for PageDirectory {
 
 pub fn new_page_directory() -> impl crate::archs::PageDirectory {
     PageDirectory::new()
+}
+
+const GB: usize = 1024 * 1024 * 1024;
+
+/// Create a level 1 block descriptor to map first GB of physical RAM
+pub fn make_boot_ram_descriptor() -> u64 {
+    let phys_addr = Arch::ram_range().expect("Arch::ram_range").base();
+    assert!(phys_addr.is_aligned(1 * GB));
+    let level = 1;
+    let contiguous = false;
+    PageBlockDescriptor::new_entry(level, Some(phys_addr), Attributes::KERNEL_RWX.set(AttributeField::Accessed), contiguous).get()
+}
+
+/// Create a level 1 block descriptor to map the device
+pub fn make_boot_device_descriptor() -> u64 {
+    let phys_addr = Arch::debug_uart()
+        .expect("Arch::debug_uart")
+        .base()
+        .align_down(1 * GB);
+    let level = 1;
+    let contiguous = false;
+    PageBlockDescriptor::new_entry(level, Some(phys_addr), Attributes::DEVICE, contiguous).get()
 }
 
 /// Iterator over the virtual address ranges implied by entries in a page table.

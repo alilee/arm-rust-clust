@@ -3,11 +3,10 @@
 //! Register exception handlers and service exceptions.
 
 use crate::Result;
-use crate::archs::{HandlerTrait, arch::Arch};
 
 /// Initialise the exception handling module.
 pub fn init() -> Result<()> {
-    Arch::handler_init()
+    Ok(())
 }
 
 #[cfg(test)]
