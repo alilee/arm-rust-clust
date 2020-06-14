@@ -45,7 +45,9 @@ impl Into<&str> for Level {
 /// True if logging is enabled for this module at this level.
 #[macro_export]
 macro_rules! log_enabled {
-    ($lvl:expr) => ($crate::debug::logger::_is_enabled($lvl, module_path!()));
+    ($lvl:expr) => {
+        $crate::debug::logger::_is_enabled($lvl, module_path!())
+    };
 }
 
 /// The dbg macro.
@@ -57,7 +59,11 @@ macro_rules! dbg {
     ($val:expr) => {
         match $val {
             tmp => {
-                $crate::log!($crate::debug::Level::Debug, concat!(stringify!($val), " = {:?}"), &tmp);
+                $crate::log!(
+                    $crate::debug::Level::Debug,
+                    concat!(stringify!($val), " = {:?}"),
+                    &tmp
+                );
                 tmp
             }
         }
@@ -70,7 +76,7 @@ macro_rules! log {
     ($lvl:expr, $string:expr) => ({
         if $crate::debug::logger::_is_enabled($lvl, module_path!()) {
             let lvl: &str = $lvl.into();
-            crate::debug::logger::_print(format_args_nl!(
+            $crate::debug::logger::_print(format_args_nl!(
                 concat!("{:>5}[{:>50} {:3}]  ", $string),
                 lvl,
                 module_path!().trim_start_matches("libkernel::").trim_start_matches("archs::"),

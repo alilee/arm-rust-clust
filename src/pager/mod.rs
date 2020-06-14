@@ -51,20 +51,14 @@ pub fn init(next: fn() -> !) -> ! {
 
     let kernel_image_offset =
         map_ranges(&mut (*page_directory), &frames::allocator()).expect("pager::map_ranges");
-    debug!("kernel_image_offset: {:?}", kernel_image_offset);
+    trace!("kernel_image_offset: {:?}", kernel_image_offset);
+    debug!("{:?}", *frames::allocator().lock());
 
-    // debug!("{:?}", *frames::allocator().lock());
     // FIXME: Access to logging enabled.
     if log_enabled!(Level::Trace) {
         page_directory.dump(&Identity::new());
     }
-
-    let next: fn() -> ! = unsafe {
-        kernel_image_offset
-            .translate_phys(PhysAddr::from_ptr(next as *const u8))
-            .unwrap()
-            .into()
-    };
+    assert!(false);
 
     Arch::handler_init(kernel_image_offset).expect("handler_init");
     Arch::enable_paging(&(*page_directory), kernel_image_offset).expect("Arch::enable-paging");
@@ -118,16 +112,7 @@ fn map_ranges(
         };
     }
 
-    // Kernel text identity-mapped
-    page_directory.map_translation(
-        unsafe { VirtAddrRange::identity_mapped(Arch::boot_image()) },
-        Identity::new(),
-        Attributes::KERNEL_RWX.set(AttributeField::Accessed),
-        allocator,
-        mem_access_translation,
-    )?;
-
-    // Debug output device identity-mapped
+    debug!("Debug output device identity-mapped");
     page_directory.map_translation(
         unsafe { VirtAddrRange::identity_mapped(Arch::debug_uart()?) },
         Identity::new(),

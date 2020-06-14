@@ -6,8 +6,8 @@ mod layout;
 mod mair;
 mod table;
 
-pub use table::TABLE_ENTRIES;
 pub use layout::kernel_offset;
+pub use table::TABLE_ENTRIES;
 
 use table::{PageBlockDescriptor, PageTable, TableDescriptor, LEVEL_OFFSETS, LEVEL_WIDTH};
 
@@ -23,6 +23,7 @@ use crate::util::locked::Locked;
 use crate::{Error, Result};
 
 use core::any::Any;
+use core::ptr::null;
 
 impl PagerTrait for Arch {
     fn ram_range() -> Result<PhysAddrRange> {
@@ -316,19 +317,19 @@ impl crate::archs::PageDirectory for PageDirectory {
                         info!("{} [...] {} null entries", LEVEL_BUFFERS[level], null_count);
                         null_count = 0;
                     }
-                    if entry.is_table(level as u8) {
-                        let entry = TableDescriptor::from(entry);
-                        info!("{} [{:>3}] {:?}", LEVEL_BUFFERS[level], i, entry);
-                    } else {
+                    if !entry.is_table(level as u8) {
                         let entry = PageBlockDescriptor::from(entry);
                         info!("{} [{:>3}] {:?}", LEVEL_BUFFERS[level], i, entry);
-                    }
-                    if level < 3 && entry.is_valid() && entry.is_table(level as u8) {
-                        dump_level(
-                            entry.next_level_table_address(),
-                            level + 1,
-                            mem_access_translation,
-                        );
+                    } else {
+                        let table = TableDescriptor::from(entry);
+                        info!("{} [{:>3}] {:?}", LEVEL_BUFFERS[level], i, table);
+                        if level < 3 && entry.is_valid() {
+                            dump_level(
+                                entry.next_level_table_address(),
+                                level + 1,
+                                mem_access_translation,
+                            );
+                        }
                     }
                 }
             }
@@ -336,7 +337,9 @@ impl crate::archs::PageDirectory for PageDirectory {
                 info!("{} [...] {} null entries", LEVEL_BUFFERS[level], null_count);
             }
         }
+
         info!("PageDirectory");
+
         if self.ttb0.is_some() {
             info!("TTBO");
             dump_level(
@@ -345,6 +348,7 @@ impl crate::archs::PageDirectory for PageDirectory {
                 mem_access_translation,
             );
         }
+
         if self.ttb1.is_some() {
             info!("TTB1");
             dump_level(

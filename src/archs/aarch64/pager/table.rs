@@ -2,9 +2,7 @@
 
 //! Page table data structures.
 
-use crate::pager::{
-    Addr, AttributeField, Attributes, PhysAddr, PAGESIZE_BYTES,
-};
+use crate::pager::{Addr, AttributeField, Attributes, PhysAddr, PAGESIZE_BYTES};
 use crate::util::bitfield::{register_bitfields, Bitfield, FieldValue};
 
 use core::fmt::{Debug, Formatter};
@@ -242,7 +240,7 @@ impl From<Attributes> for PageBlockDescriptorMask {
             (false, UserExec, UXN::SET),
             (false, KernelExec, PXN::SET),
             (true, Device, AF::SET),
-            (true, Accessed, AF::SET)
+            (true, Accessed, AF::SET),
         ];
 
         let mut result = Self::from(SH::OuterShareable);

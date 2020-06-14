@@ -191,7 +191,20 @@ impl Debug for FrameTableInner {
         use core::mem::size_of_val;
 
         writeln!(f, "FrameTable {{ ").unwrap();
-        writeln!(f, "{} RAM range: {:?}", BUFFER, self.ram_range).unwrap();
+        writeln!(f, "{}    RAM range: {:?}", BUFFER, self.ram_range).unwrap();
+        writeln!(
+            f,
+            "{}    table address: {:?}",
+            BUFFER, &self.table[0] as *const FrameTableNode
+        )
+        .unwrap();
+        writeln!(
+            f,
+            "{}    size_of(table): {:?} pages",
+            BUFFER,
+            (PAGESIZE_BYTES + size_of_val(self.table) - 1) / PAGESIZE_BYTES
+        )
+        .unwrap();
         for (frame_use, _) in self.frame_lists.iter() {
             let frame_list = &self.frame_lists[frame_use];
             if frame_list.count > 0 {
@@ -208,7 +221,6 @@ impl Debug for FrameTableInner {
                 write!(f, "{}        [", BUFFER).unwrap();
                 let mut i = frame_list.head.unwrap_or(u32::MAX as usize);
                 let mut seq_length = 0;
-                #[allow(unused_variables)]
                 let mut count_check = 0usize;
                 while i != u32::MAX as usize {
                     let next = self.table[i].next();
@@ -218,7 +230,7 @@ impl Debug for FrameTableInner {
                     if seq_length < 4 || next != i + 1 {
                         write!(f, "{}, ", i).unwrap();
                     } else if seq_length == 4 {
-                        write!(f, "...").unwrap();
+                        write!(f, "..., ").unwrap();
                     }
                     if next != i + 1 {
                         seq_length = 0;
@@ -229,17 +241,9 @@ impl Debug for FrameTableInner {
                     i = next;
                     count_check += 1;
                 }
-                // FIXME: Why does this hang?
-                // assert_eq!(count_check, frame_list.count);
+                assert_eq!(count_check, frame_list.count);
                 writeln!(f, "]").unwrap();
             }
-            writeln!(
-                f,
-                "{}    size_of(table): {:?} bytes",
-                BUFFER,
-                size_of_val(self.table)
-            )
-            .unwrap();
         }
         write!(f, "{}}}", BUFFER)
     }
@@ -330,17 +334,23 @@ pub fn init() -> Result<PhysAddrRange> {
     log!(Level::Major, "init");
 
     let ram_range: PhysAddrRange = Arch::ram_range()?;
+    dbg!(ram_range);
     let mem_translation = FixedOffset::new(ram_range.base(), Arch::kernel_base());
+    dbg!(mem_translation);
     let len = ram_range.length_in_pages();
+    dbg!(len);
     let image_range = Arch::boot_image();
+    dbg!(image_range);
     let frame_table_range = PhysAddrRange::new(
         image_range.top(),
         len * core::mem::size_of::<FrameTableNode>(),
     );
+    dbg!(frame_table_range);
 
     let mut frame_table = unsafe {
         let virt_addr: VirtAddr = Arch::kernel_offset().translate_phys(frame_table_range.base())?;
         let frame_table_ptr: *mut FrameTableNode = virt_addr.into();
+        dbg!(frame_table_ptr);
         FrameTableInner::new(
             core::slice::from_raw_parts_mut(frame_table_ptr, len),
             ram_range,
@@ -348,12 +358,17 @@ pub fn init() -> Result<PhysAddrRange> {
         )
     };
 
-    frame_table.move_range(frame_table_range, FrameUse::KernelHot)?;
-    frame_table.move_range(image_range, FrameUse::KernelHot)?;
+    dbg!(&frame_table);
+    frame_table.move_free_range(frame_table_range, FrameUse::KernelHot)?;
+    dbg!(&frame_table);
+    frame_table.move_free_range(image_range, FrameUse::KernelHot)?;
+    dbg!(&frame_table);
 
     unsafe {
         ALLOCATOR = Locked::new(FrameTable(Some(frame_table)));
+        debug!("{:?}", *(ALLOCATOR.lock()));
     }
+
     Ok(frame_table_range)
 }
 
@@ -376,11 +391,16 @@ impl FrameTableInner {
         }
     }
 
-    fn move_range(&mut self, phys_addr_range: PhysAddrRange, frame_use: FrameUse) -> Result<()> {
+    fn move_free_range(
+        &mut self,
+        phys_addr_range: PhysAddrRange,
+        frame_use: FrameUse,
+    ) -> Result<()> {
         let count = phys_addr_range.length_in_pages();
         let phys_addr = phys_addr_range.base();
         let i = phys_addr.offset_above(self.ram_range.base()) / PAGESIZE_BYTES;
 
+        self.frame_lists[FrameUse::Free].count -= count;
         self.frame_lists[frame_use].move_range(i, count, self.table)
     }
 
@@ -426,9 +446,7 @@ impl Allocator for FrameTable {
 
     fn alloc_for_overwrite(&mut self, purpose: Purpose) -> Result<PhysAddr> {
         let inner = self.inner()?;
-        let i = inner
-            .pop(FrameUse::Free)
-            .or(Err(Error::OutOfMemory))?;
+        let i = inner.pop(FrameUse::Free).or(Err(Error::OutOfMemory))?;
         inner.push(i, purpose.into())?;
 
         let phys_addr = inner.ram_page(i);
@@ -448,14 +466,41 @@ mod tests {
         assert_err!(alloc.alloc_zeroed(Purpose::User));
     }
 
-    const FRAME_TABLE_LENGTH: usize = 3;
-    static mut FRAME_TABLE_NODES: [FrameTableNode; FRAME_TABLE_LENGTH] =
-        [FrameTableNode::null(); FRAME_TABLE_LENGTH];
+    #[test]
+    fn moving() {
+        use crate::pager::Page;
+
+        const FRAME_TABLE_LENGTH: usize = 3;
+        static mut FRAME_TABLE_NODES: [FrameTableNode; FRAME_TABLE_LENGTH] =
+            [FrameTableNode::null(); FRAME_TABLE_LENGTH];
+
+        let pages = [Page::new(); 3];
+        let pages_base = unsafe { PhysAddr::from_ptr(&pages) };
+        let mem_translation = FixedOffset::identity();
+        let ram_range = PhysAddrRange::new(pages_base, size_of_val(&pages));
+        trace!("{:?}", ram_range);
+
+        let mut inner =
+            unsafe { FrameTableInner::new(&mut FRAME_TABLE_NODES, ram_range, mem_translation) };
+        dbg!(&inner);
+
+        inner
+            .move_free_range(
+                PhysAddrRange::new(pages_base.increment(0x1000), 0x1000),
+                FrameUse::KernelHot,
+            )
+            .unwrap();
+        dbg!(&inner);
+    }
 
     #[test]
     fn allocating_same() {
         use crate::pager::Page;
         use Purpose::*;
+
+        const FRAME_TABLE_LENGTH: usize = 3;
+        static mut FRAME_TABLE_NODES: [FrameTableNode; FRAME_TABLE_LENGTH] =
+            [FrameTableNode::null(); FRAME_TABLE_LENGTH];
 
         let pages = [Page::new(); 3];
         let mem_translation = FixedOffset::identity();
