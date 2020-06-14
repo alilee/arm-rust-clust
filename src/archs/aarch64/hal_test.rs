@@ -4,12 +4,7 @@ use crate::pager::Translate;
 use crate::Result;
 
 pub mod mair {
-    use crate::Result;
-
-    pub fn init() -> Result<()> {
-        trace!("init");
-        Ok(())
-    }
+    pub fn init() {}
 }
 
 pub fn enable_paging(_: u64, _: u64, _: u16, _: usize) -> Result<()> {

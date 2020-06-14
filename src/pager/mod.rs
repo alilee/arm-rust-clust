@@ -50,10 +50,10 @@ pub fn init(next: fn() -> !) -> ! {
     let mut page_directory = page_directory.lock();
 
     let kernel_image_offset =
-        map_ranges(&mut (*page_directory), &frames::ALLOCATOR).expect("pager::map_ranges");
+        map_ranges(&mut (*page_directory), &frames::allocator()).expect("pager::map_ranges");
     debug!("kernel_image_offset: {:?}", kernel_image_offset);
 
-    debug!("{:?}", *frames::ALLOCATOR.lock());
+    // debug!("{:?}", *frames::allocator().lock());
     // FIXME: Access to logging enabled.
     if log_enabled!(Level::Trace) {
         page_directory.dump(&Identity::new());
@@ -120,7 +120,7 @@ fn map_ranges(
 
     // Kernel text identity-mapped
     page_directory.map_translation(
-        unsafe { VirtAddrRange::identity_mapped(PhysAddrRange::boot_image()) },
+        unsafe { VirtAddrRange::identity_mapped(Arch::boot_image()) },
         Identity::new(),
         Attributes::KERNEL_RWX.set(AttributeField::Accessed),
         allocator,

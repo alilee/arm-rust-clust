@@ -74,13 +74,13 @@ const LAYOUT: [KernelExtent; 8] = [
         virt_range_gap: &{
             || {
                 Some(
-                    PhysAddrRange::text_image()
+                    Arch::text_image()
                         .base()
                         .offset_above(Arch::ram_range().expect("Arch::ram_range").base()),
                 )
             }
         },
-        phys_addr_range: &{ || Some(PhysAddrRange::text_image()) },
+        phys_addr_range: &{ || Some(Arch::text_image()) },
         attributes: Attributes::KERNEL_EXEC,
     },
     KernelExtent {
@@ -88,7 +88,7 @@ const LAYOUT: [KernelExtent; 8] = [
         virt_range_align: 0,
         virt_range_min_extent: 0,
         virt_range_gap: &{ || None },
-        phys_addr_range: &{ || Some(PhysAddrRange::static_image()) },
+        phys_addr_range: &{ || Some(Arch::static_image()) },
         attributes: Attributes::KERNEL_STATIC,
     },
     KernelExtent {
@@ -96,7 +96,7 @@ const LAYOUT: [KernelExtent; 8] = [
         virt_range_align: 0,
         virt_range_min_extent: 0,
         virt_range_gap: &{ || None },
-        phys_addr_range: &{ || Some(PhysAddrRange::data_image()) },
+        phys_addr_range: &{ || Some(Arch::data_image()) },
         attributes: Attributes::KERNEL_DATA,
     },
     KernelExtent {

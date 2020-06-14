@@ -5,11 +5,12 @@
 //! At different times during the boot sequence, accessible memory may be mapped
 //! at the same or different virtual addresses.
 
-use super::{Addr, PhysAddr, VirtAddr};
+use super::{Addr, PhysAddr, PhysAddrRange, VirtAddr, VirtAddrRange};
 
 use crate::{Error, Result};
 
 use core::fmt::{Debug, Formatter};
+use crate::pager::AddrRange;
 
 /// Able to translate.
 pub trait Translate {
@@ -18,6 +19,11 @@ pub trait Translate {
 
     /// Translate a virtual address to an option physical address.
     fn translate_maybe(&self, virt_addr: VirtAddr) -> Option<PhysAddr>;
+
+    /// Translate a virtual address to a physical address.
+    fn translate_range(&self, virt_addr_range: VirtAddrRange) -> PhysAddrRange {
+        PhysAddrRange::new(self.translate(virt_addr_range.base()), virt_addr_range.length())
+    }
 
     /// Reverse translate a physical address to a virtual address, if defined..
     fn translate_phys(&self, _phys_addr: PhysAddr) -> Result<VirtAddr> {

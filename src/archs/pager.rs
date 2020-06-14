@@ -18,6 +18,19 @@ pub trait PagerTrait {
     /// Base virtual address of kernel address space
     fn kernel_base() -> VirtAddr;
 
+    /// Kernel offset on boot
+    fn kernel_offset() -> FixedOffset;
+    /// Kernel boot image
+    fn boot_image() -> PhysAddrRange;
+    /// Kernel code
+    fn text_image() -> PhysAddrRange;
+    /// Kernel read-only data
+    fn static_image() -> PhysAddrRange;
+    /// Kernel zero-initialised
+    fn bss_image() -> PhysAddrRange;
+    /// Kernel dynamic data (includes bss)
+    fn data_image() -> PhysAddrRange;
+
     /// Initialise virtual memory management.
     fn pager_init() -> Result<()>;
     /// Enable virtual memory management.

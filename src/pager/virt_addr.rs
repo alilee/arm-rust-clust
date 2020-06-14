@@ -32,6 +32,11 @@ impl Addr<VirtAddr, VirtAddrRange> for VirtAddr {
 }
 
 impl VirtAddr {
+    /// Construct from a reference to a linker symbol.
+    pub const fn from_linker_symbol(sym: &u8) -> Self {
+        unsafe { Self(sym as *const u8 as usize) }
+    }
+
     /// Construct bottom of virtual address range.
     pub const fn null() -> Self {
         Self(0)
@@ -127,6 +132,16 @@ impl AddrRange<VirtAddr, VirtAddrRange> for VirtAddrRange {
 }
 
 impl VirtAddrRange {
+    /// Create a range from static refs.
+    pub const fn from_linker_symbols(sym_base: &'static u8, sym_top: &'static u8) -> Self {
+        let base = VirtAddr::from_linker_symbol(&sym_base);
+        let top = VirtAddr::from_linker_symbol(&sym_top);
+        Self {
+            base,
+            length: top.0 - base.0,
+        }
+    }
+
     /// Identity mapped from physical address range.
     pub unsafe fn identity_mapped(phys_addr_range: PhysAddrRange) -> Self {
         Self::new(
@@ -195,6 +210,9 @@ mod tests {
             let _base5 = virt_id.as_ref::<u8>();
             let _base6 = virt_id.as_mut_ref::<u8>();
         }
+
+        static SYM: u8 = 43;
+        VirtAddr::from_linker_symbol(&SYM);
     }
 
     #[test]

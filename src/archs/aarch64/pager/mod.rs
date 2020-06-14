@@ -2,14 +2,16 @@
 
 //! Paging trait for aarch64
 
+mod layout;
 mod mair;
 mod table;
 
 pub use table::TABLE_ENTRIES;
+pub use layout::kernel_offset;
 
 use table::{PageBlockDescriptor, PageTable, TableDescriptor, LEVEL_OFFSETS, LEVEL_WIDTH};
 
-use super::Arch;
+use super::{hal, Arch};
 
 use crate::archs::{DeviceTrait, PagerTrait};
 use crate::pager::AttributeField::OnDemand;
@@ -35,6 +37,30 @@ impl PagerTrait for Arch {
         result
     }
 
+    fn kernel_offset() -> FixedOffset {
+        layout::kernel_offset()
+    }
+
+    fn boot_image() -> PhysAddrRange {
+        layout::boot_image()
+    }
+
+    fn text_image() -> PhysAddrRange {
+        layout::text_image()
+    }
+
+    fn static_image() -> PhysAddrRange {
+        layout::static_image()
+    }
+
+    fn bss_image() -> PhysAddrRange {
+        layout::bss_image()
+    }
+
+    fn data_image() -> PhysAddrRange {
+        layout::data_image()
+    }
+
     fn pager_init() -> Result<()> {
         info!("init");
         mair::init()
@@ -44,7 +70,6 @@ impl PagerTrait for Arch {
         page_directory: &impl crate::archs::PageDirectory,
         stack_offset: FixedOffset,
     ) -> Result<()> {
-        use super::hal;
         info!("enable");
 
         let page_directory = page_directory
@@ -339,16 +364,30 @@ pub fn new_page_directory() -> impl crate::archs::PageDirectory {
 const GB: usize = 1024 * 1024 * 1024;
 
 /// Create a level 1 block descriptor to map first GB of physical RAM
-pub fn make_boot_ram_descriptor() -> u64 {
+///
+/// TODO: Make const
+#[allow(dead_code)]
+fn make_boot_ram_descriptor() -> u64 {
     let phys_addr = Arch::ram_range().expect("Arch::ram_range").base();
     assert!(phys_addr.is_aligned(1 * GB));
     let level = 1;
     let contiguous = false;
-    PageBlockDescriptor::new_entry(level, Some(phys_addr), Attributes::KERNEL_RWX.set(AttributeField::Accessed), contiguous).get()
+    PageBlockDescriptor::new_entry(
+        level,
+        Some(phys_addr),
+        Attributes::KERNEL_RWX.set(AttributeField::Accessed),
+        contiguous,
+    )
+    .get()
 }
 
+pub const BOOT_RAM_DESCRIPTOR: u64 = 0x40000040000605;
+
 /// Create a level 1 block descriptor to map the device
-pub fn make_boot_device_descriptor() -> u64 {
+///
+/// TODO: Make const
+#[allow(dead_code)]
+fn make_boot_device_descriptor() -> u64 {
     let phys_addr = Arch::debug_uart()
         .expect("Arch::debug_uart")
         .base()
@@ -357,6 +396,8 @@ pub fn make_boot_device_descriptor() -> u64 {
     let contiguous = false;
     PageBlockDescriptor::new_entry(level, Some(phys_addr), Attributes::DEVICE, contiguous).get()
 }
+
+pub const BOOT_DEVICE_DESCRIPTOR: u64 = 0x60000000000601;
 
 /// Iterator over the virtual address ranges implied by entries in a page table.
 struct PageTableEntries {
@@ -568,5 +609,11 @@ mod tests {
             &allocator,
             &mem_access_translation,
         ));
+    }
+
+    #[test]
+    fn test_boot_descriptors() {
+        assert_eq!(make_boot_ram_descriptor(), BOOT_RAM_DESCRIPTOR);
+        assert_eq!(make_boot_device_descriptor(), BOOT_DEVICE_DESCRIPTOR);
     }
 }

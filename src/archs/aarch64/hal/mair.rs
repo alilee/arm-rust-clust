@@ -2,12 +2,13 @@
 
 //! Implementation of MAIR.
 
-use crate::Result;
-
 /// Initialise the MAIR register.
 ///
+/// Called during reset, so no debug.
+///
 /// Note: See pager::mair for offsets.
-pub fn init() -> Result<()> {
+#[inline(always)]
+pub fn init() {
     use cortex_a::regs::{RegisterReadWrite, MAIR_EL1, MAIR_EL1::*};
 
     MAIR_EL1.write(
@@ -15,8 +16,4 @@ pub fn init() -> Result<()> {
             + Attr1_Normal_Outer::WriteThrough_NonTransient_ReadWriteAlloc
             + Attr1_Normal_Inner::WriteThrough_NonTransient_ReadWriteAlloc,
     );
-
-    debug!("init -> MAIR_EL1 {:#b}", MAIR_EL1.get());
-
-    Ok(())
 }

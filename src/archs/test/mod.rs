@@ -2,6 +2,8 @@
 
 //! Dead-bat implementation of an architecture to allow tests to compile.
 
+#![allow(missing_docs)]
+
 use crate::pager::{
     Addr, AddrRange, Attributes, FixedOffset, FrameAllocator, PhysAddr, PhysAddrRange, Translate,
     VirtAddr, VirtAddrRange,
@@ -22,6 +24,30 @@ impl super::PagerTrait for Arch {
 
     fn kernel_base() -> VirtAddr {
         VirtAddr::at(0x1_0000_0000_0000)
+    }
+
+    fn kernel_offset() -> FixedOffset {
+        FixedOffset::new(PhysAddr::at(0x4000_0000), VirtAddr::at(0x1_4000_0000))
+    }
+
+    fn boot_image() -> PhysAddrRange {
+        unimplemented!()
+    }
+
+    fn text_image() -> PhysAddrRange {
+        PhysAddrRange::new(PhysAddr::at(0x4008_0000), 0x1_8000)
+    }
+
+    fn static_image() -> PhysAddrRange {
+        PhysAddrRange::new(PhysAddr::at(0x4009_8000), 0x1000)
+    }
+
+    fn bss_image() -> PhysAddrRange {
+        unimplemented!()
+    }
+
+    fn data_image() -> PhysAddrRange {
+        PhysAddrRange::new(PhysAddr::at(0x4009_9000), 0x1000)
     }
 
     fn pager_init() -> Result<()> {

@@ -2,6 +2,7 @@
 
 //! Debug logging to serial available from kernel_init
 
+#[allow(unused_imports)]
 use super::Level;
 
 use crate::pager::Translate;
@@ -29,6 +30,7 @@ pub fn _print(args: Arguments) {
 /// True iff logs at level should be displayed for logging from the module_path.
 #[cfg(not(test))]
 pub fn _is_enabled(level: Level, module_path: &str) -> bool {
+
     let setting = LOG_LEVEL_SETTINGS
         .into_iter()
         .fold(Level::Trace, |base, (pat, level)| {
@@ -49,7 +51,7 @@ pub fn _print(args: Arguments) {
 }
 
 #[cfg(test)]
-pub fn _is_enabled(_lvl: &str, _module_path: &str) -> bool {
+pub fn _is_enabled(_lvl: Level, _module_path: &str) -> bool {
     true
 }
 

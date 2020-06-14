@@ -1,11 +1,14 @@
+// SPDX-License-Identifier: Unlicense
+
 mod handler;
 
 pub mod mair;
 
 pub use handler::*;
 
-use crate::pager::{Addr, FixedOffset, PhysAddr, Translate, VirtAddr};
+use crate::pager::{Addr, PhysAddr, Translate, VirtAddr};
 use crate::Result;
+use crate::archs::aarch64::pager;
 
 #[link_section = ".startup"]
 #[no_mangle]
@@ -14,13 +17,11 @@ use crate::Result;
 ///
 /// Positioned at magic address by linker.ld.
 ///
-/// Gets a stack and calls boot2 for the first core, and parks the rest in a WFE loop.
+/// Gets a stack, switches on vm for high memory and calls kernel_init
+/// with the first core, and parks the rest.
 ///
 /// NOTE: must not use stack before SP set.
-///
-/// FIXME: Fetch addresses from dtb and calculate
-/// TODO: CPACR to enable FP in EL1
-pub extern "C" fn _reset(_pdtb: *const u8) -> ! {
+pub extern "C" fn _reset(pdtb: *const u8) -> ! {
     use cortex_a::{asm, regs::*};
 
     const CORE_0: u64 = 0;
@@ -39,14 +40,21 @@ pub extern "C" fn _reset(_pdtb: *const u8) -> ! {
         SP.set(&STACK_TOP as *const u64 as u64);
     }
 
-    // device_tree::set(pdtb);
-    enable_vm()
+    enable_vm(pdtb)
 }
 
-fn enable_vm() -> ! {
+/// FIXME: Fetch addresses from dtb and calculate
+/// TODO: CPACR to enable FP in EL1
+/// FIXME: initialise memory
+/// TODO: register assignments and translate should be from const (depends on consts in traits)
+fn enable_vm(_pdtb: *const u8) -> ! {
     use crate::archs::aarch64;
     use aarch64::pager::TABLE_ENTRIES;
     use cortex_a::{barrier, regs::SCTLR_EL1::*, regs::TCR_EL1::*, regs::*};
+
+    // TODO: device_tree::set(pdtb);
+
+    mair::init();
 
     #[repr(align(4096))]
     struct TempMap([u64; TABLE_ENTRIES]);
@@ -55,13 +63,13 @@ fn enable_vm() -> ! {
     static mut TEMP_MAP0: TempMap = TempMap([0; TABLE_ENTRIES]);
 
     unsafe {
-        TEMP_MAP1.0[0] = aarch64::pager::make_boot_ram_descriptor();
-        TEMP_MAP1.0[8] = aarch64::pager::make_boot_ram_descriptor();
-        TEMP_MAP1.0[10] = aarch64::pager::make_boot_device_descriptor();
+        TEMP_MAP1.0[0] = aarch64::pager::BOOT_RAM_DESCRIPTOR;
+        TEMP_MAP1.0[8] = aarch64::pager::BOOT_RAM_DESCRIPTOR;
+        TEMP_MAP1.0[10] = aarch64::pager::BOOT_DEVICE_DESCRIPTOR;
         TTBR1_EL1.set(PhysAddr::from_ptr(&TEMP_MAP1).get() as u64);
 
-        TEMP_MAP0.0[0] = aarch64::pager::make_boot_device_descriptor();
-        TEMP_MAP0.0[1] = aarch64::pager::make_boot_ram_descriptor();
+        TEMP_MAP0.0[0] = aarch64::pager::BOOT_DEVICE_DESCRIPTOR;
+        TEMP_MAP0.0[1] = aarch64::pager::BOOT_RAM_DESCRIPTOR;
         TTBR0_EL1.set(PhysAddr::from_ptr(&TEMP_MAP0).get() as u64);
     }
 
@@ -72,12 +80,12 @@ fn enable_vm() -> ! {
             + SH1::Outer
             + ORGN1::WriteThrough_ReadAlloc_NoWriteAlloc_Cacheable
             + IRGN1::WriteThrough_ReadAlloc_NoWriteAlloc_Cacheable
-            + T1SZ.val(64 - super::UPPER_VA_BITS as u64) // L1 1GB pages
+            + T1SZ.val(64 - 39) // L1 1GB pages
             + TG0::KiB_4
             + SH0::Outer
             + ORGN0::WriteThrough_ReadAlloc_NoWriteAlloc_Cacheable
             + IRGN0::WriteThrough_ReadAlloc_NoWriteAlloc_Cacheable
-            + T0SZ.val(64 - super::UPPER_VA_BITS as u64), // L1 1GB pages
+            + T0SZ.val(64 - 39), // L1 1GB pages
     );
 
     SCTLR_EL1.modify(M::SET);
@@ -85,10 +93,7 @@ fn enable_vm() -> ! {
     let kernel_offset = unsafe {
         barrier::isb(barrier::SY);
 
-        let kernel_offset = FixedOffset::new(
-            PhysAddr::from_ptr(_reset as *const ()),
-            VirtAddr::at(0xffff_ff82_0008_0000),
-        );
+        let kernel_offset = pager::kernel_offset();
 
         let offset = kernel_offset.offset() as u64;
         asm!("add sp, sp, {}", in(reg) offset);
@@ -153,14 +158,12 @@ pub fn enable_paging(ttb1: u64, ttb0: u64, asid: u16, offset: usize) -> Result<(
 }
 
 pub fn set_vbar(_translation: impl Translate) -> Result<()> {
-    use crate::pager::Identity;
     use cortex_a::regs::*;
 
     extern "C" {
         static vector_table_el1: u8;
     }
-    let virt_addr =
-        unsafe { Identity::new().translate_phys(PhysAddr::from_linker_symbol(&vector_table_el1))? };
+    let virt_addr = unsafe { VirtAddr::from_linker_symbol(&vector_table_el1) };
 
     VBAR_EL1.set(virt_addr.get() as u64);
 

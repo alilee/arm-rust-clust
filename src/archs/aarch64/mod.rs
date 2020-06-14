@@ -32,10 +32,10 @@ pub fn new_page_directory() -> impl super::PageDirectory {
 
 #[cfg(test)]
 mod tests {
-    extern crate std;
+    use super::*;
 
     #[test]
-    fn it_works() {
-        info!("marker")
+    fn test_use() {
+        assert_eq!(LOWER_VA_BITS, 48)
     }
 }

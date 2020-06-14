@@ -1,14 +1,12 @@
 ENTRY(_reset)
 SECTIONS
 {
-
     /DISCARD/ :
     {
         *(.ARM.exidx*)
     }
 
     . = 0xffffff8200080000;
-
     image_base = .;
 
     .text :
@@ -30,7 +28,8 @@ SECTIONS
     {
         static_end = .;
         data_base = .;
-        stack = ALIGN(0x1000);
+        . = ALIGN(0x1000);
+        stack = .;
         . = . + 0x1000;
         STACK_TOP = .;
         *(.data*)
@@ -38,9 +37,12 @@ SECTIONS
 
     .bss ALIGN(0x1000) :
     {
+        bss_base = .;
         *(.bss*)
+        . = ALIGN(0x1000);
+        bss_end = .;
     }
 
-    image_end = ALIGN(0x1000);
     data_end = .;
+    image_end = .;
 }

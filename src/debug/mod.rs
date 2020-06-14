@@ -24,8 +24,22 @@ pub enum Level {
     Major,
     /// Something went wrong.
     Error,
-    /// Major failure.
-    Crit,
+    /// Can't continue.
+    Fatal,
+}
+
+impl Into<&str> for Level {
+    fn into(self) -> &'static str {
+        match self {
+            Self::Trace => "TRACE",
+            Self::Debug => "DEBUG",
+            Self::Info => "INFO",
+            Self::Warn => "WARN",
+            Self::Major => "MAJOR",
+            Self::Error => "ERROR",
+            Self::Fatal => "FATAL",
+        }
+    }
 }
 
 /// True if logging is enabled for this module at this level.
@@ -55,9 +69,10 @@ macro_rules! dbg {
 macro_rules! log {
     ($lvl:expr, $string:expr) => ({
         if $crate::debug::logger::_is_enabled($lvl, module_path!()) {
-            $crate::debug::logger::_print(format_args_nl!(
-                concat!("{:5?}[{:>50} {:3}]  ", $string),
-                $lvl,
+            let lvl: &str = $lvl.into();
+            crate::debug::logger::_print(format_args_nl!(
+                concat!("{:>5}[{:>50} {:3}]  ", $string),
+                lvl,
                 module_path!().trim_start_matches("libkernel::").trim_start_matches("archs::"),
                 line!(),
             ))
@@ -65,9 +80,10 @@ macro_rules! log {
     });
     ($lvl:expr, $format_string:expr, $($arg:tt)*) => ({
         if $crate::debug::logger::_is_enabled($lvl, module_path!()) {
+            let lvl: &str = $lvl.into();
             $crate::debug::logger::_print(format_args_nl!(
-                concat!("{:5?}[{:>50} {:3}]  ", $format_string),
-                $lvl,
+                concat!("{:>5}[{:>50} {:3}]  ", $format_string),
+                lvl,
                 module_path!().trim_start_matches("libkernel::").trim_start_matches("archs::"),
                 line!(),
                 $($arg)*

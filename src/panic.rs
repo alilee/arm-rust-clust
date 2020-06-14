@@ -3,7 +3,7 @@
 //! Panic handling.
 
 #[cfg(not(test))]
-use crate::archs::{HandlerTrait, arch::Arch};
+use crate::archs::{arch::Arch, HandlerTrait};
 
 /// The point of exit for the "standard" (non-testing) `libkernel`.
 ///
@@ -29,12 +29,16 @@ fn _panic_exit() -> ! {
 #[allow(unreachable_code)]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
+    use crate::debug::Level;
+
     match info.location() {
-        None => error!(
+        None => log!(
+            Level::Fatal,
             "Panic: {}",
             info.message().unwrap_or(&format_args!("unknown"))
         ),
-        Some(loc) => error!(
+        Some(loc) => log!(
+            Level::Fatal,
             "Panic: {} (at {}:{})",
             info.message().unwrap_or(&format_args!("unknown")),
             loc.file(),

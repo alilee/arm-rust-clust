@@ -37,6 +37,15 @@ impl PhysAddr {
         Self(virt_addr.get())
     }
 
+    /// Address of the i-th page of RAM.
+    pub fn ram_page(i: usize) -> PhysAddr {
+        use crate::archs::{arch::Arch, PagerTrait};
+        Arch::ram_range()
+            .expect("Arch ram_range")
+            .base()
+            .increment(i * PAGESIZE_BYTES)
+    }
+
     /// Construct from a pointer.
     ///
     /// UNSAFE: pointer must be to physical memory ie. before paging is enabled or under
@@ -51,11 +60,6 @@ impl PhysAddr {
     /// identity mapping.
     pub unsafe fn from_fn(f: fn() -> !) -> Self {
         Self::from_ptr(f as *const u8)
-    }
-
-    /// Construct from a reference to a linker symbol.
-    pub const fn from_linker_symbol(sym: &u8) -> Self {
-        unsafe { Self(sym as *const u8 as usize) }
     }
 
     /// Page number.
@@ -105,49 +109,6 @@ pub struct PhysAddrRangeIterator {
 }
 
 impl PhysAddrRange {
-    /// Create a range from static refs.
-    fn from_linker_symbols(sym_base: &'static u8, sym_top: &'static u8) -> Self {
-        let base = PhysAddr::from_linker_symbol(&sym_base);
-        let top = PhysAddr::from_linker_symbol(&sym_top);
-        Self::new(base, top.offset_above(base))
-    }
-
-    /// Kernel boot image (using linker symbols)
-    pub fn boot_image() -> Self {
-        extern "C" {
-            static image_base: u8;
-            static image_end: u8;
-        }
-        unsafe { Self::from_linker_symbols(&image_base, &image_end) }
-    }
-
-    /// Text section of the kernel boot image (using linker symbols)
-    pub fn text_image() -> Self {
-        extern "C" {
-            static text_base: u8;
-            static text_end: u8;
-        }
-        unsafe { Self::from_linker_symbols(&text_base, &text_end) }
-    }
-
-    /// ROdata section of the kernel boot image (using linker symbols)
-    pub fn static_image() -> Self {
-        extern "C" {
-            static static_base: u8;
-            static static_end: u8;
-        }
-        unsafe { Self::from_linker_symbols(&static_base, &static_end) }
-    }
-
-    /// Data section of the kernel boot image (using linker symbols)
-    pub fn data_image() -> Self {
-        extern "C" {
-            static data_base: u8;
-            static data_end: u8;
-        }
-        unsafe { Self::from_linker_symbols(&data_base, &data_end) }
-    }
-
     /// Length of the range in bytes.
     pub const fn length_in_pages(&self) -> usize {
         (self.length + PAGESIZE_BYTES - 1) / PAGESIZE_BYTES
@@ -192,7 +153,6 @@ mod tests {
 
         let base = PhysAddr(0x345_0000);
         let c: u8 = 42u8;
-        static SYM: u8 = 43u8;
         assert_eq!(0x345_0000, base.get());
         assert_eq!(0x1_0000, PhysAddr(0x346_0000).offset_above(base));
 
@@ -200,14 +160,12 @@ mod tests {
             PhysAddr::from_ptr(&c);
             PhysAddr::from_fn(foo);
         };
-        PhysAddr::from_linker_symbol(&SYM);
     }
 
     #[test]
     fn phys_addr_range() {
         let base = PhysAddr(0x345_0000);
         let _image_range = PhysAddrRange::new(base, 0x1_0000);
-        let _boot_image_range = PhysAddrRange::text_image();
         let top = PhysAddr(0x346_0000);
         let between_range = PhysAddrRange::between(base, top);
         assert_eq!(base, between_range.base());
