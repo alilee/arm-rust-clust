@@ -58,10 +58,9 @@ pub fn init(next: fn() -> !) -> ! {
     if log_enabled!(Level::Trace) {
         page_directory.dump(&Identity::new());
     }
-    assert!(false);
 
-    Arch::handler_init(kernel_image_offset).expect("handler_init");
-    Arch::enable_paging(&(*page_directory), kernel_image_offset).expect("Arch::enable-paging");
+    Arch::handler_init().expect("handler_init");
+    Arch::enable_paging(&(*page_directory)).expect("Arch::enable-paging");
 
     next()
 }

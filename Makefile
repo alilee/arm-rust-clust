@@ -42,7 +42,7 @@ $(OBJCOPY) -O binary $$argv[1] $$argv[1].bin
 $(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -semihosting -dtb qemu.dtb -kernel $$argv[1].bin > $$argv[1].out
 set result $$status
 if test $$result -ne 0
-	cat $$argv[1].out
+#	cat $$argv[1].out
 #	$(OBJDUMP) -dS $$argv[1] > $$argv[1].code
 	$(OBJDUMP) -d $$argv[1] > $$argv[1].s
 end

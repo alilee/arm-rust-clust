@@ -2,15 +2,14 @@
 
 //! Exception handling trait for aarch64.
 
-use super::{Arch, hal};
+use super::{hal, Arch};
 
 use crate::archs::HandlerTrait;
-use crate::pager::Translate;
 use crate::Result;
 
 impl HandlerTrait for Arch {
-    fn handler_init(translation: impl Translate) -> Result<()> {
+    fn handler_init() -> Result<()> {
         info!("init");
-        hal::set_vbar(translation)
+        hal::set_vbar()
     }
 }

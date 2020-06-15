@@ -3,8 +3,7 @@
 //! Interface for paging functions.
 
 use crate::pager::{
-    Attributes, FixedOffset, FrameAllocator, PhysAddrRange, Translate, VirtAddr,
-    VirtAddrRange,
+    Attributes, FixedOffset, FrameAllocator, PhysAddrRange, Translate, VirtAddr, VirtAddrRange,
 };
 use crate::util::locked::Locked;
 use crate::Result;
@@ -34,7 +33,7 @@ pub trait PagerTrait {
     /// Initialise virtual memory management.
     fn pager_init() -> Result<()>;
     /// Enable virtual memory management.
-    fn enable_paging(page_directory: &impl PageDirectory, stack_offset: FixedOffset) -> Result<()>;
+    fn enable_paging(page_directory: &impl PageDirectory) -> Result<()>;
 }
 
 /// Methods to maintain a directory of virtual to physical addresses.

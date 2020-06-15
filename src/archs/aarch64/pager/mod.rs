@@ -23,7 +23,6 @@ use crate::util::locked::Locked;
 use crate::{Error, Result};
 
 use core::any::Any;
-use core::ptr::null;
 
 impl PagerTrait for Arch {
     fn ram_range() -> Result<PhysAddrRange> {
@@ -67,10 +66,7 @@ impl PagerTrait for Arch {
         mair::init()
     }
 
-    fn enable_paging(
-        page_directory: &impl crate::archs::PageDirectory,
-        stack_offset: FixedOffset,
-    ) -> Result<()> {
+    fn enable_paging(page_directory: &impl crate::archs::PageDirectory) -> Result<()> {
         info!("enable");
 
         let page_directory = page_directory
@@ -81,7 +77,10 @@ impl PagerTrait for Arch {
         let ttb1 = page_directory.ttb1().unwrap().get() as u64;
         let ttb0 = page_directory.ttb0().unwrap().get() as u64;
 
-        hal::enable_paging(ttb1, ttb0, 0, stack_offset.offset())
+        debug!("ttb1: {:?}", ttb1);
+        debug!("ttb0: {:?}", ttb0);
+
+        hal::enable_paging(ttb1, ttb0, 0)
     }
 }
 

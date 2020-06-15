@@ -6,9 +6,9 @@ pub mod mair;
 
 pub use handler::*;
 
+use crate::archs::aarch64::pager;
 use crate::pager::{Addr, PhysAddr, Translate, VirtAddr};
 use crate::Result;
-use crate::archs::aarch64::pager;
 
 #[link_section = ".startup"]
 #[no_mangle]
@@ -111,25 +111,21 @@ fn enable_vm(_pdtb: *const u8) -> ! {
     kernel_init()
 }
 
-pub fn enable_paging(ttb1: u64, ttb0: u64, asid: u16, offset: usize) -> Result<()> {
+pub fn enable_paging(ttb1: u64, ttb0: u64, asid: u16) -> Result<()> {
     use cortex_a::{
         barrier,
         regs::{SCTLR_EL1::*, TCR_EL1::*, *},
     };
 
-    TTBR0_EL1.write(TTBR0_EL1::ASID.val(asid as u64) + TTBR0_EL1::BADDR.val(ttb0 >> 1));
-    TTBR1_EL1.write(TTBR1_EL1::ASID.val(asid as u64) + TTBR1_EL1::BADDR.val(ttb1 >> 1));
+    debug!("enable_paging: {:x}, {:x}, {}", ttb0, ttb1, asid);
 
-    debug!(
-        "enable_paging: {:x}, {:x}, {}, {:x}",
-        TTBR0_EL1.get(),
-        TTBR1_EL1.get(),
-        asid,
-        offset
-    );
+    // nothing in low memory except debug device, so no debugging
+    unsafe {
+        TTBR0_EL1.write(TTBR0_EL1::ASID.val(asid as u64) + TTBR0_EL1::BADDR.val(ttb0 >> 1));
+        TTBR1_EL1.write(TTBR1_EL1::ASID.val(asid as u64) + TTBR1_EL1::BADDR.val(ttb1 >> 1));
 
-    TCR_EL1.modify(
-        AS::Bits_16    // 16 bit ASID
+        TCR_EL1.modify(
+            AS::Bits_16    // 16 bit ASID
             + IPS::Bits_36  // 36 bits/64GB of physical address space
             + TG1::KiB_4
             + SH1::Outer
@@ -141,15 +137,12 @@ pub fn enable_paging(ttb1: u64, ttb0: u64, asid: u16, offset: usize) -> Result<(
             + ORGN0::WriteThrough_ReadAlloc_NoWriteAlloc_Cacheable
             + IRGN0::WriteThrough_ReadAlloc_NoWriteAlloc_Cacheable
             + T0SZ.val(64 - super::LOWER_VA_BITS as u64), // 64-t0sz=48 bits of address space in low range
-    );
+        );
 
-    // TODO: nTWE nTWI
-    SCTLR_EL1.modify(I::SET + C::SET + M::SET);
+        // TODO: nTWE nTWI
+        SCTLR_EL1.modify(I::SET + C::SET + M::SET);
 
-    unsafe {
         barrier::isb(barrier::SY);
-
-        asm!("add sp, sp, {0}", in(reg) offset);
     }
 
     debug!("through!!!");
@@ -157,15 +150,15 @@ pub fn enable_paging(ttb1: u64, ttb0: u64, asid: u16, offset: usize) -> Result<(
     Ok(())
 }
 
-pub fn set_vbar(_translation: impl Translate) -> Result<()> {
+pub fn set_vbar() -> Result<()> {
     use cortex_a::regs::*;
 
     extern "C" {
         static vector_table_el1: u8;
     }
-    let virt_addr = unsafe { VirtAddr::from_linker_symbol(&vector_table_el1) };
+    let p_vector_table = unsafe { VirtAddr::from_linker_symbol(&vector_table_el1).get() as u64 };
 
-    VBAR_EL1.set(virt_addr.get() as u64);
+    VBAR_EL1.set(p_vector_table);
 
     Ok(())
 }
