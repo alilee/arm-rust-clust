@@ -144,7 +144,7 @@ pub fn enable_paging(ttb1: u64, ttb0: u64, asid: u16) -> Result<()> {
 
         barrier::isb(barrier::SY);
 
-        asm!("tlbi alle1");
+        asm!("tlbi vmalle1"); // invalidate entire TLB
     }
 
     debug!("through!!!");
