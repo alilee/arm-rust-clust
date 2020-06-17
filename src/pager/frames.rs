@@ -263,6 +263,7 @@ enum FrameUse {
     KernelWarm,
     KernelCold,
     Nailed,
+    FrameTable,
     LeafPageTable,
     BranchPageTable,
     DirectMemoryAccess,
@@ -334,23 +335,17 @@ pub fn init() -> Result<PhysAddrRange> {
     log!(Level::Major, "init");
 
     let ram_range: PhysAddrRange = Arch::ram_range()?;
-    dbg!(ram_range);
     let mem_translation = FixedOffset::new(ram_range.base(), Arch::kernel_base());
-    dbg!(mem_translation);
     let len = ram_range.length_in_pages();
-    dbg!(len);
     let image_range = Arch::boot_image();
-    dbg!(image_range);
     let frame_table_range = PhysAddrRange::new(
         image_range.top(),
         len * core::mem::size_of::<FrameTableNode>(),
     );
-    dbg!(frame_table_range);
 
     let mut frame_table = unsafe {
         let virt_addr: VirtAddr = Arch::kernel_offset().translate_phys(frame_table_range.base())?;
         let frame_table_ptr: *mut FrameTableNode = virt_addr.into();
-        dbg!(frame_table_ptr);
         FrameTableInner::new(
             core::slice::from_raw_parts_mut(frame_table_ptr, len),
             ram_range,
@@ -358,11 +353,8 @@ pub fn init() -> Result<PhysAddrRange> {
         )
     };
 
-    dbg!(&frame_table);
-    frame_table.move_free_range(frame_table_range, FrameUse::KernelHot)?;
-    dbg!(&frame_table);
+    frame_table.move_free_range(frame_table_range, FrameUse::FrameTable)?;
     frame_table.move_free_range(image_range, FrameUse::KernelHot)?;
-    dbg!(&frame_table);
 
     unsafe {
         ALLOCATOR = Locked::new(FrameTable(Some(frame_table)));

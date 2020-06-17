@@ -22,6 +22,16 @@ impl Debug for PageTableEntry {
 }
 
 impl PageTableEntry {
+    const OUTPUT_MASK: usize = ((1 << (1 + 47 - 12)) - 1) << 12;
+
+    pub fn null() -> Self {
+        Self(0)
+    }
+
+    pub fn get(self) -> PageTableEntryType {
+        self.0
+    }
+
     pub const fn is_valid(self) -> bool {
         0 != self.0 & 1
     }
@@ -31,12 +41,15 @@ impl PageTableEntry {
     }
 
     pub fn next_level_table_address(self) -> PhysAddr {
-        const MASK: usize = ((1 << (48 - 12)) - 1) << 12;
-        PhysAddr::at((self.0 as usize) & MASK)
+        PhysAddr::at((self.0 as usize) & Self::OUTPUT_MASK)
     }
 
     pub const fn is_table(self, level: u8) -> bool {
         level < 3 && self.0 & 0b10 != 0
+    }
+
+    pub const fn is_same_permissions(self, other: PageTableEntry) -> bool {
+        (self.0 ^ other.0) | (Self::OUTPUT_MASK as PageTableEntryType) == 0
     }
 }
 
@@ -98,7 +111,13 @@ impl Debug for TableDescriptor {
             self.next_level_table_address(),
         )?;
 
-        write!(f, " APTable({:02b})", self.read(APTable))?;
+        match self.read_as_enum(APTable) {
+            Some(APTable::Value::NoEffect) => {}
+            Some(APTable::Value::PrivOnly) => write!(f, " PrivOnly")?,
+            Some(APTable::Value::ReadOnly) => write!(f, " ReadOnly")?,
+            Some(APTable::Value::PrivReadOnly) => write!(f, " PrivReadOnly")?,
+            None => unreachable!(),
+        }
         if self.is_set(UXNTable) {
             write!(f, " UXNTable")?;
         }
@@ -223,8 +242,19 @@ impl Debug for PageBlockDescriptor {
         if self.is_set(AF) {
             write!(f, " AF")?;
         }
-        write!(f, " SH({:02b})", self.read(SH))?;
-        write!(f, " AP({:02b})", self.read(AP))?;
+        match self.read_as_enum(SH) {
+            Some(SH::Value::NonShareable) => write!(f, " NonShareable")?,
+            Some(SH::Value::OuterShareable) => write!(f, " OuterShareable")?,
+            Some(SH::Value::InnerShareable) => write!(f, " InnerShareable")?,
+            None => unreachable!(),
+        }
+        match self.read_as_enum(AP) {
+            Some(AP::Value::PrivOnly) => write!(f, " PrivOnly")?,
+            Some(AP::Value::ReadWrite) => write!(f, " ReadWrite")?,
+            Some(AP::Value::PrivReadOnly) => write!(f, " PrivReadOnly")?,
+            Some(AP::Value::ReadOnly) => write!(f, " ReadOnly")?,
+            None => unreachable!(),
+        }
         write!(f, " {:?}", MAIR::from(self.read(AttrIndx)))?;
         write!(f, " )")
     }

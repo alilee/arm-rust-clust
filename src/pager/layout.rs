@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 
-use super::{Addr, AddrRange, Attributes, PhysAddrRange, VirtAddr, VirtAddrRange};
+use super::{Addr, AddrRange, AttributeField, Attributes, PhysAddrRange, VirtAddr, VirtAddrRange};
 use crate::archs::{arch::Arch, PagerTrait};
 use crate::Result;
 
@@ -105,7 +105,7 @@ const LAYOUT: [KernelExtent; 8] = [
         virt_range_min_extent: 1 * GB,
         virt_range_gap: &{ || None },
         phys_addr_range: &{ || unsafe { Some(FRAME_TABLE_RANGE.expect("FRAME_TABLE_RANGE")) } },
-        attributes: Attributes::KERNEL_DATA,
+        attributes: Attributes::KERNEL_DATA.set(AttributeField::Block),
     },
     KernelExtent {
         content: RangeContent::Device,

@@ -3,10 +3,9 @@
 //! Kernel as library, to facilitate integration testing.
 
 #![no_std]
-
 #![feature(naked_functions)] // for _reset
 #![feature(panic_info_message)]
-#![feature(format_args_nl)]  // for debug logging macros
+#![feature(format_args_nl)] // for debug logging macros
 #![feature(const_fn)] // casting pointer to ints in PhysAddr::from_linker_symbol
 #![feature(const_raw_ptr_to_usize_cast)] // casting pointer to ints in PhysAddr::from_linker_symbol
 #![feature(linkage)] // for weak linkage of panic::_panic_exit
@@ -15,7 +14,7 @@
 #![feature(const_panic)] // for assertions in const functions (eg. VirtAddr::align_up)
 #![feature(asm)] // used throughout archs
 #![feature(global_asm)] // for exception handler and return
-
+#![feature(core_intrinsics)] // for unchecked_sub in checking perms for ptes
 #![warn(missing_docs)]
 
 #[macro_use]
@@ -29,7 +28,7 @@ pub mod util;
 
 mod panic;
 
-pub use util::result::{Result, Error};
+pub use util::result::{Error, Result};
 
 #[allow(unused_imports)]
 use crate::archs::arch::_reset;

@@ -22,7 +22,9 @@ use crate::pager::{
 use crate::util::locked::Locked;
 use crate::{Error, Result};
 
+use crate::archs::aarch64::pager::table::PageTableEntry;
 use core::any::Any;
+use core::intrinsics::unchecked_sub;
 
 impl PagerTrait for Arch {
     fn ram_range() -> Result<PhysAddrRange> {
@@ -165,9 +167,11 @@ impl PageDirectory {
             // entry_target_range: the all or part of this entry to map pages for
             // target_range: the span of entries in this table to map pages for
             // page_table_virt_addr_range_base: the va of pt[0]
-            debug!(
+            trace!(
                 "  index: {:03}, entry_target_range: {:?}, entry_range: {:?}",
-                index, entry_target_range, entry_range,
+                index,
+                entry_target_range,
+                entry_range,
             );
             if level == 3
                 || ((1u8..=2u8).contains(&level) && attributes.is_set(AttributeField::Block))
@@ -296,10 +300,22 @@ impl crate::archs::PageDirectory for PageDirectory {
 
     #[allow(dead_code)]
     fn dump(&self, mem_access_translation: &impl Translate) {
-        fn dump_level(phys_addr: PhysAddr, level: usize, mem_access_translation: &impl Translate) {
+        fn dump_level(
+            phys_addr: PhysAddr,
+            level: usize,
+            virt_addr: VirtAddr,
+            mem_access_translation: &impl Translate,
+        ) {
             const LEVEL_BUFFERS: [&str; 4] = ["", " ", "  ", "   "];
+            let level_increment: usize = 1 << LEVEL_OFFSETS[level];
 
-            info!("dumping table at {:?} being level {}", phys_addr, level);
+            trace!(
+                "dumping table at {:?} (being level {}) starting {:?}",
+                phys_addr,
+                level,
+                virt_addr
+            );
+            let mut virt_addr = virt_addr;
             let page_table = unsafe {
                 mem_access_translation
                     .translate_phys(phys_addr)
@@ -307,7 +323,10 @@ impl crate::archs::PageDirectory for PageDirectory {
                     .as_ref::<PageTable>()
             };
             let mut null_count = 0u16;
+            let mut virt_start = virt_addr;
+            let mut starting_entry = PageBlockDescriptor::from(page_table[0]);
             for i in 0..512 {
+                let next_virt_addr = virt_addr.increment(level_increment);
                 let entry = page_table[i];
                 if entry.is_null() {
                     null_count += 1;
@@ -315,44 +334,68 @@ impl crate::archs::PageDirectory for PageDirectory {
                     if null_count > 0 {
                         info!("{} [...] {} null entries", LEVEL_BUFFERS[level], null_count);
                         null_count = 0;
+                        virt_start = virt_addr;
+                        starting_entry = PageBlockDescriptor::from(entry);
                     }
-                    if !entry.is_table(level as u8) {
-                        let entry = PageBlockDescriptor::from(entry);
-                        info!("{} [{:>3}] {:?}", LEVEL_BUFFERS[level], i, entry);
+
+                    let next_entry = if i < 511 {
+                        page_table[i + 1]
                     } else {
-                        let table = TableDescriptor::from(entry);
-                        info!("{} [{:>3}] {:?}", LEVEL_BUFFERS[level], i, table);
-                        if level < 3 && entry.is_valid() {
-                            dump_level(
-                                entry.next_level_table_address(),
-                                level + 1,
-                                mem_access_translation,
+                        PageTableEntry::null()
+                    };
+
+                    let diff = unsafe { unchecked_sub(next_entry.get(), entry.get()) };
+                    if diff != level_increment as u64 {
+                        let virt_addr_range = VirtAddrRange::between(virt_start, next_virt_addr);
+                        if !entry.is_table(level as u8) {
+                            info!(
+                                "{} [{:>3} {:?}] {:?}",
+                                LEVEL_BUFFERS[level], i, virt_addr_range, starting_entry,
                             );
+                        } else {
+                            let table = TableDescriptor::from(entry);
+                            info!(
+                                "{} [{:>3} {:?}] {:?}",
+                                LEVEL_BUFFERS[level], i, virt_addr_range, table
+                            );
+                            if level < 3 && entry.is_valid() {
+                                dump_level(
+                                    entry.next_level_table_address(),
+                                    level + 1,
+                                    virt_addr,
+                                    mem_access_translation,
+                                );
+                            }
                         }
+                        virt_start = next_virt_addr;
+                        starting_entry = PageBlockDescriptor::from(next_entry);
                     }
                 }
+                virt_addr = next_virt_addr;
             }
             if null_count > 0 {
                 info!("{} [...] {} null entries", LEVEL_BUFFERS[level], null_count);
-            }
+            };
         }
 
-        info!("PageDirectory");
+        info!("PageDirectory:");
 
         if self.ttb0.is_some() {
-            info!("TTBO");
+            info!("TTBO: {:?}", self.ttb0.unwrap());
             dump_level(
                 self.ttb0.unwrap(),
                 TTB0_FIRST_LEVEL.into(),
+                VirtAddr::null(),
                 mem_access_translation,
             );
         }
 
         if self.ttb1.is_some() {
-            info!("TTB1");
+            info!("TTB1: {:?}", self.ttb1.unwrap());
             dump_level(
                 self.ttb1.unwrap(),
                 TTB1_FIRST_LEVEL.into(),
+                Arch::kernel_base(),
                 mem_access_translation,
             );
         }

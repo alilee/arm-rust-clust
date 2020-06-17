@@ -143,6 +143,8 @@ pub fn enable_paging(ttb1: u64, ttb0: u64, asid: u16) -> Result<()> {
         SCTLR_EL1.modify(I::SET + C::SET + M::SET);
 
         barrier::isb(barrier::SY);
+
+        asm!("tlbi alle1");
     }
 
     debug!("through!!!");

@@ -2,6 +2,8 @@
 
 //! Managing virtual address space, address translation and page faults.
 
+use core::intrinsics::unchecked_add;
+
 /// A usize value representing either a virtual or physical address.
 pub trait Addr<A: Addr<A, R> + core::marker::Copy + core::clone::Clone, R: AddrRange<A, R>> {
     /// Lowest possible address.
@@ -32,7 +34,12 @@ pub trait Addr<A: Addr<A, R> + core::marker::Copy + core::clone::Clone, R: AddrR
 
     /// An address that is higher than this by a given number of bytes.
     fn increment(&self, offset: usize) -> A {
-        A::at(self.get() + offset)
+        let top = unsafe { unchecked_add(self.get(), offset) };
+        if top >= self.get() {
+            A::at(top)
+        } else {
+            A::null()
+        }
     }
 
     /// Aligned on a byte boundary.

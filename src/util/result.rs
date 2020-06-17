@@ -11,6 +11,8 @@ pub enum Error {
     OutOfMemory,
     /// No pages available of requested type
     OutOfPages,
+    /// Unexpected value in bitfield
+    UnexpectedValue,
     /// Function failed because required initialisation not performed
     UnInitialised,
     /// Function failed with undefined error
