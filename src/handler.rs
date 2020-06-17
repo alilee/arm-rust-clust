@@ -6,7 +6,8 @@ use crate::Result;
 
 /// Initialise the exception handling module.
 pub fn init() -> Result<()> {
-    Ok(())
+    use crate::archs::{arch::Arch, HandlerTrait};
+    Arch::handler_init()
 }
 
 #[cfg(test)]

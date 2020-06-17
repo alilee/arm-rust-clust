@@ -24,6 +24,7 @@ pub mod archs;
 pub mod device;
 pub mod handler;
 pub mod pager;
+pub mod thread;
 pub mod util;
 
 mod panic;

@@ -2,6 +2,22 @@
 
 //! Interaction with physical exceptions
 
+use crate::pager::{Addr, VirtAddr};
+use crate::Result;
+
+pub fn set_vbar() -> Result<()> {
+    use cortex_a::regs::*;
+
+    extern "C" {
+        static vector_table_el1: u8;
+    }
+    let p_vector_table = unsafe { VirtAddr::from_linker_symbol(&vector_table_el1).get() as u64 };
+
+    VBAR_EL1.set(p_vector_table);
+
+    Ok(())
+}
+
 #[no_mangle]
 #[naked]
 fn el1_sp0_sync_handler() -> ! {
@@ -98,7 +114,8 @@ fn el0_64_irq_handler() -> () {
     // gic::end_int(int);
 }
 
-global_asm!(r#"
+global_asm!(
+    r#"
 .global           vector_table_el1
 
 .macro            EXCEPTION_ENTRY handler
@@ -128,34 +145,34 @@ global_asm!(r#"
 .balign 0x800     /* Exception taken from EL1 with SP_EL0. */
 vector_table_el1: EXCEPTION_ENTRY el1_sp0_sync_handler
 .balign 0x080     /* IRQ or vIRQ */
-				  mov        x0, 1
-				  adr        x30, .handler_return
-				  b          .
+				  mov     x0, 1
+				  adr     x30, .handler_return
+				  b       .
 .balign 0x080     /* FIQ or vFIQ */
-				  mov        x0, 2
-				  adr        x30, .handler_return
-				  b          .
+				  mov     x0, 2
+				  adr     x30, .handler_return
+				  b       .
 .balign 0x080     /* SError or vSError */
-				  mov        x0, 3
-				  adr        x30, .handler_return
-				  b          .
+				  mov     x0, 3
+				  adr     x30, .handler_return
+				  b       .
 .balign 0x080     /* Exception taken from EL1 with SP_EL1. */
                   /* Synchronous */
-				  mov        x0, 4
-				  bl         el1_sp1_sync_handler
-				  b          .
+				  mov     x0, 4
+				  bl      el1_sp1_sync_handler
+				  b       .
 .balign 0x080
-				  mov        x0, 5
-				  adr        x30, .handler_return
-				  b          .
+				  mov     x0, 5
+				  adr     x30, .handler_return
+				  b       .
 .balign 0x080
-				  mov        x0, 6
-				  adr        x30, .handler_return
-				  b          .
+				  mov     x0, 6
+				  adr     x30, .handler_return
+				  b       .
 .balign 0x080
-				  mov        x0, 7
-				  adr        x30, .handler_return
-				  b          .
+				  mov     x0, 7
+				  adr     x30, .handler_return
+				  b       .
 .balign 0x080
 .handler_return:  mrs        x30, tpidr_el1
                   ldp        x0, x1, [x30], #16
@@ -175,4 +192,5 @@ vector_table_el1: EXCEPTION_ENTRY el1_sp0_sync_handler
 				  ldp        x28, x29, [x30], #16
 				  ldr        x30, [x30]
 				  eret
-"#);
+"#
+);

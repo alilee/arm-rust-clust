@@ -14,7 +14,7 @@ kernel := target/$(TARGET)/debug/kernel
 linker.ld := src/archs/aarch64/linker.ld
 SOURCES := $(shell find . -name '*.rs') $(linker.ld)
 
-.PHONY: all check build unit_test doctest test clean qemu gdb run real_clean
+.PHONY: all check build unit_test doctest test clean qemu gdb run real_clean complexity
 
 all: test build
 
@@ -92,3 +92,8 @@ real_clean: clean
 	rm -f *.dtb
 	rm -f *.dts
 
+
+### source analysis ###
+
+complexity:
+	scc -w --exclude-dir .git,.idea --by-file -s complexity

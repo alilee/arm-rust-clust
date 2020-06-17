@@ -13,6 +13,7 @@ use libkernel::*;
 fn kernel_init() -> ! {
     info!("starting");
 
+    handler::init().expect("handler::init");
     pager::init(kernel_main)
 }
 
@@ -20,7 +21,6 @@ fn kernel_init() -> ! {
 fn kernel_main() -> ! {
     info!("kernel_main");
 
-    handler::init().expect("handler::init");
     // heap::init().expect("heap::init");
     device::init().expect("device::init");
     // thread::init().expect("thread::init");

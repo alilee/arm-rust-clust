@@ -23,7 +23,7 @@ pub use virt_addr::*;
 pub use frames::Allocator as FrameAllocator;
 pub use frames::Purpose as FramePurpose;
 
-use crate::archs::{arch, arch::Arch, DeviceTrait, HandlerTrait, PageDirectory, PagerTrait};
+use crate::archs::{arch, arch::Arch, DeviceTrait, PageDirectory, PagerTrait};
 use crate::debug::Level;
 use crate::pager::bump::PageBumpAllocator;
 use crate::util::locked::Locked;
@@ -59,7 +59,6 @@ pub fn init(next: fn() -> !) -> ! {
         page_directory.dump(&Identity::new());
     }
 
-    Arch::handler_init().expect("handler_init");
     Arch::enable_paging(&(*page_directory)).expect("Arch::enable-paging");
 
     next()

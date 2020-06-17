@@ -27,6 +27,6 @@ impl From<u64> for MAIR {
 
 /// Initialise the MAIR register.
 pub fn init() -> Result<()> {
-    crate::archs::aarch64::hal::mair::init();
+    crate::archs::aarch64::hal::init_mair();
     Ok(())
 }

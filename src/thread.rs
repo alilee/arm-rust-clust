@@ -1,3 +1,3 @@
 // SPDX-License-Identifier: Unlicense
 
-//! A kernel heap.
+//! CPU threads and multi-tasking.
