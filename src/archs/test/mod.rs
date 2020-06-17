@@ -54,10 +54,7 @@ impl super::PagerTrait for Arch {
         Ok(())
     }
 
-    fn enable_paging(
-        page_directory: &impl super::PageDirectory,
-        translate: FixedOffset,
-    ) -> Result<()> {
+    fn enable_paging(page_directory: &impl super::PageDirectory) -> Result<()> {
         unimplemented!()
     }
 }
@@ -97,7 +94,7 @@ impl super::DeviceTrait for Arch {
 }
 
 impl super::HandlerTrait for Arch {
-    fn handler_init(_translation: impl Translate) -> Result<()> {
+    fn handler_init() -> Result<()> {
         Ok(())
     }
 }

@@ -26,10 +26,12 @@ fn next() -> ! {
     use libkernel::archs::{arch::Arch, PagerTrait};
     use libkernel::pager::*;
 
+    info!("!!!");
+
     unsafe {
         assert_gt!(PhysAddr::from_fn(next).get(), Arch::kernel_base().get());
     }
-    assert!(false);
+
     exit_success()
 }
 
@@ -39,11 +41,3 @@ fn paging_init() {
 
     pager::init(next)
 }
-
-#[no_mangle]
-static LOG_LEVEL_SETTINGS: &[(&str, &str)] = &[
-    ("pager::frames", "INFO"),
-    ("aarch64::pager", "INFO"),
-    ("pager::layout", "DEBUG"),
-    ("aarch64::hal::mair", "INFO"),
-];
