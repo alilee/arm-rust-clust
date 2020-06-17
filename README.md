@@ -15,6 +15,7 @@ Start with the makefile.
 1. The use of Rust is more complete than most. We start the processor in Rust, and really only need global_asm
 for exception handler entry.
 1. Documentation and test coverage are significantly improved in this second try.
+1. My implementation of map_translation handles blocks and contiguous ranges.
 
 ## What could improve
 1. Reducing unsafe code even further, and justifying the necessary use of unsafe.
