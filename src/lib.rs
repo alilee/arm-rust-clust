@@ -15,6 +15,7 @@
 #![feature(asm)] // used throughout archs
 #![feature(global_asm)] // for exception handler and return
 #![feature(core_intrinsics)] // for unchecked_sub in checking perms for ptes
+#![feature(alloc_error_handler)] // for kernel heap
 #![warn(missing_docs)]
 
 #[macro_use]
@@ -34,7 +35,7 @@ pub use util::result::{Error, Result};
 #[allow(unused_imports)]
 use crate::archs::arch::_reset;
 
-// extern crate alloc;
+extern crate alloc;
 
 #[macro_use]
 extern crate claim;

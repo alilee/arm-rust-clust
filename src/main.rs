@@ -11,7 +11,7 @@ use libkernel::*;
 /// Kernel entry point, called from architecture-specific reset.
 #[no_mangle]
 fn kernel_init() -> ! {
-    info!("starting");
+    major!("starting");
 
     handler::init().expect("handler::init");
     pager::init(kernel_main)
@@ -19,7 +19,7 @@ fn kernel_init() -> ! {
 
 /// Kernel in high memory, initialise rest of kernel.
 fn kernel_main() -> ! {
-    info!("kernel_main");
+    major!("kernel_main");
 
     // heap::init().expect("heap::init");
     device::init().expect("device::init");
@@ -35,5 +35,6 @@ fn kernel_main() -> ! {
     // // clean up boot thread and yield to ready workload
     // thread::terminate()
 
+    major!("looping");
     loop {}
 }

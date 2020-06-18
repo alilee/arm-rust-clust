@@ -49,7 +49,7 @@ impl Debug for Attributes {
             (UserRead, "R"),
             (UserWrite, "W"),
             (UserExec, "X"),
-            (Accessed, "A"),
+            (Accessed, " A"),
         ];
 
         write!(f, "Attributes(").unwrap();
@@ -105,11 +105,9 @@ impl Attributes {
         .set(KernelWrite)
         .set(Block);
     /// For kernel code
-    pub const KERNEL_EXEC: Attributes = Attributes::new()
-        .set(KernelExec);
+    pub const KERNEL_EXEC: Attributes = Attributes::new().set(KernelExec);
     /// For kernel static
-    pub const KERNEL_STATIC: Attributes = Attributes::new()
-        .set(KernelRead);
+    pub const KERNEL_STATIC: Attributes = Attributes::new().set(KernelRead);
     /// For kernel stack and heap
     pub const KERNEL_DATA: Attributes = Attributes::new()
         .set(KernelRead)
@@ -133,11 +131,7 @@ impl Attributes {
         .set(KernelWrite)
         .set(UserExec);
     /// For user process data
-    pub const USER_STATIC: Attributes = Attributes::new()
-        .set(UserRead);
+    pub const USER_STATIC: Attributes = Attributes::new().set(UserRead);
     /// For user process data
-    pub const USER_DATA: Attributes = Attributes::new()
-        .set(UserRead)
-        .set(UserWrite)
-        .set(OnDemand);
+    pub const USER_DATA: Attributes = Attributes::new().set(UserRead).set(UserWrite).set(OnDemand);
 }

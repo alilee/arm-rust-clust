@@ -42,6 +42,18 @@ impl Into<&str> for Level {
     }
 }
 
+/// Call a function which is easy to break at in gdb.
+#[macro_export]
+macro_rules! bp {
+    () => {
+        $crate::debug::_breakpoint()
+    };
+}
+
+/// Easy to catch in browser
+#[inline(never)]
+pub fn _breakpoint() {}
+
 /// True if logging is enabled for this module at this level.
 #[macro_export]
 macro_rules! log_enabled {
@@ -106,6 +118,17 @@ macro_rules! error {
     );
     ($format_string:expr, $($arg:tt)*) => (
         $crate::log!($crate::debug::Level::Error, $format_string, $($arg)*);
+    )
+}
+
+/// Log a major, with a newline
+#[macro_export]
+macro_rules! major {
+    ($string:expr) => (
+        $crate::log!($crate::debug::Level::Major, $string);
+    );
+    ($format_string:expr, $($arg:tt)*) => (
+        $crate::log!($crate::debug::Level::Major, $format_string, $($arg)*);
     )
 }
 

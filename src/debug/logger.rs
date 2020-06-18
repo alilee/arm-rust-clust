@@ -30,7 +30,6 @@ pub fn _print(args: Arguments) {
 /// True iff logs at level should be displayed for logging from the module_path.
 #[cfg(not(test))]
 pub fn _is_enabled(level: Level, module_path: &str) -> bool {
-
     let setting = LOG_LEVEL_SETTINGS
         .into_iter()
         .fold(Level::Trace, |base, (pat, level)| {
@@ -75,4 +74,4 @@ pub fn offset(remap: impl Translate) -> Result<()> {
 ///
 /// Referenced in `_is_enabled`.
 #[cfg(not(test))]
-const LOG_LEVEL_SETTINGS: &[(&str, Level)] = &[("aarch64::pager", Level::Debug)];
+const LOG_LEVEL_SETTINGS: &[(&str, Level)] = &[("aarch64::pager", Level::Trace)];

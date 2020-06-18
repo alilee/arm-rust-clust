@@ -3,7 +3,6 @@
 //! Managing virtual address space, address translation and page faults.
 
 mod addr;
-mod alloc;
 mod attributes;
 mod bump;
 mod frames;
@@ -12,6 +11,9 @@ mod page;
 mod phys_addr;
 mod translation;
 mod virt_addr;
+
+#[cfg(not(test))]
+pub mod alloc;
 
 pub use addr::*;
 pub use attributes::*;
@@ -49,7 +51,7 @@ pub fn init(next: fn() -> !) -> ! {
     let page_directory = Locked::new(arch::new_page_directory());
     let mut page_directory = page_directory.lock();
 
-    let kernel_image_offset =
+    let (kernel_image_offset, heap_range) =
         map_ranges(&mut (*page_directory), &frames::allocator()).expect("pager::map_ranges");
     trace!("kernel_image_offset: {:?}", kernel_image_offset);
     debug!("{:?}", *frames::allocator().lock());
@@ -61,17 +63,22 @@ pub fn init(next: fn() -> !) -> ! {
 
     Arch::enable_paging(&(*page_directory)).expect("Arch::enable-paging");
 
+    debug!("heap_range: {:?}", heap_range);
+    #[cfg(not(test))]
+    alloc::init(heap_range).expect("alloc::init");
+
     next()
 }
 
 fn map_ranges(
     page_directory: &mut impl PageDirectory,
     allocator: &Locked<impl FrameAllocator>,
-) -> Result<FixedOffset> {
+) -> Result<(FixedOffset, VirtAddrRange)> {
     use crate::Error;
 
     let mem_access_translation = &Identity::new();
-    let mut result = Err(Error::UnInitialised); // layout should contain KernelText
+    let mut kernel_offset = Err(Error::UnInitialised); // layout should contain KernelText
+    let mut heap_range_result = Err(Error::UnInitialised); // layout should yield heap
 
     for kernel_range in layout::layout().expect("layout::layout") {
         use layout::RangeContent::*;
@@ -98,7 +105,7 @@ fn map_ranges(
                 )?;
 
                 if kernel_range.content == KernelText {
-                    result = Ok(translation);
+                    kernel_offset = Ok(translation);
                 }
             }
             Device => {
@@ -106,7 +113,36 @@ fn map_ranges(
                     .lock()
                     .reset(kernel_range.virt_addr_range)?;
             }
-            L3PageTables | Heap => {}
+            L3PageTables => {}
+            Heap => {
+                use AttributeField::*;
+                let attributes = Attributes::new()
+                    .set(KernelRead)
+                    .set(KernelWrite)
+                    .set(Accessed);
+
+                let backing = {
+                    let mut frame_table = frames::allocator().lock();
+                    frame_table.alloc_zeroed(FramePurpose::Kernel)?
+                };
+
+                let phys_addr_range = PhysAddrRange::new(backing, PAGESIZE_BYTES);
+                let translation =
+                    FixedOffset::new(phys_addr_range.base(), kernel_range.virt_addr_range.base());
+                let heap_range = kernel_range
+                    .virt_addr_range
+                    .resize(phys_addr_range.length());
+
+                page_directory.map_translation(
+                    heap_range,
+                    translation,
+                    attributes,
+                    allocator,
+                    mem_access_translation,
+                )?;
+
+                heap_range_result = Ok(heap_range);
+            }
         };
     }
 
@@ -119,5 +155,5 @@ fn map_ranges(
         mem_access_translation,
     )?;
 
-    result
+    Ok((kernel_offset?, heap_range_result?))
 }
