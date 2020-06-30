@@ -5,6 +5,7 @@
 use crate::pager::{Addr, AttributeField, Attributes, PhysAddr, PAGESIZE_BYTES};
 use crate::util::bitfield::{register_bitfields, Bitfield, FieldValue};
 
+use crate::pager::AttributeField::OnDemand;
 use core::fmt::{Debug, Formatter};
 use core::mem;
 use core::ops::{Index, IndexMut};
@@ -46,6 +47,11 @@ impl PageTableEntry {
 
     pub const fn is_table(self, level: u8) -> bool {
         level < 3 && self.0 & 0b10 != 0
+    }
+
+    pub fn demand_page(&mut self, phys_addr: PhysAddr) -> Self {
+        self.0 |= (phys_addr.get() & Self::OUTPUT_MASK) as u64 | 1;
+        *self
     }
 
     pub const fn is_same_permissions(self, other: PageTableEntry) -> bool {
@@ -155,23 +161,35 @@ impl TableDescriptor {
         use TableDescriptorFields::*;
 
         let mut field = TableDescriptorMask::from(attributes);
+        field += Type::Table;
         match maybe_phys_addr {
             Some(phys_addr) => {
                 field +=
                     Valid::SET + NextLevelTableAddress.val(phys_addr.page() as PageTableEntryType);
+                Self::from(field)
             }
-            None => {}
+            None => {
+                assert!(attributes.is_set(OnDemand));
+                let page = PageBlockDescriptorMask::from(attributes);
+                let mut result = Self::new(page.value);
+                result.modify(field);
+                result
+            }
         }
-        field += Type::Table;
-        Self::from(field)
+    }
+
+    /// Create a new table descriptor with the same security as the entry in the parent table.
+    pub fn new_branch(phys_addr_table: PhysAddr, mut parent_entry: Self) -> Self {
+        use TableDescriptorFields::*;
+        parent_entry
+            .modify(NextLevelTableAddress.val(phys_addr_table.page() as PageTableEntryType));
+        parent_entry
     }
 
     /// Extract table address at next level.
     pub fn next_level_table_address(self) -> PhysAddr {
-        PhysAddr::at(
-            (self.read(TableDescriptorFields::NextLevelTableAddress) * PAGESIZE_BYTES as u64)
-                as usize,
-        )
+        use TableDescriptorFields::*;
+        PhysAddr::at((self.read(NextLevelTableAddress) * PAGESIZE_BYTES as u64) as usize)
     }
 }
 
@@ -338,6 +356,14 @@ impl PageBlockDescriptor {
         Self::from(field)
     }
 
+    /// Create a new L3 page descriptor with the same security as the entry in the parent table.
+    pub fn new_leaf(phys_addr_output: PhysAddr, parent_entry: TableDescriptor) -> Self {
+        use PageBlockDescriptorFields::*;
+        let mut result = Self::from(parent_entry);
+        result.modify(OutputAddress.val(phys_addr_output.page() as PageTableEntryType));
+        result
+    }
+
     /// Extract the output address of the physical page frame.
     pub fn output_address(self) -> PhysAddr {
         PhysAddr::at(
@@ -355,6 +381,13 @@ impl From<PageBlockDescriptor> for PageTableEntry {
 impl From<PageTableEntry> for PageBlockDescriptor {
     fn from(pte: PageTableEntry) -> Self {
         Self::new(pte.0)
+    }
+}
+
+impl From<TableDescriptor> for PageBlockDescriptor {
+    fn from(table_desc: TableDescriptor) -> Self {
+        const FIELD_MASK: PageTableEntryType = (0xF << 51) | (0xFFE);
+        Self::new(table_desc.get() & FIELD_MASK)
     }
 }
 
@@ -419,5 +452,21 @@ mod tests {
         let result = PageBlockDescriptor::from(field);
         trace!("{:x}", result.get());
         assert_eq!(0x78000000000e01, result.get())
+    }
+
+    #[test]
+    fn test_demand_page_desc() {
+        let attributes = Attributes::KERNEL_DATA;
+        let table_desc = TableDescriptor::new_entry(None, attributes);
+        let phys_addr = PhysAddr::at(0x1234_9000);
+        let page_desc =
+            PageBlockDescriptor::from(PageTableEntry::from(table_desc).demand_page(phys_addr));
+        let page_desc_direct =
+            PageBlockDescriptor::new_entry(3, Some(phys_addr), attributes, false);
+        dbg!(table_desc);
+        dbg!(page_desc);
+        dbg!(page_desc_direct);
+        assert_eq!(page_desc.get(), page_desc_direct.get());
+        assert!(false);
     }
 }

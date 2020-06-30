@@ -7,6 +7,8 @@
 pub enum Error {
     /// Function completes with no adverse conditions
     Success,
+    /// Memory access out of bounds
+    SegmentFault,
     /// Out of memory to allocate
     OutOfMemory,
     /// No pages available of requested type

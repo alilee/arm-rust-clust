@@ -18,58 +18,45 @@ pub fn set_vbar() -> Result<()> {
     Ok(())
 }
 
-#[no_mangle]
-#[naked]
-fn el1_sp0_sync_handler() -> ! {
+fn print_exception_details() {
     use cortex_a::regs::*;
 
-    info!("SP0 Sync Exception!");
     info!("SPSR_EL1: {:b}", SPSR_EL1.get());
     info!("ESR_EL1: {:b}", ESR_EL1.get());
     info!("ESR_EL1::EC {:b}", ESR_EL1.read(ESR_EL1::EC));
-    info!(
-        "{}",
-        match ESR_EL1.read(ESR_EL1::EC) {
-            0b010101 => "SVC64",
-            0b111100 => "BRK instruction execution in AArch64 state",
-            _ => "Unknown exception class",
-        }
-    );
+    // info!("{:?}", ESR_EL1.read_as_enum(ESR_EL1::EC));
     info!("ESR_EL1::IL {:b}", ESR_EL1.read(ESR_EL1::IL));
     info!("ESR_EL1::ISS {:b}", ESR_EL1.read(ESR_EL1::ISS));
     info!("FAR_EL1: {:p}", FAR_EL1.get() as *const ());
     info!("ELR_EL1: {:p}", ELR_EL1.get() as *const ());
+}
+
+#[no_mangle]
+#[naked]
+fn el1_sp0_sync_handler() -> ! {
+    info!("SP0 Sync Exception!");
+    print_exception_details();
 
     info!("looping...");
     loop {}
 }
 
 #[no_mangle]
-#[naked]
-fn el1_sp1_sync_handler() -> ! {
-    use cortex_a::regs::*;
+fn el1_sp1_sync_handler() -> Option<u64> {
+    use cortex_a::regs::{ESR_EL1::*, *};
 
     info!("SP1 Sync Exception!");
-    info!("SPSR_EL1: {:b}", SPSR_EL1.get());
-    info!("ESR_EL1: {:b}", ESR_EL1.get());
-    info!(
-        "ESR_EL1::EC {:b} - {}",
-        ESR_EL1.read(ESR_EL1::EC),
-        match ESR_EL1.read(ESR_EL1::EC) {
-            0b010101 => "SVC64",
-            0b100001 => "Instruction Abort (from EL1)",
-            0b100101 => "Data Abort (from EL1)",
-            0b111100 => "BRK instruction execution in AArch64 state",
-            _ => "Unknown exception class",
-        }
-    );
-    info!("ESR_EL1::IL {:b}", ESR_EL1.read(ESR_EL1::IL));
-    info!("ESR_EL1::ISS {:b}", ESR_EL1.read(ESR_EL1::ISS));
-    info!("FAR_EL1: {:p}", FAR_EL1.get() as *const ());
-    info!("ELR_EL1: {:p}", ELR_EL1.get() as *const ());
+    print_exception_details();
 
-    info!("looping...");
-    loop {}
+    let esr = ESR_EL1.extract();
+    match esr.read_as_enum(ESR_EL1::EC) {
+        Some(EC::Value::DataAbortCurrentEL) => super::pager::handle_data_abort_current_el(esr),
+        None => unreachable!(),
+        _ => {
+            info!("looping...");
+            loop {}
+        }
+    }
 }
 
 #[no_mangle]
@@ -77,23 +64,7 @@ fn el0_64_sync_handler() -> () {
     use cortex_a::regs::*;
 
     info!("EL0 Synchronous Exception!");
-    info!("SPSR_EL1: {:b}", SPSR_EL1.get());
-    info!("ESR_EL1: {:b}", ESR_EL1.get());
-    info!("ESR_EL1::EC {:b}", ESR_EL1.read(ESR_EL1::EC));
-    info!(
-        "{}",
-        match ESR_EL1.read(ESR_EL1::EC) {
-            0b010101 => "SVC64",
-            0b011000 => "MSR, MRS, or System instruction execution",
-            0b100100 => "Data Abort from EL0",
-            0b111100 => "BRK instruction execution in AArch64 state",
-            _ => "Unknown exception class",
-        }
-    );
-    info!("ESR_EL1::IL {:b}", ESR_EL1.read(ESR_EL1::IL));
-    info!("ESR_EL1::ISS {:b}", ESR_EL1.read(ESR_EL1::ISS));
-    info!("FAR_EL1: {:p}", FAR_EL1.get() as *const ());
-    info!("ELR_EL1: {:p}", ELR_EL1.get() as *const ());
+    print_exception_details();
 
     // gic::print_state();
 

@@ -22,6 +22,7 @@ pub use phys_addr::*;
 pub use translation::*;
 pub use virt_addr::*;
 
+pub use frames::allocator;
 pub use frames::Allocator as FrameAllocator;
 pub use frames::Purpose as FramePurpose;
 
@@ -37,6 +38,14 @@ pub const PAGESIZE_BYTES: usize = 4096;
 /// Available virtual memory within device range.
 pub static DEVICE_MEM_ALLOCATOR: Locked<PageBumpAllocator> = Locked::new(PageBumpAllocator::new());
 
+static mut MEM_FIXED_OFFSET: FixedOffset = FixedOffset::identity();
+
+/// Get the offset of real RAM from the kernel-mapped area.
+#[inline(always)]
+pub fn mem_translation() -> FixedOffset {
+    unsafe { MEM_FIXED_OFFSET }
+}
+
 /// Initialise the virtual memory manager and jump to the kernel in high memory.
 ///
 /// Can only reference debug, arch and self. Other modules not initialised.
@@ -51,10 +60,14 @@ pub fn init(next: fn() -> !) -> ! {
     let page_directory = Locked::new(arch::new_page_directory());
     let mut page_directory = page_directory.lock();
 
-    let (kernel_image_offset, heap_range) =
+    let (mem_translation_found, kernel_image_offset, heap_range) =
         map_ranges(&mut (*page_directory), &frames::allocator()).expect("pager::map_ranges");
     trace!("kernel_image_offset: {:?}", kernel_image_offset);
     debug!("{:?}", *frames::allocator().lock());
+
+    unsafe {
+        MEM_FIXED_OFFSET = mem_translation_found;
+    }
 
     // FIXME: Access to logging enabled.
     if log_enabled!(Level::Trace) {
@@ -73,10 +86,11 @@ pub fn init(next: fn() -> !) -> ! {
 fn map_ranges(
     page_directory: &mut impl PageDirectory,
     allocator: &Locked<impl FrameAllocator>,
-) -> Result<(FixedOffset, VirtAddrRange)> {
+) -> Result<(FixedOffset, FixedOffset, VirtAddrRange)> {
     use crate::Error;
 
     let mem_access_translation = &Identity::new();
+    let mut mem_translation = Err(Error::UnInitialised); // layout mem
     let mut kernel_offset = Err(Error::UnInitialised); // layout should contain KernelText
     let mut heap_range_result = Err(Error::UnInitialised); // layout should yield heap
 
@@ -104,9 +118,18 @@ fn map_ranges(
                     mem_access_translation,
                 )?;
 
-                if kernel_range.content == KernelText {
-                    kernel_offset = Ok(translation);
-                }
+                match kernel_range.content {
+                    RAM => mem_translation = Ok(translation),
+                    KernelText => {
+                        kernel_offset = Ok(translation);
+                    }
+                    _ => {}
+                };
+
+                assert!(
+                    kernel_range.content != RAM
+                        || kernel_range.virt_addr_range.base() == Arch::kernel_base()
+                );
             }
             Device => {
                 DEVICE_MEM_ALLOCATOR
@@ -155,5 +178,5 @@ fn map_ranges(
         mem_access_translation,
     )?;
 
-    Ok((kernel_offset?, heap_range_result?))
+    Ok((mem_translation?, kernel_offset?, heap_range_result?))
 }

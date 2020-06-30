@@ -5,6 +5,26 @@
 use crate::archs::aarch64;
 use crate::Result;
 
+use cortex_a::regs::*;
+use register::LocalRegisterCopy;
+
+/// Initialise the MAIR register..
+///
+/// Called during reset, so no debug.
+///
+/// Note: See pager::mair for offsets.
+#[inline(always)]
+pub fn init_mair() {
+    use cortex_a::regs::MAIR_EL1::*;
+
+    MAIR_EL1.write(
+        Attr0_Device::nonGathering_nonReordering_noEarlyWriteAck
+            + Attr1_Normal_Outer::WriteThrough_NonTransient_ReadWriteAlloc
+            + Attr1_Normal_Inner::WriteThrough_NonTransient_ReadWriteAlloc,
+    );
+}
+
+///
 pub fn enable_paging(ttb1: u64, ttb0: u64, asid: u16) -> Result<()> {
     use cortex_a::{
         barrier,
@@ -46,18 +66,26 @@ pub fn enable_paging(ttb1: u64, ttb0: u64, asid: u16) -> Result<()> {
     Ok(())
 }
 
-/// Initialise the MAIR register..
 ///
-/// Called during reset, so no debug.
-///
-/// Note: See pager::mair for offsets.
-#[inline(always)]
-pub fn init_mair() {
-    use cortex_a::regs::{RegisterReadWrite, MAIR_EL1, MAIR_EL1::*};
+pub fn handle_data_abort_current_el(esr: LocalRegisterCopy<u32, ESR_EL1::Register>) -> Option<u64> {
+    use crate::pager::{Addr, VirtAddr};
+    use ESR_EL1::*;
+    info!("handle_data_abort_current_el");
 
-    MAIR_EL1.write(
-        Attr0_Device::nonGathering_nonReordering_noEarlyWriteAck
-            + Attr1_Normal_Outer::WriteThrough_NonTransient_ReadWriteAlloc
-            + Attr1_Normal_Inner::WriteThrough_NonTransient_ReadWriteAlloc,
-    );
+    let dfsc_reason: DFSC_REASON::Value = esr.read_as_enum(DFSC_REASON).expect("DFSC_REASON");
+    match dfsc_reason {
+        DFSC_REASON::Value::Translation => {
+            let fault_addr = VirtAddr::at(FAR_EL1.get() as usize);
+            let page_dir = aarch64::pager::PageDirectory::load(TTBR0_EL1.get(), TTBR1_EL1.get());
+            page_dir
+                .demand_page(
+                    fault_addr,
+                    crate::pager::allocator(),
+                    crate::pager::mem_translation(),
+                )
+                .expect("page fault");
+            None
+        }
+        _ => unimplemented!(),
+    }
 }

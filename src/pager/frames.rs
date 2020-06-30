@@ -16,6 +16,7 @@ use core::fmt::{Debug, Formatter};
 ///
 /// Determines the list the page is on, and enables scanning tasks, for example page table
 /// Access Flag reset.
+#[derive(Copy, Clone, Debug)]
 pub enum Purpose {
     /// Page is for a user process.
     User,

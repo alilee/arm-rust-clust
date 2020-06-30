@@ -7,14 +7,13 @@ mod mair;
 mod table;
 
 pub use layout::kernel_offset;
-pub use table::TABLE_ENTRIES;
+pub use table::{PageTableEntry, TABLE_ENTRIES};
 
 use table::{PageBlockDescriptor, PageTable, TableDescriptor, LEVEL_OFFSETS, LEVEL_WIDTH};
 
 use super::{hal, Arch};
 
 use crate::archs::{DeviceTrait, PagerTrait};
-use crate::pager::AttributeField::OnDemand;
 use crate::pager::{
     Addr, AddrRange, AttributeField, Attributes, FixedOffset, FrameAllocator, FramePurpose,
     PhysAddr, PhysAddrRange, Translate, VirtAddr, VirtAddrRange,
@@ -22,7 +21,7 @@ use crate::pager::{
 use crate::util::locked::Locked;
 use crate::{Error, Result};
 
-use crate::archs::aarch64::pager::table::PageTableEntry;
+use crate::util::result::Error::SegmentFault;
 use core::any::Any;
 use core::intrinsics::unchecked_sub;
 
@@ -104,6 +103,13 @@ impl PageDirectory {
         Self {
             ttb0: None,
             ttb1: None,
+        }
+    }
+
+    pub fn load(ttbr0: u64, ttbr1: u64) -> Self {
+        Self {
+            ttb0: Some(PhysAddr::at(ttbr0 as usize)),
+            ttb1: Some(PhysAddr::at(ttbr1 as usize)),
         }
     }
 
@@ -210,17 +216,18 @@ impl PageDirectory {
                 Some(page_table[index].next_level_table_address())
             } else {
                 // FIXME: PageTable for the entry may have just been paged out
-                let maybe_phys_addr =
-                    if attributes.is_set(OnDemand) && target_range.covers(&entry_range) {
-                        // No frame needed for next level table yet.
-                        None
-                    } else {
-                        let purpose = match level {
-                            2 => FramePurpose::LeafPageTable,
-                            _ => FramePurpose::BranchPageTable,
-                        };
-                        Some(allocator.lock().alloc_zeroed(purpose)?)
+                let maybe_phys_addr = if attributes.is_set(AttributeField::OnDemand)
+                    && target_range.covers(&entry_range)
+                {
+                    // No frame needed for next level table yet.
+                    None
+                } else {
+                    let purpose = match level {
+                        2 => FramePurpose::LeafPageTable,
+                        _ => FramePurpose::BranchPageTable,
                     };
+                    Some(allocator.lock().alloc_zeroed(purpose)?)
+                };
                 page_table[index] = TableDescriptor::new_entry(maybe_phys_addr, attributes).into();
                 maybe_phys_addr
             };
@@ -238,6 +245,66 @@ impl PageDirectory {
             }
         }
         Ok(target_range)
+    }
+
+    pub fn demand_page(
+        &mut self,
+        virt_addr: VirtAddr,
+        allocator: &Locked<impl FrameAllocator>,
+        mem_access_translation: &impl Translate,
+    ) -> Result<()> {
+        let (mut phys_addr, mut level, purpose) = if virt_addr < Arch::kernel_base() {
+            (
+                self.ttb0.unwrap(),
+                TTB0_FIRST_LEVEL as usize,
+                FramePurpose::User,
+            )
+        } else {
+            (
+                self.ttb1.unwrap(),
+                TTB1_FIRST_LEVEL as usize,
+                FramePurpose::Kernel,
+            )
+        };
+
+        let mut parent_entry = PageTableEntry::null();
+        while level <= 3 {
+            dbg!(phys_addr);
+            dbg!(level);
+            dbg!(purpose);
+            dbg!(parent_entry);
+
+            let page_table = unsafe {
+                mem_access_translation
+                    .translate_phys(phys_addr)?
+                    .as_mut_ref::<PageTable>()
+            };
+            let entry = virt_addr.get_page_table_entry(LEVEL_WIDTH, LEVEL_OFFSETS[level]);
+            dbg!(entry);
+
+            if !page_table[entry].is_valid() {
+                dbg!(!page_table[entry].is_valid());
+
+                let purpose = match level {
+                    3 => purpose,
+                    2 => FramePurpose::LeafPageTable,
+                    1 => FramePurpose::BranchPageTable,
+                    _ => unreachable!(),
+                };
+                phys_addr = allocator.lock().alloc_zeroed(purpose)?;
+                if page_table[entry].is_null() {
+                    if parent_entry.is_null() {
+                        return Err(SegmentFault);
+                    }
+                    page_table[entry] = parent_entry;
+                }
+                page_table[entry].demand_page(phys_addr);
+                dbg!(page_table[entry]);
+            }
+            parent_entry = page_table[entry];
+            level += 1;
+        }
+        Ok(())
     }
 }
 
@@ -655,6 +722,47 @@ mod tests {
             &allocator,
             &mem_access_translation,
         ));
+    }
+
+    #[test]
+    fn test_demand_paging() {
+        let mut page_dir = super::PageDirectory::new();
+        let base = Arch::kernel_base();
+        let target_range = VirtAddrRange::new(base, 0x10_0000_0000);
+        let translation = FixedOffset::new(PhysAddr::null(), base);
+        let attributes = Attributes::KERNEL_DATA;
+        let allocator = Locked::new(TestAllocator::new(6));
+        let mem_access_translation = FixedOffset::identity();
+
+        assert_ok!(page_dir.map_translation(
+            target_range,
+            translation,
+            attributes,
+            &allocator,
+            &mem_access_translation,
+        ));
+        assert_ok!(page_dir.demand_page(base, &allocator, &mem_access_translation));
+        assert!(false);
+    }
+
+    #[test]
+    fn test_demand_paging_page_fault() {
+        let mut page_dir = super::PageDirectory::new();
+        let base = Arch::kernel_base();
+        let target_range = VirtAddrRange::new(base, 0x10_0000_0000);
+        let translation = FixedOffset::new(PhysAddr::null(), base);
+        let attributes = Attributes::KERNEL_DATA;
+        let allocator = Locked::new(TestAllocator::new(6));
+        let mem_access_translation = FixedOffset::identity();
+
+        assert_ok!(page_dir.map_translation(
+            target_range,
+            translation,
+            attributes,
+            &allocator,
+            &mem_access_translation,
+        ));
+        assert_err!(page_dir.demand_page(target_range.top(), &allocator, &mem_access_translation));
     }
 
     #[test]

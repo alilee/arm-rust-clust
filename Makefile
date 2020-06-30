@@ -30,7 +30,7 @@ $(kernel): $(SOURCES)
 	cargo build
 
 doctest:
-	cargo test --doc --target=$(HOST)
+	cargo test --quiet --doc --target=$(HOST)
 
 unit_test: doctest
 	cargo test --quiet --lib --target=$(HOST)

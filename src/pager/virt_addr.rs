@@ -4,7 +4,6 @@
 //!
 //! ```rust
 //! let a = 3;
-//! assert!(false);
 //! ```
 
 use super::{Addr, AddrRange, PhysAddr, PhysAddrRange, PAGESIZE_BYTES};
@@ -70,6 +69,11 @@ impl VirtAddr {
         use core::mem;
         let e = self.0 as *mut T;
         unsafe { mem::transmute::<*mut T, &'static mut T>(e) }
+    }
+
+    /// Extract the page table entry number at a given level offset
+    pub const fn get_page_table_entry(self, width: usize, offset: usize) -> usize {
+        (self.0 >> offset) & ((1 << width) - 1)
     }
 }
 
@@ -197,6 +201,7 @@ mod tests {
         let phys_addr = PhysAddr::at(0x345_0000);
         let virt_id = unsafe { VirtAddr::identity_mapped(phys_addr) };
         let base = VirtAddr(0x345_0000);
+        assert_eq!(0x45, base.get_page_table_entry(8, 16));
         let top = base.increment(0x1_0000);
         assert_eq!(0x1_0000, base.offset_below(top));
 
