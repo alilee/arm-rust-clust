@@ -76,7 +76,8 @@ pub fn handle_data_abort_current_el(esr: LocalRegisterCopy<u32, ESR_EL1::Registe
     match dfsc_reason {
         DFSC_REASON::Value::Translation => {
             let fault_addr = VirtAddr::at(FAR_EL1.get() as usize);
-            let page_dir = aarch64::pager::PageDirectory::load(TTBR0_EL1.get(), TTBR1_EL1.get());
+            let mut page_dir =
+                aarch64::pager::PageDirectory::load(TTBR0_EL1.get(), TTBR1_EL1.get());
             page_dir
                 .demand_page(
                     fault_addr,

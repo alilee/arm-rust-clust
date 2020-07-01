@@ -42,8 +42,8 @@ static mut MEM_FIXED_OFFSET: FixedOffset = FixedOffset::identity();
 
 /// Get the offset of real RAM from the kernel-mapped area.
 #[inline(always)]
-pub fn mem_translation() -> FixedOffset {
-    unsafe { MEM_FIXED_OFFSET }
+pub fn mem_translation() -> &'static impl Translate {
+    unsafe { &MEM_FIXED_OFFSET }
 }
 
 /// Initialise the virtual memory manager and jump to the kernel in high memory.

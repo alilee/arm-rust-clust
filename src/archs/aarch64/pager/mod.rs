@@ -269,22 +269,14 @@ impl PageDirectory {
 
         let mut parent_entry = PageTableEntry::null();
         while level <= 3 {
-            dbg!(phys_addr);
-            dbg!(level);
-            dbg!(purpose);
-            dbg!(parent_entry);
-
             let page_table = unsafe {
                 mem_access_translation
                     .translate_phys(phys_addr)?
                     .as_mut_ref::<PageTable>()
             };
             let entry = virt_addr.get_page_table_entry(LEVEL_WIDTH, LEVEL_OFFSETS[level]);
-            dbg!(entry);
 
             if !page_table[entry].is_valid() {
-                dbg!(!page_table[entry].is_valid());
-
                 let purpose = match level {
                     3 => purpose,
                     2 => FramePurpose::LeafPageTable,
@@ -299,9 +291,9 @@ impl PageDirectory {
                     page_table[entry] = parent_entry;
                 }
                 page_table[entry].demand_page(phys_addr);
-                dbg!(page_table[entry]);
             }
             parent_entry = page_table[entry];
+            phys_addr = parent_entry.next_level_table_address();
             level += 1;
         }
         Ok(())
@@ -742,7 +734,7 @@ mod tests {
             &mem_access_translation,
         ));
         assert_ok!(page_dir.demand_page(base, &allocator, &mem_access_translation));
-        assert!(false);
+        page_dir.dump(&mem_access_translation);
     }
 
     #[test]
@@ -762,6 +754,8 @@ mod tests {
             &allocator,
             &mem_access_translation,
         ));
+        assert_none!(page_dir.ttb0);
+        let mut page_dir = super::PageDirectory::load(0, page_dir.ttb1.unwrap().get() as u64);
         assert_err!(page_dir.demand_page(target_range.top(), &allocator, &mem_access_translation));
     }
 
