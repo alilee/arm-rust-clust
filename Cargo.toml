@@ -15,7 +15,7 @@ test = false
 
 [dependencies]
 test-types = { path = "test-types" }
-qemu-exit = { path = "../qemu-exit" }
+qemu-exit = "1.0.0"
 spin = "0.5.2"
 register = "0.5.1"
 enum-map = "0.6.2"
@@ -23,7 +23,7 @@ claim = "0.3.1"
 linked_list_allocator = "0.8.4"
 
 [target.'cfg(target_arch = "aarch64")'.dependencies]
-cortex-a = { path = "../cortex-a" }
+cortex-a = "5.1.0"
 dtb = "0.2.0"
 
 [profile.dev]
