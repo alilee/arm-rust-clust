@@ -1,4 +1,4 @@
-HOST = x86_64-apple-darwin
+HOST = x86_64-unknown-linux-gnu
 TARGET = aarch64-unknown-none-softfloat
 QEMU = qemu-system-aarch64
 GDB = gdb
