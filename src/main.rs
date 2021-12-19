@@ -21,7 +21,6 @@ fn kernel_init() -> ! {
 fn kernel_main() -> ! {
     major!("kernel_main");
 
-    // heap::init().expect("heap::init");
     device::init().expect("device::init");
     // thread::init().expect("thread::init");
     //
