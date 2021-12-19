@@ -23,7 +23,7 @@ use hal_test as hal;
 pub struct Arch {}
 
 #[cfg(not(test))]
-pub use hal::_reset;
+pub use hal::reset;
 
 /// Construct an empty page directory.
 pub fn new_page_directory() -> impl super::PageDirectory {

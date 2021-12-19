@@ -2,7 +2,11 @@
 
 //! Code executed on system reset.
 
+use core::arch::asm;
+
 use crate::pager::{Addr, PhysAddr, Translate};
+
+use tock_registers::interfaces::{ReadWriteable, Writeable};
 
 #[link_section = ".startup"]
 #[no_mangle]
@@ -15,36 +19,30 @@ use crate::pager::{Addr, PhysAddr, Translate};
 /// with the first core, and parks the rest.
 ///
 /// NOTE: must not use stack before SP set.
-pub extern "C" fn _reset(pdtb: *const u8) -> ! {
-    use cortex_a::{asm, regs::*};
-
-    const CORE_0: u64 = 0;
-    const AFF0_CORE_MASK: u64 = 0xFF;
-
-    if CORE_0 != MPIDR_EL1.get() & AFF0_CORE_MASK {
-        loop {
-            asm::wfe();
-        }
-    }
-
-    extern "C" {
-        static STACK_TOP: u64; // defined in linker.ld
-    }
-    unsafe {
-        SP.set(&STACK_TOP as *const u64 as u64);
-    }
-
-    enable_boot_vm(pdtb)
+pub unsafe extern "C" fn reset(pdtb: *const u8) -> ! {
+    asm!(
+        "   mrs x1, mpidr_el1",
+        "   and x1, x1, 0xFF", // aff0
+        "   cbz x1, 3f",       // core 0
+        "2: wfe",
+        "   b 2b", // TODO: init remaining cores
+        "3: adrp x1, STACK_TOP",
+        "   mov sp, x1",
+        "   b enable_boot_vm",
+        options(noreturn)
+    )
 }
 
+#[allow(dead_code)]
+#[no_mangle]
 /// FIXME: Fetch addresses from dtb and calculate
 /// TODO: CPACR to enable FP in EL1
 /// FIXME: initialise memory
 /// TODO: register assignments and translate should be from const (depends on consts in traits)
-fn enable_boot_vm(_pdtb: *const u8) -> ! {
+extern "C" fn enable_boot_vm(_pdtb: *const u8) -> ! {
     use crate::archs::aarch64;
     use aarch64::pager::TABLE_ENTRIES;
-    use cortex_a::{barrier, regs::SCTLR_EL1::*, regs::TCR_EL1::*, regs::*};
+    use cortex_a::{asm::barrier, registers::SCTLR_EL1::*, registers::TCR_EL1::*, registers::*};
 
     // TODO: device_tree::set(pdtb);
 
@@ -68,7 +66,7 @@ fn enable_boot_vm(_pdtb: *const u8) -> ! {
     }
 
     TCR_EL1.modify(
-        AS::Bits_16    // 16 bit ASID
+        AS::ASID16Bits
             + IPS::Bits_36  // 36 bits/64GB of physical address space
             + TG1::KiB_4
             + SH1::Outer

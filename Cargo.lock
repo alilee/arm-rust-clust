@@ -20,8 +20,6 @@ dependencies = [
 [[package]]
 name = "cortex-a"
 version = "6.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "509fc35485a2b4ddbacabe0bf2212cdfff88da93658608e5cc651afcb75b7733"
 dependencies = [
  "tock-registers",
 ]
@@ -98,8 +96,6 @@ dependencies = [
 [[package]]
 name = "qemu-exit"
 version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "220eb94f40665452ab6114bf8a8d86aa1fd41c6dbfaa4ab71b5912c8adb80389"
 
 [[package]]
 name = "quote"

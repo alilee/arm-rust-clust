@@ -2,10 +2,13 @@
 
 //! Page table data structures.
 
+use tock_registers::fields::FieldValue;
+
 use crate::pager::{Addr, AttributeField, Attributes, PhysAddr, PAGESIZE_BYTES};
-use crate::util::bitfield::{register_bitfields, Bitfield, FieldValue};
+use crate::util::bitfield::{register_bitfields, Bitfield};
 
 use crate::pager::AttributeField::OnDemand;
+
 use core::fmt::{Debug, Formatter};
 use core::mem;
 use core::ops::{Index, IndexMut};

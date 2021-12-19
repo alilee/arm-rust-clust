@@ -1,4 +1,4 @@
-ENTRY(_reset)
+ENTRY(reset)
 SECTIONS
 {
     /DISCARD/ :

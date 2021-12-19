@@ -26,16 +26,22 @@ fn kernel_init() {
 
 #[kernel_test]
 fn test_heap() {
+    info!("test_heap");
     use alloc::boxed::Box;
 
     let backing = Page::new();
+    debug!("backing");
 
     unsafe {
         let mut heap = libkernel::pager::alloc::ALLOCATOR.lock();
+        debug!("lock");
         heap.init(VirtAddr::from(&backing).get(), PAGESIZE_BYTES);
+        debug!("init");
     }
 
     let x = Box::new(1);
+    debug!("new");
 
     assert_eq!(*x, 1);
+    debug!("returning");
 }

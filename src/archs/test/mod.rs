@@ -100,7 +100,7 @@ impl super::HandlerTrait for Arch {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn _reset() -> ! {
+pub unsafe extern "C" fn reset() -> ! {
     unreachable!()
 }
 

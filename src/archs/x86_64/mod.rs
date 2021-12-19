@@ -2,11 +2,10 @@
 
 pub struct Arch {}
 
-impl super::ArchTrait for Arch {
-}
+impl super::ArchTrait for Arch {}
 
 #[cfg(not(test))]
 #[no_mangle]
-pub unsafe extern "C" fn _reset() -> ! {
+pub unsafe extern "C" fn reset() -> ! {
     unimplemented!()
 }

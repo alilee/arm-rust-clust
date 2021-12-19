@@ -5,8 +5,10 @@
 use crate::pager::{Addr, VirtAddr};
 use crate::Result;
 
+use tock_registers::interfaces::{Readable, Writeable};
+
 pub fn set_vbar() -> Result<()> {
-    use cortex_a::regs::*;
+    use cortex_a::registers::*;
 
     extern "C" {
         static vector_table_el1: u8;
@@ -19,7 +21,7 @@ pub fn set_vbar() -> Result<()> {
 }
 
 fn print_exception_details() {
-    use cortex_a::regs::*;
+    use cortex_a::registers::*;
 
     info!("SPSR_EL1: {:b}", SPSR_EL1.get());
     info!("ESR_EL1: {:b}", ESR_EL1.get());
@@ -31,8 +33,8 @@ fn print_exception_details() {
     info!("ELR_EL1: {:p}", ELR_EL1.get() as *const ());
 }
 
+#[allow(dead_code)]
 #[no_mangle]
-#[naked]
 fn el1_sp0_sync_handler() -> ! {
     info!("SP0 Sync Exception!");
     print_exception_details();
@@ -43,7 +45,7 @@ fn el1_sp0_sync_handler() -> ! {
 
 #[no_mangle]
 fn el1_sp1_sync_handler() -> Option<u64> {
-    use cortex_a::regs::{ESR_EL1::*, *};
+    use cortex_a::registers::{ESR_EL1::*, *};
 
     info!("SP1 Sync Exception!");
     print_exception_details();
@@ -61,7 +63,7 @@ fn el1_sp1_sync_handler() -> Option<u64> {
 
 #[no_mangle]
 fn el0_64_sync_handler() -> () {
-    use cortex_a::regs::*;
+    use cortex_a::registers::*;
 
     info!("EL0 Synchronous Exception!");
     print_exception_details();
@@ -85,7 +87,7 @@ fn el0_64_irq_handler() -> () {
     // gic::end_int(int);
 }
 
-global_asm!(
+core::arch::global_asm!(
     r#"
 .global           vector_table_el1
 

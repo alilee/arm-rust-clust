@@ -7,7 +7,10 @@
 #[no_mangle]
 fn _panic_exit() -> ! {
     #[cfg(target_arch = "aarch64")]
-    qemu_exit::aarch64::exit_success();
+    {
+        use qemu_exit::QEMUExit;
+        qemu_exit::aarch64::AArch64::new().exit_success();
+    }
 
     #[cfg(target_arch = "x86_64")]
     qemu_exit::x86::exit_success();

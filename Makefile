@@ -36,15 +36,17 @@ unit_test: doctest
 	cargo test --quiet --lib --target=$(HOST)
 
 define KERNEL_TEST_RUNNER
-#!/usr/local/bin/fish
+#!/usr/bin/env fish
+## DO NOT EDIT - generated in Makefile
 
 $(OBJCOPY) -O binary $$argv[1] $$argv[1].bin
-$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -semihosting -dtb qemu.dtb -kernel $$argv[1].bin > $$argv[1].out
+$(OBJDUMP) -d $$argv[1] > $$argv[1].s
+$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -semihosting -kernel $$argv[1].bin > $$argv[1].out
 set result $$status
 if test $$result -ne 0
-#	cat $$argv[1].out
+    cat $$argv[1].out
 #	$(OBJDUMP) -dS $$argv[1] > $$argv[1].code
-	$(OBJDUMP) -d $$argv[1] > $$argv[1].s
+#	$(OBJDUMP) -d $$argv[1] > $$argv[1].s
 end
 exit $$result
 endef
@@ -70,7 +72,7 @@ clean:
 ### debugging ###
 
 qemu.rawdtb:
-	$(QEMU) -M $(BOARD),dumpdtb=$@ -cpu $(CPU) -m 256M
+	$(QEMU) -machine $(BOARD),dumpdtb=$@ -cpu $(CPU) -m 256M -nographic
 
 %.dtb: %.rawdtb
 	dtc -I dtb -O dtb $< > $@
