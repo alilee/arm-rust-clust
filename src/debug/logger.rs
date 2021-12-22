@@ -28,7 +28,12 @@ pub fn _print(args: Arguments) {
 }
 
 /// True iff logs at level should be displayed for logging from the module_path.
+///
+/// This code is linked weakly, so that the integration tests can overload it to align the debug
+/// output to the test case
 #[cfg(not(test))]
+#[linkage = "weak"]
+#[no_mangle]
 pub fn _is_enabled(level: Level, module_path: &str) -> bool {
     let setting = LOG_LEVEL_SETTINGS
         .into_iter()

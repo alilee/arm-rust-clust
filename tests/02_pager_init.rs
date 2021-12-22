@@ -41,3 +41,21 @@ fn paging_init() {
 
     pager::init(next)
 }
+
+use libkernel::debug::Level;
+
+#[no_mangle]
+pub fn _is_enabled(level: Level, module_path: &str) -> bool {
+    const LOG_LEVEL_SETTINGS: &[(&str, Level)] = &[("aarch64::pager", Level::Debug)];
+
+    let setting = LOG_LEVEL_SETTINGS
+        .into_iter()
+        .fold(Level::Trace, |base, (pat, level)| {
+            if module_path.ends_with(pat) {
+                *level
+            } else {
+                base
+            }
+        });
+    level >= setting
+}

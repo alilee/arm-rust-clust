@@ -147,29 +147,30 @@ fn map_ranges(
                 let attributes = Attributes::new()
                     .set(KernelRead)
                     .set(KernelWrite)
-                    .set(Accessed);
+                    .set(OnDemand);
 
-                let backing = {
-                    let mut frame_table = frames::allocator().lock();
-                    frame_table.alloc_zeroed(FramePurpose::Kernel)?
-                };
+                // let backing = {
+                //     let mut frame_table = frames::allocator().lock();
+                //     frame_table.alloc_zeroed(FramePurpose::Kernel)?
+                // };
 
-                let phys_addr_range = PhysAddrRange::new(backing, PAGESIZE_BYTES);
-                let translation =
-                    FixedOffset::new(phys_addr_range.base(), kernel_range.virt_addr_range.base());
-                let heap_range = kernel_range
-                    .virt_addr_range
-                    .resize(phys_addr_range.length());
+                // let phys_addr_range = PhysAddrRange::new(backing, PAGESIZE_BYTES);
+                // let translation =
+                //     FixedOffset::new(phys_addr_range.base(), kernel_range.virt_addr_range.base());
+                // let heap_range = kernel_range
+                //     .virt_addr_range
+                //     .resize(phys_addr_range.length());
 
+                let translation = NullTranslation::new();
                 page_directory.map_translation(
-                    heap_range,
+                    kernel_range.virt_addr_range,
                     translation,
                     attributes,
                     allocator,
                     mem_access_translation,
                 )?;
 
-                heap_range_result = Ok(heap_range);
+                heap_range_result = Ok(kernel_range.virt_addr_range);
             }
             KernelStack => {
                 use frames::Purpose;

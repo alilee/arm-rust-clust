@@ -122,28 +122,38 @@ core::arch::global_asm!(
 .endm
 
 .balign 0x800     /* Exception taken from EL1 with SP_EL0. */
-vector_table_el1: EXCEPTION_ENTRY el1_sp0_sync_handler
+vector_table_el1: mov x0, 0
+                  b .
+                  EXCEPTION_ENTRY el1_sp0_sync_handler
 .balign 0x080     /* IRQ or vIRQ */
                   mov x0, 1
+                  b .
 				  EXCEPTION_ENTRY default_handler
 .balign 0x080     /* FIQ or vFIQ */
 				  mov     x0, 2
+				  b .
 				  EXCEPTION_ENTRY default_handler
 .balign 0x080     /* SError or vSError */
 				  mov     x0, 3
+				  b .
 				  EXCEPTION_ENTRY default_handler
 				  
 .balign 0x080     /* Exception taken from EL1 with SP_EL1. */
                   /* Synchronous */
+                  mov x0, 4
+                  b .
 				  EXCEPTION_ENTRY el1_sp1_sync_handler
 .balign 0x080
 				  mov     x0, 5
+				  b .
 				  EXCEPTION_ENTRY default_handler
 .balign 0x080
 				  mov     x0, 6
+				  b .
 				  EXCEPTION_ENTRY default_handler
 .balign 0x080
 				  mov     x0, 7
+				  b .
 				  EXCEPTION_ENTRY default_handler
 .balign 0x080
 .handler_return:  mrs        x30, tpidr_el1
