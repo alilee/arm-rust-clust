@@ -38,6 +38,10 @@ pub const PAGESIZE_BYTES: usize = 4096;
 /// Available virtual memory within device range.
 pub static DEVICE_MEM_ALLOCATOR: Locked<PageBumpAllocator> = Locked::new(PageBumpAllocator::new());
 
+/// Available virtual memory for handler stacks (1 per CPU).
+pub static KERNEL_STACK_ALLOCATOR: Locked<PageBumpAllocator> =
+    Locked::new(PageBumpAllocator::new());
+
 static mut MEM_FIXED_OFFSET: FixedOffset = FixedOffset::identity();
 
 /// Get the offset of real RAM from the kernel-mapped area.
@@ -60,7 +64,7 @@ pub fn init(next: fn() -> !) -> ! {
     let page_directory = Locked::new(arch::new_page_directory());
     let mut page_directory = page_directory.lock();
 
-    let (mem_translation_found, kernel_image_offset, heap_range) =
+    let (mem_translation_found, kernel_image_offset, heap_range, stack_pointer) =
         map_ranges(&mut (*page_directory), &frames::allocator()).expect("pager::map_ranges");
     trace!("kernel_image_offset: {:?}", kernel_image_offset);
     debug!("{:?}", *frames::allocator().lock());
@@ -80,19 +84,20 @@ pub fn init(next: fn() -> !) -> ! {
     #[cfg(not(test))]
     alloc::init(heap_range).expect("alloc::init");
 
-    next()
+    Arch::move_stack(stack_pointer, next)
 }
 
 fn map_ranges(
     page_directory: &mut impl PageDirectory,
     allocator: &Locked<impl FrameAllocator>,
-) -> Result<(FixedOffset, FixedOffset, VirtAddrRange)> {
+) -> Result<(FixedOffset, FixedOffset, VirtAddrRange, VirtAddr)> {
     use crate::Error;
 
     let mem_access_translation = &Identity::new();
     let mut mem_translation = Err(Error::UnInitialised); // layout mem
     let mut kernel_offset = Err(Error::UnInitialised); // layout should contain KernelText
     let mut heap_range_result = Err(Error::UnInitialised); // layout should yield heap
+    let mut stack_pointer = Err(Error::UnInitialised); // layout should yield stack
 
     for kernel_range in layout::layout().expect("layout::layout") {
         use layout::RangeContent::*;
@@ -166,6 +171,42 @@ fn map_ranges(
 
                 heap_range_result = Ok(heap_range);
             }
+            KernelStack => {
+                use frames::Purpose;
+                use AttributeField::*;
+
+                // core 0 kernel stack
+                const KERNEL_STACK_LEN_PAGES: usize = 6;
+
+                let kernel_stack = {
+                    let mut lock = KERNEL_STACK_ALLOCATOR.lock();
+                    lock.reset(kernel_range.virt_addr_range)?;
+                    // include a guard page
+                    lock.alloc(KERNEL_STACK_LEN_PAGES + 1)?
+                };
+
+                let attributes = Attributes::new()
+                    .set(KernelRead)
+                    .set(KernelWrite)
+                    .set(Accessed);
+
+                // first mapped page, after guard
+                let mut kernel_stack_page = kernel_stack.resize(PAGESIZE_BYTES).step();
+
+                for _ in 0..KERNEL_STACK_LEN_PAGES {
+                    let phys_addr = allocator.lock().alloc_for_overwrite(Purpose::Kernel)?;
+                    let translation = FixedOffset::new(phys_addr, kernel_stack_page.base());
+                    page_directory.map_translation(
+                        kernel_stack_page,
+                        translation,
+                        attributes,
+                        allocator,
+                        mem_access_translation,
+                    )?;
+                    kernel_stack_page = kernel_stack_page.step();
+                }
+                stack_pointer = Ok(kernel_stack_page.base());
+            }
         };
     }
 
@@ -178,5 +219,10 @@ fn map_ranges(
         mem_access_translation,
     )?;
 
-    Ok((mem_translation?, kernel_offset?, heap_range_result?))
+    Ok((
+        mem_translation?,
+        kernel_offset?,
+        heap_range_result?,
+        stack_pointer?,
+    ))
 }

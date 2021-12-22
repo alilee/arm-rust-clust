@@ -71,6 +71,19 @@ pub fn enable_paging(ttb1: u64, ttb0: u64, asid: u16) -> Result<()> {
     Ok(())
 }
 
+#[inline(never)]
+/// Set the stack pointer and call function (using new stack)
+pub fn move_stack(stack_pointer: usize, next: fn() -> !) -> ! {
+    unsafe {
+        asm!(
+            "mov sp, {}", 
+            "br {}",
+            in(reg) stack_pointer, 
+            in(reg) next, 
+            options(noreturn))
+    }
+}
+
 ///
 pub fn handle_data_abort_current_el(esr: LocalRegisterCopy<u64, ESR_EL1::Register>) -> Option<u64> {
     use crate::pager::{Addr, VirtAddr};

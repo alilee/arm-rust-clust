@@ -57,6 +57,10 @@ impl super::PagerTrait for Arch {
     fn enable_paging(page_directory: &impl super::PageDirectory) -> Result<()> {
         unimplemented!()
     }
+
+    fn move_stack(stack_pointer: VirtAddr, next: fn() -> !) -> ! {
+        unimplemented!()
+    }
 }
 
 pub struct PageDirectory {}

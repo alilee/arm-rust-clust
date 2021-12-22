@@ -25,6 +25,7 @@ pub enum RangeContent {
     KernelText,
     KernelStatic,
     KernelData,
+    KernelStack,
     FrameTable,
     Device,
     L3PageTables,
@@ -58,7 +59,7 @@ impl Debug for KernelExtent {
 
 const GB: usize = 1024 * 1024 * 1024;
 
-const LAYOUT: [KernelExtent; 8] = [
+const LAYOUT: [KernelExtent; 9] = [
     KernelExtent {
         content: RangeContent::RAM,
         virt_range_align: 1 * GB,
@@ -127,6 +128,14 @@ const LAYOUT: [KernelExtent; 8] = [
         content: RangeContent::Heap,
         virt_range_align: 1 * GB,
         virt_range_min_extent: 8 * GB,
+        virt_range_gap: &{ || None },
+        phys_addr_range: &{ || None },
+        attributes: Attributes::KERNEL_DATA,
+    },
+    KernelExtent {
+        content: RangeContent::KernelStack,
+        virt_range_align: 1 * GB,
+        virt_range_min_extent: 1 * GB,
         virt_range_gap: &{ || None },
         phys_addr_range: &{ || None },
         attributes: Attributes::KERNEL_DATA,

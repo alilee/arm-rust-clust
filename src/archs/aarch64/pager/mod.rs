@@ -83,6 +83,11 @@ impl PagerTrait for Arch {
 
         hal::enable_paging(ttb1, ttb0, 0)
     }
+
+    fn move_stack(stack_pointer: VirtAddr, next: fn() -> !) -> ! {
+        info!("move_stack: {:?}", stack_pointer);
+        hal::move_stack(stack_pointer.get(), next)
+    }
 }
 
 /// Starting level of kernel range.

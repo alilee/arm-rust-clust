@@ -13,6 +13,7 @@ pub static ALLOCATOR: LockedHeap = LockedHeap::empty();
 
 #[alloc_error_handler]
 fn alloc_error_handler(layout: alloc::alloc::Layout) -> ! {
+    error!("alloc_error_handler");
     panic!("allocation error: {:?}", layout)
 }
 

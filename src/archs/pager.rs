@@ -34,6 +34,8 @@ pub trait PagerTrait {
     fn pager_init() -> Result<()>;
     /// Enable virtual memory management.
     fn enable_paging(page_directory: &impl PageDirectory) -> Result<()>;
+    /// Move the stack pointer and call
+    fn move_stack(stack_pointer: VirtAddr, next: fn() -> !) -> !;
 }
 
 /// Methods to maintain a directory of virtual to physical addresses.
