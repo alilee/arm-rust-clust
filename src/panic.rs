@@ -16,7 +16,10 @@ use crate::archs::{arch::Arch, HandlerTrait};
 #[allow(unreachable_code)]
 fn _panic_exit() -> ! {
     #[cfg(target_arch = "aarch64")]
-    qemu_exit::aarch64::exit_failure();
+    {
+        use qemu_exit::QEMUExit;
+        qemu_exit::AArch64::new().exit_failure();
+    }
 
     // #[cfg(target_arch = "x86_64")]
     // qemu_exit::x86::exit(2);

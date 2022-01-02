@@ -372,7 +372,7 @@ pub fn allocator() -> &'static Locked<FrameTable> {
 
 impl FrameTableInner {
     fn new(table: FrameTableNodes, ram_range: PhysAddrRange, mem_translation: FixedOffset) -> Self {
-        let mut frame_lists: EnumMap<FrameUse, FrameDeque> = EnumMap::new();
+        let mut frame_lists: EnumMap<FrameUse, FrameDeque> = EnumMap::default();
         frame_lists[FrameUse::Free]
             .reset(table)
             .expect("FrameDeque::reset");

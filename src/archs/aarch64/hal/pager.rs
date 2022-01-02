@@ -2,11 +2,16 @@
 
 //! Implementation of paging on aarch64.
 
+use core::arch::asm;
+
 use crate::archs::aarch64;
 use crate::Result;
 
-use cortex_a::regs::*;
-use register::LocalRegisterCopy;
+use cortex_a::registers::*;
+use tock_registers::{
+    interfaces::{ReadWriteable, Readable, Writeable},
+    LocalRegisterCopy,
+};
 
 /// Initialise the MAIR register..
 ///
@@ -15,7 +20,7 @@ use register::LocalRegisterCopy;
 /// Note: See pager::mair for offsets.
 #[inline(always)]
 pub fn init_mair() {
-    use cortex_a::regs::MAIR_EL1::*;
+    use cortex_a::registers::MAIR_EL1::*;
 
     MAIR_EL1.write(
         Attr0_Device::nonGathering_nonReordering_noEarlyWriteAck
@@ -27,8 +32,8 @@ pub fn init_mair() {
 ///
 pub fn enable_paging(ttb1: u64, ttb0: u64, asid: u16) -> Result<()> {
     use cortex_a::{
-        barrier,
-        regs::{SCTLR_EL1::*, TCR_EL1::*, *},
+        asm::barrier,
+        registers::{SCTLR_EL1::*, TCR_EL1::*, *},
     };
 
     debug!("enable_paging: {:x}, {:x}, {}", ttb0, ttb1, asid);
@@ -39,7 +44,7 @@ pub fn enable_paging(ttb1: u64, ttb0: u64, asid: u16) -> Result<()> {
         TTBR1_EL1.write(TTBR1_EL1::ASID.val(asid as u64) + TTBR1_EL1::BADDR.val(ttb1 >> 1));
 
         TCR_EL1.modify(
-            AS::Bits_16    // 16 bit ASID
+            AS::ASID16Bits
                 + IPS::Bits_36  // 36 bits/64GB of physical address space
                 + TG1::KiB_4
                 + SH1::Outer
@@ -66,15 +71,30 @@ pub fn enable_paging(ttb1: u64, ttb0: u64, asid: u16) -> Result<()> {
     Ok(())
 }
 
+#[inline(never)]
+/// Set the stack pointer and call function (using new stack)
+pub fn move_stack(stack_pointer: usize, next: fn() -> !) -> ! {
+    unsafe {
+        asm!(
+            "mov sp, {}", 
+            "br {}",
+            in(reg) stack_pointer, 
+            in(reg) next, 
+            options(noreturn))
+    }
+}
+
 ///
-pub fn handle_data_abort_current_el(esr: LocalRegisterCopy<u32, ESR_EL1::Register>) -> Option<u64> {
+pub fn handle_data_abort_current_el(esr: LocalRegisterCopy<u64, ESR_EL1::Register>) -> Option<u64> {
     use crate::pager::{Addr, VirtAddr};
-    use ESR_EL1::*;
+    use ESR_EL1::ISS_DATA_FAULT_STATUS_CODE_REASON::Value;
     info!("handle_data_abort_current_el");
 
-    let dfsc_reason: DFSC_REASON::Value = esr.read_as_enum(DFSC_REASON).expect("DFSC_REASON");
+    let dfsc_reason: Value = esr
+        .read_as_enum(ESR_EL1::ISS_DATA_FAULT_STATUS_CODE_REASON)
+        .expect("ISS_DATA_FAULT_STATUS_CODE_REASON");
     match dfsc_reason {
-        DFSC_REASON::Value::Translation => {
+        Value::Translation => {
             let fault_addr = VirtAddr::at(FAR_EL1.get() as usize);
             let mut page_dir =
                 aarch64::pager::PageDirectory::load(TTBR0_EL1.get(), TTBR1_EL1.get());

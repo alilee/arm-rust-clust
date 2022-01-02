@@ -32,7 +32,7 @@ pub fn _print(args: Arguments) {
 pub fn _is_enabled(level: Level, module_path: &str) -> bool {
     let setting = LOG_LEVEL_SETTINGS
         .into_iter()
-        .fold(Level::Trace, |base, (pat, level)| {
+        .fold(Level::Info, |base, (pat, level)| {
             if module_path.ends_with(pat) {
                 *level
             } else {
@@ -74,4 +74,4 @@ pub fn offset(remap: impl Translate) -> Result<()> {
 ///
 /// Referenced in `_is_enabled`.
 #[cfg(not(test))]
-const LOG_LEVEL_SETTINGS: &[(&str, Level)] = &[("aarch64::pager", Level::Trace)];
+const LOG_LEVEL_SETTINGS: &[(&str, Level)] = &[("aarch64::pager", Level::Info)];

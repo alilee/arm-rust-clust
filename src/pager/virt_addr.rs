@@ -32,8 +32,8 @@ impl Addr<VirtAddr, VirtAddrRange> for VirtAddr {
 
 impl VirtAddr {
     /// Construct from a reference to a linker symbol.
-    pub const fn from_linker_symbol(sym: &u8) -> Self {
-        unsafe { Self(sym as *const u8 as usize) }
+    pub fn from_linker_symbol(sym: *const u8) -> Self {
+        Self(sym as usize)
     }
 
     /// Construct bottom of virtual address range.
@@ -137,9 +137,9 @@ impl AddrRange<VirtAddr, VirtAddrRange> for VirtAddrRange {
 
 impl VirtAddrRange {
     /// Create a range from static refs.
-    pub const fn from_linker_symbols(sym_base: &'static u8, sym_top: &'static u8) -> Self {
-        let base = VirtAddr::from_linker_symbol(&sym_base);
-        let top = VirtAddr::from_linker_symbol(&sym_top);
+    pub fn from_linker_symbols(sym_base: *const u8, sym_top: *const u8) -> Self {
+        let base = VirtAddr::from_linker_symbol(sym_base);
+        let top = VirtAddr::from_linker_symbol(sym_top);
         Self {
             base,
             length: top.0 - base.0,

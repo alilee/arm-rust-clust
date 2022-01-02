@@ -12,3 +12,4 @@ a.out
 sdimage
 qemu*.*dt*
 rust-clust.iml
+.idea

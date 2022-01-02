@@ -2,21 +2,24 @@
 
 //! Page table data structures.
 
-pub use register::{register_bitfields, FieldValue, IntLike};
+pub use tock_registers::{register_bitfields, UIntLike};
 
-use register::{Field, RegisterLongName, TryFromValue};
+use tock_registers::{
+    fields::{Field, FieldValue, TryFromValue},
+    RegisterLongName,
+};
 
 use core::marker::PhantomData;
 
 /// A in-memory bit struct that fits into integer.
 #[derive(Copy, Clone)]
 #[repr(transparent)]
-pub struct Bitfield<T: IntLike, R: RegisterLongName = ()> {
+pub struct Bitfield<T: UIntLike, R: RegisterLongName = ()> {
     value: T,
     associated_register: PhantomData<R>,
 }
 
-impl<T: IntLike, R: RegisterLongName> Bitfield<T, R> {
+impl<T: UIntLike, R: RegisterLongName> Bitfield<T, R> {
     /// New bitfield with given value.
     pub const fn new(value: T) -> Self {
         Self {
@@ -72,17 +75,17 @@ impl<T: IntLike, R: RegisterLongName> Bitfield<T, R> {
     /// Determine if any of a set of specific flags is set.
     #[inline]
     pub fn matches_any(&self, field: FieldValue<T, R>) -> bool {
-        self.get() & field.mask != T::zero()
+        self.get() & field.mask() != T::zero()
     }
 
     /// Determine if all of a set of specific flags is set.
     #[inline]
     pub fn matches_all(&self, field: FieldValue<T, R>) -> bool {
-        self.get() & field.mask == field.value
+        self.get() & field.mask() == field.value
     }
 }
 
-impl<T: IntLike, R: RegisterLongName> From<FieldValue<T, R>> for Bitfield<T, R> {
+impl<T: UIntLike, R: RegisterLongName> From<FieldValue<T, R>> for Bitfield<T, R> {
     fn from(field: FieldValue<T, R>) -> Self {
         Self::new(field.value)
     }
