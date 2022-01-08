@@ -113,7 +113,7 @@ impl Debug for VirtAddrRange {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         write!(
             f,
-            "VirtAddr(0x{:08x}..0x{:08x}, 0x{:08x})",
+            "VirtAddr(0x{:08x}..0x{:08x}, 0x{:09x})",
             self.base.0,
             self.base.0 + self.length,
             self.length

@@ -3,6 +3,7 @@
 //! Managing virtual address space, address translation and page faults.
 
 use core::intrinsics::unchecked_add;
+use crate::pager::PAGESIZE_BYTES;
 
 /// A usize value representing either a virtual or physical address.
 pub trait Addr<A: Addr<A, R> + core::marker::Copy + core::clone::Clone, R: AddrRange<A, R>> {
@@ -65,6 +66,11 @@ pub trait Addr<A: Addr<A, R> + core::marker::Copy + core::clone::Clone, R: AddrR
 pub trait AddrRange<A: Addr<A, R> + core::marker::Copy + core::clone::Clone, R: AddrRange<A, R>> {
     /// Construct from base and length.
     fn new(base: A, length: usize) -> R;
+
+    /// Construct from base with one page width
+    fn page_at(base: A) -> R {
+        R::new(base, PAGESIZE_BYTES)
+    }
 
     /// Range between two addresses.
     fn between(base: A, top: A) -> R {

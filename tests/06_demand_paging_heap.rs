@@ -23,13 +23,11 @@ mod panic_exit_success;
 fn kernel_init() {
     use libkernel::{handler, pager};
 
-    fn next() -> ! {
-        test_main();
-        unreachable!()
-    }
-
     handler::init().expect("handler::init");
-    pager::init(next);
+    pager::init().expect("pager::init");
+    pager::alloc::init().expect("pager::alloc::init");
+
+    test_main();
 }
 
 #[inline(never)]

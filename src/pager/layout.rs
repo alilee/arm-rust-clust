@@ -1,22 +1,13 @@
 // SPDX-License-Identifier: Unlicense
 
-use super::{Addr, AddrRange, AttributeField, Attributes, PhysAddrRange, VirtAddr, VirtAddrRange};
 use crate::archs::{arch::Arch, PagerTrait};
-use crate::Result;
+use crate::pager::FixedOffset;
+use crate::{Error, Result};
 
-use core::fmt::{Debug, Error, Formatter};
+use super::{Addr, AddrRange, AttributeField, Attributes, PhysAddrRange, VirtAddr, VirtAddrRange};
 
-static mut FRAME_TABLE_RANGE: Option<PhysAddrRange> = None;
-
-/// Initialise
-pub fn init(frame_table_range: PhysAddrRange) -> Result<()> {
-    info!("init");
-    info!("Kernel base: {:?}", Arch::kernel_base());
-    unsafe {
-        FRAME_TABLE_RANGE = Some(frame_table_range);
-    }
-    Ok(())
-}
+use core::fmt;
+use core::fmt::{Debug, Formatter};
 
 /// Content within Range.
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -25,11 +16,10 @@ pub enum RangeContent {
     KernelText,
     KernelStatic,
     KernelData,
-    KernelStack,
     FrameTable,
+    KernelStack,
+    KernelHeap,
     Device,
-    L3PageTables,
-    Heap,
 }
 
 /// Range requiring to be mapped.
@@ -41,13 +31,15 @@ struct KernelExtent {
     virt_range_gap: &'static dyn Fn() -> Option<usize>,
     phys_addr_range: &'static dyn Fn() -> Option<PhysAddrRange>,
     attributes: Attributes,
+    virt_range: Option<VirtAddrRange>,
 }
 
 impl Debug for KernelExtent {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
-            "KernelExtent {{ {:?}, {:#x}, {:#x}, {:?}, {:?} }}",
+            "KernelExtent {{{:?} => {:?}, {:#x}, {:#x}, {:?}, {:?}}}",
+            self.virt_range,
             self.content,
             self.virt_range_align,
             self.virt_range_min_extent,
@@ -57,9 +49,11 @@ impl Debug for KernelExtent {
     }
 }
 
+static mut FRAME_TABLE_RANGE: Option<PhysAddrRange> = None;
+
 const GB: usize = 1024 * 1024 * 1024;
 
-const LAYOUT: [KernelExtent; 9] = [
+static mut LAYOUT: [KernelExtent; 8] = [
     KernelExtent {
         content: RangeContent::RAM,
         virt_range_align: 1 * GB,
@@ -67,6 +61,7 @@ const LAYOUT: [KernelExtent; 9] = [
         virt_range_gap: &{ || None },
         phys_addr_range: &{ || Some(Arch::ram_range().expect("Arch::ram_range")) },
         attributes: Attributes::RAM,
+        virt_range: None,
     },
     KernelExtent {
         content: RangeContent::KernelText,
@@ -83,6 +78,7 @@ const LAYOUT: [KernelExtent; 9] = [
         },
         phys_addr_range: &{ || Some(Arch::text_image()) },
         attributes: Attributes::KERNEL_EXEC,
+        virt_range: None,
     },
     KernelExtent {
         content: RangeContent::KernelStatic,
@@ -91,6 +87,7 @@ const LAYOUT: [KernelExtent; 9] = [
         virt_range_gap: &{ || None },
         phys_addr_range: &{ || Some(Arch::static_image()) },
         attributes: Attributes::KERNEL_STATIC,
+        virt_range: None,
     },
     KernelExtent {
         content: RangeContent::KernelData,
@@ -99,38 +96,16 @@ const LAYOUT: [KernelExtent; 9] = [
         virt_range_gap: &{ || None },
         phys_addr_range: &{ || Some(Arch::data_image()) },
         attributes: Attributes::KERNEL_DATA,
+        virt_range: None,
     },
     KernelExtent {
         content: RangeContent::FrameTable,
         virt_range_align: 1 * GB,
         virt_range_min_extent: 1 * GB,
         virt_range_gap: &{ || None },
-        phys_addr_range: &{ || unsafe { Some(FRAME_TABLE_RANGE.expect("FRAME_TABLE_RANGE")) } },
+        phys_addr_range: &{ || unsafe { FRAME_TABLE_RANGE } },
         attributes: Attributes::KERNEL_DATA.set(AttributeField::Block),
-    },
-    KernelExtent {
-        content: RangeContent::Device,
-        virt_range_align: 1 * GB,
-        virt_range_min_extent: 1 * GB,
-        virt_range_gap: &{ || None },
-        phys_addr_range: &{ || None },
-        attributes: Attributes::DEVICE,
-    },
-    KernelExtent {
-        content: RangeContent::L3PageTables,
-        virt_range_align: 1 * GB,
-        virt_range_min_extent: 8 * GB,
-        virt_range_gap: &{ || None },
-        phys_addr_range: &{ || None },
-        attributes: Attributes::KERNEL_DATA,
-    },
-    KernelExtent {
-        content: RangeContent::Heap,
-        virt_range_align: 1 * GB,
-        virt_range_min_extent: 8 * GB,
-        virt_range_gap: &{ || None },
-        phys_addr_range: &{ || None },
-        attributes: Attributes::KERNEL_DATA,
+        virt_range: None,
     },
     KernelExtent {
         content: RangeContent::KernelStack,
@@ -139,8 +114,74 @@ const LAYOUT: [KernelExtent; 9] = [
         virt_range_gap: &{ || None },
         phys_addr_range: &{ || None },
         attributes: Attributes::KERNEL_DATA,
+        virt_range: None,
+    },
+    KernelExtent {
+        content: RangeContent::KernelHeap,
+        virt_range_align: 1 * GB,
+        virt_range_min_extent: 8 * GB,
+        virt_range_gap: &{ || None },
+        phys_addr_range: &{ || None },
+        attributes: Attributes::KERNEL_DATA,
+        virt_range: None,
+    },
+    KernelExtent {
+        content: RangeContent::Device,
+        virt_range_align: 1 * GB,
+        virt_range_min_extent: 1 * GB,
+        virt_range_gap: &{ || None },
+        phys_addr_range: &{ || None },
+        attributes: Attributes::DEVICE,
+        virt_range: None,
     },
 ];
+
+static mut MEM_FIXED_OFFSET: FixedOffset = FixedOffset::identity();
+
+/// Initialise
+pub fn init(frame_table_range: PhysAddrRange) -> Result<()> {
+    info!("init");
+    info!("Kernel base: {:?}", Arch::kernel_base());
+
+    unsafe {
+        FRAME_TABLE_RANGE = Some(frame_table_range);
+    }
+
+    let mut virt_addr = Arch::kernel_base();
+    unsafe {
+        for extent in LAYOUT.iter_mut() {
+            let base = if extent.virt_range_align > 0 {
+                virt_addr.align_up(extent.virt_range_align)
+            } else {
+                virt_addr
+            };
+            let virt_range_gap = (extent.virt_range_gap)();
+            let base = match virt_range_gap {
+                Some(gap) => base.increment(gap),
+                None => base,
+            };
+
+            let phys_addr_range = (extent.phys_addr_range)();
+
+            let length = if let Some(phys_addr_range) = phys_addr_range {
+                core::cmp::max(phys_addr_range.length(), extent.virt_range_min_extent)
+            } else {
+                extent.virt_range_min_extent
+            };
+            extent.virt_range = Some(VirtAddrRange::new(base, length));
+
+            if extent.content == RangeContent::RAM {
+                let phys_addr = phys_addr_range.unwrap().base();
+                let translation = FixedOffset::new(phys_addr, base);
+                MEM_FIXED_OFFSET = translation;
+            }
+
+            virt_addr = extent.virt_range.unwrap().step().base();
+        }
+    }
+
+    Ok(())
+}
 
 /// Range requiring to be mapped.
 #[derive(Debug)]
@@ -152,27 +193,11 @@ pub struct KernelRange {
 }
 
 impl KernelRange {
-    fn from(virt_addr: VirtAddr, extent: &KernelExtent) -> Self {
-        let base = if extent.virt_range_align > 0 {
-            virt_addr.align_up(extent.virt_range_align)
-        } else {
-            virt_addr
-        };
-        let virt_range_gap = (extent.virt_range_gap)();
-        let base = match virt_range_gap {
-            Some(gap) => base.increment(gap),
-            None => base,
-        };
-        let phys_addr_range = (extent.phys_addr_range)();
-        let length = if let Some(phys_addr_range) = phys_addr_range {
-            core::cmp::max(phys_addr_range.length(), extent.virt_range_min_extent)
-        } else {
-            extent.virt_range_min_extent
-        };
+    fn from(extent: &KernelExtent) -> Self {
         Self {
             content: extent.content,
-            virt_addr_range: VirtAddrRange::new(base, length),
-            phys_addr_range,
+            virt_addr_range: extent.virt_range.expect("Layout not initialised"),
+            phys_addr_range: (extent.phys_addr_range)(),
             attributes: extent.attributes,
         }
     }
@@ -185,7 +210,7 @@ pub struct LayoutIterator {
 }
 
 impl Debug for LayoutIterator {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::result::Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::result::Result<(), fmt::Error> {
         write!(f, "Layout")
     }
 }
@@ -203,14 +228,16 @@ impl Iterator for LayoutIterator {
     type Item = KernelRange;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.i >= LAYOUT.len() {
-            return None;
+        unsafe {
+            if self.i >= LAYOUT.len() {
+                return None;
+            }
+            info!("{:?}", &LAYOUT[self.i]);
+            let result = KernelRange::from(&LAYOUT[self.i]);
+            self.next_base = result.virt_addr_range.step().base();
+            self.i += 1;
+            Some(result)
         }
-        trace!("{:?}: {:?}", self.next_base, &LAYOUT[self.i]);
-        let result = KernelRange::from(self.next_base, &LAYOUT[self.i]);
-        self.next_base = result.virt_addr_range.step().base();
-        self.i += 1;
-        Some(result)
     }
 }
 
@@ -230,6 +257,23 @@ impl IntoIterator for Layout {
     }
 }
 
+/// Get the offset of real RAM from the kernel-mapped area.
+#[inline(always)]
+pub fn mem_translation() -> &'static impl super::Translate {
+    unsafe { &MEM_FIXED_OFFSET }
+}
+
+/// Search the kernel layout for the virtual address range of the first kernel heap area.
+pub fn get_range(content: RangeContent) -> Result<VirtAddrRange> {
+    unsafe {
+        LAYOUT
+            .iter()
+            .find(|extent| (*extent).content == content)
+            .and_then(|e| e.virt_range)
+            .ok_or(Error::UnInitialised)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -237,9 +281,10 @@ mod tests {
 
     #[test]
     fn calculate() {
-        unsafe { FRAME_TABLE_RANGE = Some(PhysAddrRange::new(PhysAddr::at(0x4000_0000), 0x1000)) }
+        assert_err!(get_range(RangeContent::KernelHeap));
+        init(PhysAddrRange::new(PhysAddr::at(0x4000_0000), 0x1000)).unwrap();
         for item in layout().unwrap() {
-            info!("{:?}", item);
+            assert_eq!(item.virt_addr_range, get_range(item.content).unwrap());
         }
     }
 }

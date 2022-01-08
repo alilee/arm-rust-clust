@@ -72,23 +72,22 @@ pub fn enable_paging(ttb1: u64, ttb0: u64, asid: u16) -> Result<()> {
 }
 
 #[inline(never)]
-/// Set the stack pointer and call function (using new stack)
-pub fn move_stack(stack_pointer: usize, next: fn() -> !) -> ! {
+/// Set the stack pointer
+pub fn move_stack(stack_pointer: usize) -> () {
     unsafe {
-        asm!(
-            "mov sp, {}", 
-            "br {}",
-            in(reg) stack_pointer, 
-            in(reg) next, 
-            options(noreturn))
+        asm!("mov sp, {}",
+             in(reg) stack_pointer)
     }
 }
 
+/// EL1 has triggered a data abort
 ///
-pub fn handle_data_abort_current_el(esr: LocalRegisterCopy<u64, ESR_EL1::Register>) -> Option<u64> {
+/// Page table entry for read or write access is invalid - either paged out
+/// or was never mapped.
+pub fn handle_data_abort_el1(esr: LocalRegisterCopy<u64, ESR_EL1::Register>) -> Result<()> {
     use crate::pager::{Addr, VirtAddr};
     use ESR_EL1::ISS_DATA_FAULT_STATUS_CODE_REASON::Value;
-    info!("handle_data_abort_current_el");
+    info!("handle_data_abort_el1");
 
     let dfsc_reason: Value = esr
         .read_as_enum(ESR_EL1::ISS_DATA_FAULT_STATUS_CODE_REASON)
@@ -96,16 +95,7 @@ pub fn handle_data_abort_current_el(esr: LocalRegisterCopy<u64, ESR_EL1::Registe
     match dfsc_reason {
         Value::Translation => {
             let fault_addr = VirtAddr::at(FAR_EL1.get() as usize);
-            let mut page_dir =
-                aarch64::pager::PageDirectory::load(TTBR0_EL1.get(), TTBR1_EL1.get());
-            page_dir
-                .demand_page(
-                    fault_addr,
-                    crate::pager::allocator(),
-                    crate::pager::mem_translation(),
-                )
-                .expect("page fault");
-            None
+            crate::pager::kernel_translation_fault(fault_addr, Some(esr.read(ESR_EL1::ISS_DATA_FAULT_STATUS_CODE_LEVEL)))
         }
         _ => unimplemented!(),
     }

@@ -5,7 +5,7 @@ use super::{Addr, AddrRange, VirtAddr, PAGESIZE_BYTES};
 use core::fmt::{Debug, Error, Formatter};
 
 /// A local physical address
-#[derive(Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Copy, Clone, PartialOrd, PartialEq, Eq, Ord)]
 pub struct PhysAddr(usize);
 
 impl Debug for PhysAddr {
@@ -27,6 +27,9 @@ impl Addr<PhysAddr, PhysAddrRange> for PhysAddr {
 }
 
 impl PhysAddr {
+    /// Const for compile-time constant
+    pub const fn fixed(addr: usize) -> Self { Self(addr) }
+
     /// Construct bottom of virtual address range.
     pub const fn null() -> Self {
         Self(0)
@@ -109,6 +112,11 @@ pub struct PhysAddrRangeIterator {
 }
 
 impl PhysAddrRange {
+    /// Const for compile-time constant
+    pub const fn fixed(base: PhysAddr, length: usize) -> Self {
+        Self { base, length }
+    }
+
     /// Length of the range in bytes.
     pub const fn length_in_pages(&self) -> usize {
         (self.length + PAGESIZE_BYTES - 1) / PAGESIZE_BYTES

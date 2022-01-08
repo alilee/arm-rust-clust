@@ -84,9 +84,9 @@ impl PagerTrait for Arch {
         hal::enable_paging(ttb1, ttb0, 0)
     }
 
-    fn move_stack(stack_pointer: VirtAddr, next: fn() -> !) -> ! {
+    fn move_stack(stack_pointer: VirtAddr) -> () {
         info!("move_stack: {:?}", stack_pointer);
-        hal::move_stack(stack_pointer.get(), next)
+        hal::move_stack(stack_pointer.get())
     }
 }
 
@@ -104,13 +104,16 @@ pub struct PageDirectory {
 }
 
 impl PageDirectory {
-    fn new() -> Self {
+    /// Create a new empty page directory
+    pub const fn new() -> Self {
         Self {
             ttb0: None,
             ttb1: None,
         }
     }
 
+    /// Populate page directory from physical addresses
+    #[cfg(test)]
     pub fn load(ttbr0: u64, ttbr1: u64) -> Self {
         Self {
             ttb0: Some(PhysAddr::at(ttbr0 as usize)),
@@ -251,58 +254,6 @@ impl PageDirectory {
         }
         Ok(target_range)
     }
-
-    pub fn demand_page(
-        &mut self,
-        virt_addr: VirtAddr,
-        allocator: &Locked<impl FrameAllocator>,
-        mem_access_translation: &impl Translate,
-    ) -> Result<()> {
-        let (mut phys_addr, mut level, purpose) = if virt_addr < Arch::kernel_base() {
-            (
-                self.ttb0.unwrap(),
-                TTB0_FIRST_LEVEL as usize,
-                FramePurpose::User,
-            )
-        } else {
-            (
-                self.ttb1.unwrap(),
-                TTB1_FIRST_LEVEL as usize,
-                FramePurpose::Kernel,
-            )
-        };
-
-        let mut parent_entry = PageTableEntry::null();
-        while level <= 3 {
-            let page_table = unsafe {
-                mem_access_translation
-                    .translate_phys(phys_addr)?
-                    .as_mut_ref::<PageTable>()
-            };
-            let entry = virt_addr.get_page_table_entry(LEVEL_WIDTH, LEVEL_OFFSETS[level]);
-
-            if !page_table[entry].is_valid() {
-                let purpose = match level {
-                    3 => purpose,
-                    2 => FramePurpose::LeafPageTable,
-                    1 => FramePurpose::BranchPageTable,
-                    _ => unreachable!(),
-                };
-                phys_addr = allocator.lock().alloc_zeroed(purpose)?;
-                if page_table[entry].is_null() {
-                    if parent_entry.is_null() {
-                        return Err(SegmentFault);
-                    }
-                    page_table[entry] = parent_entry;
-                }
-                page_table[entry].demand_page(phys_addr);
-            }
-            parent_entry = page_table[entry];
-            phys_addr = parent_entry.next_level_table_address();
-            level += 1;
-        }
-        Ok(())
-    }
 }
 
 impl crate::archs::PageDirectory for PageDirectory {
@@ -360,6 +311,58 @@ impl crate::archs::PageDirectory for PageDirectory {
             allocator,
             mem_access_translation,
         )
+    }
+
+    fn demand_page(
+        &mut self,
+        virt_addr: VirtAddr,
+        allocator: &Locked<impl FrameAllocator>,
+        mem_access_translation: &impl Translate,
+    ) -> Result<()> {
+        let (mut phys_addr, mut level, purpose) = if virt_addr < Arch::kernel_base() {
+            (
+                self.ttb0.unwrap(),
+                TTB0_FIRST_LEVEL as usize,
+                FramePurpose::User,
+            )
+        } else {
+            (
+                self.ttb1.unwrap(),
+                TTB1_FIRST_LEVEL as usize,
+                FramePurpose::Kernel,
+            )
+        };
+
+        let mut parent_entry = PageTableEntry::null();
+        while level <= 3 {
+            let page_table = unsafe {
+                mem_access_translation
+                    .translate_phys(phys_addr)?
+                    .as_mut_ref::<PageTable>()
+            };
+            let entry = virt_addr.get_page_table_entry(LEVEL_WIDTH, LEVEL_OFFSETS[level]);
+
+            if !page_table[entry].is_valid() {
+                let purpose = match level {
+                    3 => purpose,
+                    2 => FramePurpose::LeafPageTable,
+                    1 => FramePurpose::BranchPageTable,
+                    _ => unreachable!(),
+                };
+                phys_addr = allocator.lock().alloc_zeroed(purpose)?;
+                if page_table[entry].is_null() {
+                    if parent_entry.is_null() {
+                        return Err(SegmentFault);
+                    }
+                    page_table[entry] = parent_entry;
+                }
+                page_table[entry].demand_page(phys_addr);
+            }
+            parent_entry = page_table[entry];
+            phys_addr = parent_entry.next_level_table_address();
+            level += 1;
+        }
+        Ok(())
     }
 
     #[allow(dead_code)]

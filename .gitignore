@@ -13,3 +13,4 @@ sdimage
 qemu*.*dt*
 rust-clust.iml
 .idea
+test_output

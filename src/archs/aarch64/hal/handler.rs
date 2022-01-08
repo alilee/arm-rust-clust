@@ -36,7 +36,7 @@ fn print_exception_details() {
 #[allow(dead_code)]
 #[no_mangle]
 fn el1_sp0_sync_handler() -> ! {
-    info!("SP0 Sync Exception!");
+    info!("EL1 SP0 Sync Exception!");
     print_exception_details();
 
     info!("looping...");
@@ -44,21 +44,23 @@ fn el1_sp0_sync_handler() -> ! {
 }
 
 #[no_mangle]
-fn el1_sp1_sync_handler() -> Option<u64> {
+fn el1_sp1_sync_handler() -> () {
     use cortex_a::registers::{ESR_EL1::*, *};
 
-    info!("SP1 Sync Exception!");
+    info!("EL1 SP1 Sync Exception!");
     print_exception_details();
 
     let esr = ESR_EL1.extract();
     match esr.read_as_enum(ESR_EL1::EC) {
-        Some(EC::Value::DataAbortCurrentEL) => super::pager::handle_data_abort_current_el(esr),
+        Some(EC::Value::DataAbortCurrentEL) => {
+            super::pager::handle_data_abort_el1(esr).expect("pager::handle_data_abort_el1")
+        }
         None => unreachable!(),
         _ => {
             info!("looping...");
             loop {}
         }
-    }
+    };
 }
 
 #[no_mangle]

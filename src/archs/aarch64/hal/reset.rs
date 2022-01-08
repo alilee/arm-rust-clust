@@ -4,9 +4,9 @@
 
 use core::arch::asm;
 
-use crate::pager::{Addr, PhysAddr, Translate};
+use crate::pager::{Addr, PhysAddr};
 
-use tock_registers::interfaces::{ReadWriteable, Writeable};
+use tock_registers::interfaces::{ReadWriteable, Writeable, Readable};
 
 #[link_section = ".startup"]
 #[no_mangle]
@@ -21,32 +21,30 @@ use tock_registers::interfaces::{ReadWriteable, Writeable};
 /// NOTE: must not use stack before SP set.
 pub unsafe extern "C" fn reset(pdtb: *const u8) -> ! {
     asm!(
-        "   mrs x1, mpidr_el1",
-        "   and x1, x1, 0xFF", // aff0
-        "   cbz x1, 3f",       // core 0
+        "   adrp x1, STACK_TOP",
+        "   mov  sp, x1",
+        "   mrs  x1, mpidr_el1",
+        "   and  x1, x1, 0xFF",             // aff0
+        "   cbnz x1, 2f",                   // not core 0
+        "   bl   enable_boot_vm",
+        "   b    kernel_init",
         "2: wfe",
-        "   b 2b", // TODO: init remaining cores
-        "3: adrp x1, STACK_TOP",
-        "   mov sp, x1",
-        "   b enable_boot_vm",
+        "   b    core_init",
         options(noreturn)
     )
 }
 
 #[allow(dead_code)]
+#[link_section = ".startup"]
 #[no_mangle]
 /// FIXME: Fetch addresses from dtb and calculate
 /// TODO: CPACR to enable FP in EL1
-/// FIXME: initialise memory
+/// FIXME: initialise BSS memory
 /// TODO: register assignments and translate should be from const (depends on consts in traits)
-extern "C" fn enable_boot_vm(_pdtb: *const u8) -> ! {
+extern "C" fn enable_boot_vm() {
     use crate::archs::aarch64;
     use aarch64::pager::TABLE_ENTRIES;
     use cortex_a::{asm::barrier, registers::SCTLR_EL1::*, registers::TCR_EL1::*, registers::*};
-
-    // TODO: device_tree::set(pdtb);
-
-    super::init_mair();
 
     #[repr(align(4096))]
     struct TempMap([u64; TABLE_ENTRIES]);
@@ -54,14 +52,21 @@ extern "C" fn enable_boot_vm(_pdtb: *const u8) -> ! {
     static mut TEMP_MAP1: TempMap = TempMap([0; TABLE_ENTRIES]);
     static mut TEMP_MAP0: TempMap = TempMap([0; TABLE_ENTRIES]);
 
-    unsafe {
-        TEMP_MAP1.0[0] = aarch64::pager::BOOT_RAM_DESCRIPTOR;
-        TEMP_MAP1.0[8] = aarch64::pager::BOOT_RAM_DESCRIPTOR;
-        TEMP_MAP1.0[10] = aarch64::pager::BOOT_DEVICE_DESCRIPTOR;
-        TTBR1_EL1.set(PhysAddr::from_ptr(&TEMP_MAP1).get() as u64);
+    super::init_mair();
 
-        TEMP_MAP0.0[0] = aarch64::pager::BOOT_DEVICE_DESCRIPTOR;
-        TEMP_MAP0.0[1] = aarch64::pager::BOOT_RAM_DESCRIPTOR;
+    let core_id = MPIDR_EL1.read(MPIDR_EL1::AFF0);
+
+    unsafe {
+        if core_id == 0 {
+            TEMP_MAP1.0[0] = aarch64::pager::BOOT_RAM_DESCRIPTOR;
+            TEMP_MAP1.0[8] = aarch64::pager::BOOT_RAM_DESCRIPTOR;
+            TEMP_MAP1.0[10] = aarch64::pager::BOOT_DEVICE_DESCRIPTOR;
+
+            TEMP_MAP0.0[0] = aarch64::pager::BOOT_DEVICE_DESCRIPTOR;
+            TEMP_MAP0.0[1] = aarch64::pager::BOOT_RAM_DESCRIPTOR;
+        }
+
+        TTBR1_EL1.set(PhysAddr::from_ptr(&TEMP_MAP1).get() as u64);
         TTBR0_EL1.set(PhysAddr::from_ptr(&TEMP_MAP0).get() as u64);
     }
 
@@ -82,23 +87,14 @@ extern "C" fn enable_boot_vm(_pdtb: *const u8) -> ! {
 
     SCTLR_EL1.modify(M::SET);
 
-    let kernel_offset = unsafe {
+    unsafe {
         barrier::isb(barrier::SY);
 
         let kernel_offset = aarch64::pager::kernel_offset();
 
         let offset = kernel_offset.offset() as u64;
-        asm!("add sp, sp, {}", in(reg) offset);
-
-        kernel_offset
-    };
-
-    extern "Rust" {
-        fn kernel_init() -> !; // address relative to _reset, not high memory
+        asm!("add sp, sp, {0}",
+             "add lr, lr, {0}",
+             in(reg) offset);
     }
-
-    let phys_addr = unsafe { PhysAddr::from_ptr(kernel_init as *const ()) };
-    let kernel_init: fn() -> ! = kernel_offset.translate_phys(phys_addr).unwrap().into();
-
-    kernel_init()
 }

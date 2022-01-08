@@ -89,7 +89,8 @@ macro_rules! log {
         if $crate::debug::logger::_is_enabled($lvl, module_path!()) {
             let lvl: &str = $lvl.into();
             $crate::debug::logger::_print(format_args_nl!(
-                concat!("{:>5}[{:>50} {:3}]  ", $string),
+                concat!("#{} {:>5}[{:>50} {:3}]  ", $string),
+                $crate::archs::arch::core_id(),
                 lvl,
                 module_path!().trim_start_matches("libkernel::").trim_start_matches("archs::"),
                 line!(),
@@ -100,7 +101,8 @@ macro_rules! log {
         if $crate::debug::logger::_is_enabled($lvl, module_path!()) {
             let lvl: &str = $lvl.into();
             $crate::debug::logger::_print(format_args_nl!(
-                concat!("{:>5}[{:>50} {:3}]  ", $format_string),
+                concat!("#{} {:>5}[{:>50} {:3}]  ", $format_string),
+                $crate::archs::arch::core_id(),
                 lvl,
                 module_path!().trim_start_matches("libkernel::").trim_start_matches("archs::"),
                 line!(),

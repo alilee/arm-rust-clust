@@ -34,8 +34,8 @@ pub trait PagerTrait {
     fn pager_init() -> Result<()>;
     /// Enable virtual memory management.
     fn enable_paging(page_directory: &impl PageDirectory) -> Result<()>;
-    /// Move the stack pointer and call
-    fn move_stack(stack_pointer: VirtAddr, next: fn() -> !) -> !;
+    /// Move the stack pointer
+    fn move_stack(stack_pointer: VirtAddr) -> ();
 }
 
 /// Methods to maintain a directory of virtual to physical addresses.
@@ -52,6 +52,13 @@ pub trait PageDirectory {
         allocator: &Locked<impl FrameAllocator>,
         mem_access_translation: &impl Translate,
     ) -> Result<VirtAddrRange>;
+
+    /// Provision a page for a previously mapped, but absent, virtual address.
+    fn demand_page(&mut self,
+                   virt_addr: VirtAddr,
+                   allocator: &Locked<impl FrameAllocator>,
+                   mem_access_translation: &impl Translate,
+    ) -> Result<()>;
 
     /// Log the state of the page directory at debug.
     fn dump(&self, mem_access_translation: &impl Translate);

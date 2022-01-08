@@ -20,6 +20,6 @@ fn kernel_init() {
 
 #[kernel_test]
 fn kernel_init_runs() {
-    info!("test logging");
+    info!("test logging: {:?}", kernel_init as *const ());
     assert!(true)
 }

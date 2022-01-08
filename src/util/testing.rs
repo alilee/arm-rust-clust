@@ -30,3 +30,22 @@ pub fn test_runner(tests: &[&test_types::UnitTest]) {
 
     exit_success()
 }
+
+
+#[linkage = "weak"]
+#[no_mangle]
+fn core_init() {
+    use core::sync::atomic::{AtomicBool, Ordering};
+
+        static ACCESS: AtomicBool = AtomicBool::new(true);
+
+        while ACCESS.swap(false, Ordering::Relaxed) {
+            // handler::core().expect("handler::core");
+            // pager::core(core_main).expect("pager::join_core");
+            info!("sandwich");
+
+            ACCESS.store(true, Ordering::Relaxed);
+        }
+
+        loop {}
+}

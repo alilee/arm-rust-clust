@@ -1,6 +1,11 @@
-HOST = x86_64-unknown-linux-gnu
+# HOST = x86_64-unknown-linux-gnu
+HOST = x86_64-apple-darwin
 TARGET = aarch64-unknown-none-softfloat
+
 QEMU = qemu-system-aarch64
+QEMU_SMP = -smp 2
+QEMU_DISK = -device virtio-blk-pci,drive=drive0,id=virtblk0,num-queues=4 -drive file=disk.qcow2,if=none,id=drive0
+
 GDB = gdb
 
 BINTOOLS = rust
@@ -39,15 +44,17 @@ define KERNEL_TEST_RUNNER
 #!/usr/bin/env fish
 ## DO NOT EDIT - generated in Makefile
 
+mkdir -p test_output
+
 $(OBJCOPY) -O binary $$argv[1] $$argv[1].bin
-$(OBJDUMP) -d $$argv[1] > $$argv[1].s
-$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -semihosting -kernel $$argv[1].bin > $$argv[1].out
+$(OBJDUMP) -d $$argv[1] > test_output/(basename $$argv[1].s)
+$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -semihosting -kernel $$argv[1].bin > test_output/(basename $$argv[1].out)
 set result $$status
-if test $$result -ne 0
-    cat $$argv[1].out
+#if test $$result -ne 0
+#    cat $$argv[1].out
 #	$(OBJDUMP) -dS $$argv[1] > $$argv[1].code
 #	$(OBJDUMP) -d $$argv[1] > $$argv[1].s
-end
+#end
 exit $$result
 endef
 
@@ -71,8 +78,11 @@ clean:
 
 ### debugging ###
 
-qemu.rawdtb:
-	$(QEMU) -machine $(BOARD),dumpdtb=$@ -cpu $(CPU) -m 256M -nographic
+disk.qcow2:
+	qemu-img create -f qcow2 $@ 1G
+
+qemu.rawdtb: Makefile disk.qcow2
+	$(QEMU) -machine $(BOARD),dumpdtb=$@ -cpu $(CPU) -m 256M -nographic $(QEMU_SMP) $(QEMU_DISK)
 
 %.dtb: %.rawdtb
 	dtc -I dtb -O dtb $< > $@
@@ -81,13 +91,13 @@ qemu.rawdtb:
 	dtc -I dtb -O dts $< -o $@
 
 qemu: $(kernel).bin qemu.dtb
-	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -semihosting -s -S -dtb qemu.dtb -kernel $<
+	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic $(QEMU_SMP) $(QEMU_DISK) -semihosting -s -S -dtb qemu.dtb -kernel $<
 
 gdb: $(kernel)
 	$(GDB) -iex 'file $(kernel)' -iex 'target remote localhost:1234'
 
 run: $(kernel).bin qemu.dtb
-	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -semihosting -dtb qemu.dtb -kernel $<
+	$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic $(QEMU_SMP) $(QEMU_DISK) -semihosting -dtb qemu.dtb -kernel $<
 
 real_clean: clean
 	rm -f *.rawdtb

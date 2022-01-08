@@ -17,6 +17,8 @@ pub enum Error {
     UnexpectedValue,
     /// Function failed because required initialisation not performed
     UnInitialised,
+    /// Device not compatible with driver
+    DeviceIncompatible,
     /// Function failed with undefined error
     UnknownError,
     /// Function failed because not implemented

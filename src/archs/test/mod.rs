@@ -58,12 +58,18 @@ impl super::PagerTrait for Arch {
         unimplemented!()
     }
 
-    fn move_stack(stack_pointer: VirtAddr, next: fn() -> !) -> ! {
+    fn move_stack(stack_pointer: VirtAddr) -> () {
         unimplemented!()
     }
 }
 
 pub struct PageDirectory {}
+
+impl PageDirectory {
+    pub const fn new() -> Self {
+        Self {}
+    }
+}
 
 #[allow(unused_variables)]
 impl super::PageDirectory for PageDirectory {
@@ -79,6 +85,15 @@ impl super::PageDirectory for PageDirectory {
         allocator: &Locked<impl FrameAllocator>,
         mem_access_translation: &impl Translate,
     ) -> Result<VirtAddrRange> {
+        unimplemented!()
+    }
+
+    fn demand_page(
+        &mut self,
+        virt_addr: VirtAddr,
+        allocator: &Locked<impl FrameAllocator>,
+        mem_access_translation: &impl Translate,
+    ) -> Result<()> {
         unimplemented!()
     }
 
@@ -128,3 +143,8 @@ pub static data_base: Page = Page::new();
 
 #[no_mangle]
 pub static data_end: Page = Page::new();
+
+#[inline(always)]
+pub fn core_id() -> u8 {
+    1
+}

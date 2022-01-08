@@ -17,13 +17,11 @@ use test_macros::kernel_test;
 fn kernel_init() {
     use libkernel::{handler, pager};
 
-    fn next() -> ! {
-        test_main();
-        unreachable!()
-    }
-
     handler::init().expect("handler::init");
-    pager::init(next);
+    pager::init().expect("pager::init");
+    pager::alloc::init().expect("pager::alloc::init");
+
+    test_main();
 }
 
 #[kernel_test]

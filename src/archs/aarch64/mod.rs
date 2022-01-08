@@ -30,6 +30,14 @@ pub fn new_page_directory() -> impl super::PageDirectory {
     pager::new_page_directory()
 }
 
+#[cfg(not(test))]
+pub use hal::core_id;
+
+#[cfg(test)]
+pub use hal_test::core_id;
+
+pub use pager::PageDirectory;
+
 #[cfg(test)]
 mod tests {
     use super::*;

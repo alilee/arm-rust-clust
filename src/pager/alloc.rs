@@ -2,7 +2,8 @@
 
 //! A kernel heap.
 
-use crate::pager::{Addr, AddrRange, VirtAddrRange};
+use crate::pager::layout::RangeContent;
+use crate::pager::{Addr, AddrRange};
 use crate::Result;
 
 use linked_list_allocator::LockedHeap;
@@ -21,8 +22,11 @@ fn alloc_error_handler(layout: alloc::alloc::Layout) -> ! {
 ///
 /// Note: Memory must be accessible.
 #[cfg(not(test))]
-pub fn init(heap_range: VirtAddrRange) -> Result<()> {
+pub fn init() -> Result<()> {
     info!("init");
+
+    let heap_range = super::layout::get_range(RangeContent::KernelHeap)?;
+
     unsafe {
         let mut lock = ALLOCATOR.lock();
         lock.init(heap_range.base().get(), heap_range.length());
@@ -31,6 +35,6 @@ pub fn init(heap_range: VirtAddrRange) -> Result<()> {
 }
 
 #[cfg(test)]
-pub fn init(_heap_range: VirtAddrRange) -> Result<()> {
+pub fn init() -> Result<()> {
     Ok(())
 }

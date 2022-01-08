@@ -97,7 +97,7 @@ impl FrameDeque {
         count: usize,
         table: &mut [FrameTableNode],
     ) -> Result<()> {
-        info!("move_range(i: {}, count: {}, ...)", i, count);
+        trace!("move_range(i: {}, count: {}, ...)", i, count);
         if FrameTableNode::is_clear(table[i].prev()) {
             // Can't detach head from another list.
             unimplemented!()
@@ -357,17 +357,27 @@ pub fn init() -> Result<PhysAddrRange> {
     frame_table.move_free_range(frame_table_range, FrameUse::FrameTable)?;
     frame_table.move_free_range(image_range, FrameUse::KernelHot)?;
 
-    unsafe {
-        ALLOCATOR = Locked::new(FrameTable(Some(frame_table)));
-        debug!("{:?}", *(ALLOCATOR.lock()));
-    }
-
     Ok(frame_table_range)
 }
 
 /// Get the frame table allocator.
 pub fn allocator() -> &'static Locked<FrameTable> {
     unsafe { &ALLOCATOR }
+}
+
+/// Align frame table pointer with re-mapped frame table.
+///
+/// After reset, the frame table is placed just after the data section. Layout will
+/// put it somewhere else in kernel memory so the pointers need to be updated.
+pub(in crate::pager) fn repoint_frame_table(virt_addr: VirtAddr) -> Result<()> {
+    let mut lock = allocator().lock();
+
+    let frame_table_ptr: *mut FrameTableNode = virt_addr.into();
+    let inner = lock.inner()?;
+    let len = inner.ram_range.length_in_pages();
+    inner.table = unsafe { core::slice::from_raw_parts_mut(frame_table_ptr, len) };
+
+    Ok(())
 }
 
 impl FrameTableInner {

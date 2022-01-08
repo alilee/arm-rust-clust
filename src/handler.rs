@@ -6,6 +6,13 @@ use crate::Result;
 
 /// Initialise the exception handling module.
 pub fn init() -> Result<()> {
+    major!("init");
+    init_core()
+}
+
+/// Enable exception handling on a core
+pub fn init_core() -> Result<()> {
+    major!("init_core");
     use crate::archs::{arch::Arch, HandlerTrait};
     Arch::handler_init()
 }
