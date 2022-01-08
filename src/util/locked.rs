@@ -18,6 +18,8 @@ impl<A> Locked<A> {
     }
 
     /// Hold the lock on the Mutex while local variable is live.
+    ///
+    /// NOTE: Cannot log here as debug Uart is a Locked object.
     pub fn lock(&self) -> MutexGuard<A> {
         self.inner.lock()
     }

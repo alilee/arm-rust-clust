@@ -52,8 +52,24 @@ impl PageTableEntry {
         level < 3 && self.0 & 0b10 != 0
     }
 
-    pub fn demand_page(&mut self, phys_addr: PhysAddr) -> Self {
-        self.0 |= (phys_addr.get() & Self::OUTPUT_MASK) as u64 | 1;
+    pub fn copy_down(&mut self, level: u8) -> Self {
+        info!("copy_down");
+        if level < 3 {
+            TableDescriptor::new_branch(PhysAddr::null(), (*self).into()).into()
+        } else {
+            PageBlockDescriptor::new_leaf(PhysAddr::null(), (*self).into()).into()
+        }
+    }
+
+    pub fn demand_page(&mut self, level: u8, phys_addr: PhysAddr) -> Self {
+        self.0 |= (phys_addr.get() & Self::OUTPUT_MASK) as u64 | TableDescriptorFields::Valid.mask;
+        if level == 3 {
+            debug!("setting AF");
+            use PageBlockDescriptorFields::*;
+            let mut pbd = PageBlockDescriptor::from(*self);
+            pbd.modify(AF::SET);
+            self.0 = pbd.get();
+        }
         *self
     }
 

@@ -20,6 +20,7 @@ static LOGGER: Locked<Uart> = Locked::new(Uart::debug());
 
 /// Print debug output to the debug Uart
 #[cfg(not(test))]
+#[inline(never)]
 pub fn _print(args: Arguments) {
     use core::fmt::Write;
 

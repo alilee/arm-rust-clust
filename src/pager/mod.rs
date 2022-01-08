@@ -64,7 +64,7 @@ pub fn init(next: fn() -> !) -> ! {
     let page_directory = Locked::new(arch::new_page_directory());
     let mut page_directory = page_directory.lock();
 
-    let (mem_translation_found, kernel_image_offset, heap_range, stack_pointer) =
+    let (mem_translation_found, kernel_image_offset, frame_table_addr, heap_range, stack_pointer) =
         map_ranges(&mut (*page_directory), &frames::allocator()).expect("pager::map_ranges");
     trace!("kernel_image_offset: {:?}", kernel_image_offset);
     debug!("{:?}", *frames::allocator().lock());
@@ -80,7 +80,8 @@ pub fn init(next: fn() -> !) -> ! {
 
     Arch::enable_paging(&(*page_directory)).expect("Arch::enable-paging");
 
-    debug!("heap_range: {:?}", heap_range);
+    frames::repoint(frame_table_addr, mem_translation_found).expect("pager::frames::repoint");
+
     #[cfg(not(test))]
     alloc::init(heap_range).expect("alloc::init");
 
@@ -90,19 +91,20 @@ pub fn init(next: fn() -> !) -> ! {
 fn map_ranges(
     page_directory: &mut impl PageDirectory,
     allocator: &Locked<impl FrameAllocator>,
-) -> Result<(FixedOffset, FixedOffset, VirtAddrRange, VirtAddr)> {
+) -> Result<(FixedOffset, FixedOffset, VirtAddr, VirtAddrRange, VirtAddr)> {
     use crate::Error;
 
     let mem_access_translation = &Identity::new();
     let mut mem_translation = Err(Error::UnInitialised); // layout mem
     let mut kernel_offset = Err(Error::UnInitialised); // layout should contain KernelText
+    let mut frame_table_addr = Err(Error::UnInitialised); // layout should contain frame table
     let mut heap_range_result = Err(Error::UnInitialised); // layout should yield heap
     let mut stack_pointer = Err(Error::UnInitialised); // layout should yield stack
 
     for kernel_range in layout::layout().expect("layout::layout") {
         use layout::RangeContent::*;
 
-        debug!("{:?}", kernel_range);
+        major!("{:?}", kernel_range);
 
         match kernel_range.content {
             RAM | KernelText | KernelStatic | KernelData | FrameTable => {
@@ -127,6 +129,9 @@ fn map_ranges(
                     RAM => mem_translation = Ok(translation),
                     KernelText => {
                         kernel_offset = Ok(translation);
+                    }
+                    FrameTable => {
+                        frame_table_addr = Ok(kernel_range.virt_addr_range.base());
                     }
                     _ => {}
                 };
@@ -223,6 +228,7 @@ fn map_ranges(
     Ok((
         mem_translation?,
         kernel_offset?,
+        frame_table_addr?,
         heap_range_result?,
         stack_pointer?,
     ))

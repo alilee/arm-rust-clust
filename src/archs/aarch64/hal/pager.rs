@@ -7,11 +7,10 @@ use core::arch::asm;
 use crate::archs::aarch64;
 use crate::Result;
 
+use super::handler::EsrEL1;
+
 use cortex_a::registers::*;
-use tock_registers::{
-    interfaces::{ReadWriteable, Readable, Writeable},
-    LocalRegisterCopy,
-};
+use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
 /// Initialise the MAIR register..
 ///
@@ -85,14 +84,14 @@ pub fn move_stack(stack_pointer: usize, next: fn() -> !) -> ! {
 }
 
 ///
-pub fn handle_data_abort_current_el(esr: LocalRegisterCopy<u64, ESR_EL1::Register>) -> Option<u64> {
+pub fn handle_data_abort_current_el(esr: EsrEL1) -> Option<u64> {
     use crate::pager::{Addr, VirtAddr};
     use ESR_EL1::ISS_DATA_FAULT_STATUS_CODE_REASON::Value;
     info!("handle_data_abort_current_el");
 
     let dfsc_reason: Value = esr
         .read_as_enum(ESR_EL1::ISS_DATA_FAULT_STATUS_CODE_REASON)
-        .expect("ISS_DATA_FAULT_STATUS_CODE_REASON");
+        .expect("unknown ESR_EL1::ISS_DATA_FAULT_STATUS_CODE_REASON");
     match dfsc_reason {
         Value::Translation => {
             let fault_addr = VirtAddr::at(FAR_EL1.get() as usize);
@@ -107,6 +106,7 @@ pub fn handle_data_abort_current_el(esr: LocalRegisterCopy<u64, ESR_EL1::Registe
                 .expect("page fault");
             None
         }
+        Value::AccessFlag => unimplemented!(),
         _ => unimplemented!(),
     }
 }

@@ -258,18 +258,11 @@ impl PageDirectory {
         allocator: &Locked<impl FrameAllocator>,
         mem_access_translation: &impl Translate,
     ) -> Result<()> {
+        info!("demand_page: {:?}", virt_addr);
         let (mut phys_addr, mut level, purpose) = if virt_addr < Arch::kernel_base() {
-            (
-                self.ttb0.unwrap(),
-                TTB0_FIRST_LEVEL as usize,
-                FramePurpose::User,
-            )
+            (self.ttb0.unwrap(), TTB0_FIRST_LEVEL, FramePurpose::User)
         } else {
-            (
-                self.ttb1.unwrap(),
-                TTB1_FIRST_LEVEL as usize,
-                FramePurpose::Kernel,
-            )
+            (self.ttb1.unwrap(), TTB1_FIRST_LEVEL, FramePurpose::Kernel)
         };
 
         let mut parent_entry = PageTableEntry::null();
@@ -279,23 +272,53 @@ impl PageDirectory {
                     .translate_phys(phys_addr)?
                     .as_mut_ref::<PageTable>()
             };
-            let entry = virt_addr.get_page_table_entry(LEVEL_WIDTH, LEVEL_OFFSETS[level]);
+            let entry = virt_addr.get_page_table_entry(LEVEL_WIDTH, LEVEL_OFFSETS[level as usize]);
+
+            if level < 3 {
+                debug!(
+                    "L{:?} page_table[{:?}] = {:?}",
+                    level,
+                    entry,
+                    TableDescriptor::from(page_table[entry])
+                );
+            } else {
+                debug!(
+                    "L{:?} page_table[{:?}] = {:?}",
+                    level,
+                    entry,
+                    PageBlockDescriptor::from(page_table[entry])
+                );
+            }
 
             if !page_table[entry].is_valid() {
+                if page_table[entry].is_null() {
+                    if parent_entry.is_null() {
+                        // no L1 entry
+                        return Err(SegmentFault);
+                    }
+                    debug!("entry is null!");
+                    page_table[entry] = parent_entry.copy_down(level);
+                }
                 let purpose = match level {
                     3 => purpose,
                     2 => FramePurpose::LeafPageTable,
                     1 => FramePurpose::BranchPageTable,
                     _ => unreachable!(),
                 };
-                phys_addr = allocator.lock().alloc_zeroed(purpose)?;
-                if page_table[entry].is_null() {
-                    if parent_entry.is_null() {
-                        return Err(SegmentFault);
-                    }
-                    page_table[entry] = parent_entry;
+                phys_addr = {
+                    let mut lock = allocator.lock();
+                    lock.alloc_zeroed(purpose)?
+                };
+                debug!("using page at: {:?}", phys_addr);
+                page_table[entry].demand_page(level, phys_addr);
+                if level < 3 {
+                    debug!("updated: {:?}", TableDescriptor::from(page_table[entry]));
+                } else {
+                    debug!(
+                        "updated: {:?}",
+                        PageBlockDescriptor::from(page_table[entry])
+                    );
                 }
-                page_table[entry].demand_page(phys_addr);
             }
             parent_entry = page_table[entry];
             phys_addr = parent_entry.next_level_table_address();

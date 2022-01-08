@@ -10,7 +10,7 @@ static mut FRAME_TABLE_RANGE: Option<PhysAddrRange> = None;
 
 /// Initialise
 pub fn init(frame_table_range: PhysAddrRange) -> Result<()> {
-    info!("init");
+    info!("init: {:?}", frame_table_range);
     info!("Kernel base: {:?}", Arch::kernel_base());
     unsafe {
         FRAME_TABLE_RANGE = Some(frame_table_range);

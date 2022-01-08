@@ -37,8 +37,9 @@ fn next() -> ! {
 
 #[kernel_test]
 fn paging_init() {
-    use libkernel::pager;
+    use libkernel::{handler, pager};
 
+    handler::init().expect("handler::init");
     pager::init(next)
 }
 
