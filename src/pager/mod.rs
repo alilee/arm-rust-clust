@@ -96,6 +96,7 @@ pub fn init() -> Result<()> {
         page_directory.dump(&Identity::new());
     }
 
+    // FIXME: needs frame::allocator to allocate stack.
     init_core()?;
 
     let frame_table_range = layout::get_range(RangeContent::FrameTable)?;
@@ -152,24 +153,21 @@ pub fn init_core() -> Result<()> {
     }
     let stack_pointer = allocate_core_stack()?;
     Arch::move_stack(stack_pointer);
-
     Ok(())
 }
 
 fn map_ranges(
     page_directory: &mut impl PageDirectory,
     allocator: &Locked<impl FrameAllocator>,
-) -> Result<(FixedOffset, FixedOffset)> {
+) -> Result<()> {
     use crate::Error;
 
     let mem_access_translation = &Identity::new();
-    let mut mem_translation = Err(Error::UnInitialised); // layout mem
-    let mut kernel_offset = Err(Error::UnInitialised); // layout should contain KernelText
 
     for kernel_range in layout::layout().expect("layout::layout") {
         use layout::RangeContent::*;
 
-        debug!("{:?}", kernel_range);
+        major!("{:?}", kernel_range);
 
         match kernel_range.content {
             RAM | KernelText | KernelStatic | KernelData | FrameTable => {
@@ -191,9 +189,8 @@ fn map_ranges(
                 )?;
 
                 match kernel_range.content {
-                    RAM => mem_translation = Ok(translation),
-                    KernelText => {
-                        kernel_offset = Ok(translation);
+                    FrameTable => {
+                        frame_table_addr = Ok(kernel_range.virt_addr_range.base());
                     }
                     _ => {}
                 };
@@ -216,7 +213,7 @@ fn map_ranges(
         };
     }
 
-    debug!("Debug output device identity-mapped");
+    warn!("Debug output device identity-mapped");
     page_directory.map_translation(
         unsafe { VirtAddrRange::identity_mapped(Arch::debug_uart()?) },
         Identity::new(),
@@ -225,5 +222,5 @@ fn map_ranges(
         mem_access_translation,
     )?;
 
-    Ok((mem_translation?, kernel_offset?))
+    Ok(())
 }

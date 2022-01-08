@@ -7,11 +7,10 @@ use core::arch::asm;
 use crate::archs::aarch64;
 use crate::Result;
 
+use super::handler::EsrEL1;
+
 use cortex_a::registers::*;
-use tock_registers::{
-    interfaces::{ReadWriteable, Readable, Writeable},
-    LocalRegisterCopy,
-};
+use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
 /// Initialise the MAIR register..
 ///
@@ -91,12 +90,16 @@ pub fn handle_data_abort_el1(esr: LocalRegisterCopy<u64, ESR_EL1::Register>) -> 
 
     let dfsc_reason: Value = esr
         .read_as_enum(ESR_EL1::ISS_DATA_FAULT_STATUS_CODE_REASON)
-        .expect("ISS_DATA_FAULT_STATUS_CODE_REASON");
+        .expect("unknown ESR_EL1::ISS_DATA_FAULT_STATUS_CODE_REASON");
     match dfsc_reason {
         Value::Translation => {
             let fault_addr = VirtAddr::at(FAR_EL1.get() as usize);
-            crate::pager::kernel_translation_fault(fault_addr, Some(esr.read(ESR_EL1::ISS_DATA_FAULT_STATUS_CODE_LEVEL)))
+            crate::pager::kernel_translation_fault(
+                fault_addr,
+                Some(esr.read(ESR_EL1::ISS_DATA_FAULT_STATUS_CODE_LEVEL)),
+            )
         }
+        Value::AccessFlag => unimplemented!(),
         _ => unimplemented!(),
     }
 }

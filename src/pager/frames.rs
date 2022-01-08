@@ -149,6 +149,7 @@ impl FrameDeque {
     pub fn pop(&mut self, table: &mut [FrameTableNode]) -> Result<usize> {
         let result = self.head.ok_or(Error::OutOfPages)?;
         assert!(FrameTableNode::is_clear(table[result].prev()));
+
         if self.count == 1 {
             self.head = None;
             self.tail = None;
@@ -168,7 +169,7 @@ type FrameTableNodes = &'static mut [FrameTableNode];
 pub struct FrameTableInner {
     frame_lists: EnumMap<FrameUse, FrameDeque>,
     table: FrameTableNodes,
-    ram_range: PhysAddrRange, // range of ram to be managed. De-coupled from Arch for testing.
+    ram_range: PhysAddrRange,     // range of ram to be managed
     mem_translation: FixedOffset, // translation to enable physical pages to be accessed for zero-ing.
 }
 
@@ -326,38 +327,66 @@ impl FrameTableNode {
     }
 }
 
-/// Initialise
+/// Initialise the frame table
 ///
-/// Take the first n pages as a frame table.
+/// Take the first n pages after the kernel image as a frame table.
 pub fn init() -> Result<PhysAddrRange> {
     use crate::archs::{arch::Arch, PagerTrait};
-    use crate::debug::Level;
 
-    log!(Level::Major, "init");
+    major!("init");
+
+    // during start-up place frame table just after load image in physical memory
+    extern "C" {
+        static image_end: u8;
+    }
+    let frame_table_addr = unsafe { VirtAddr::from_linker_symbol(&image_end) };
+    debug!("frame_table_addr: {:?}", frame_table_addr);
 
     let ram_range: PhysAddrRange = Arch::ram_range()?;
-    let mem_translation = FixedOffset::new(ram_range.base(), Arch::kernel_base());
     let len = ram_range.length_in_pages();
-    let image_range = Arch::boot_image();
+
+    let mut frame_table = unsafe {
+        let frame_table_ptr: *mut FrameTableNode = frame_table_addr.into();
+        FrameTableInner::new(
+            core::slice::from_raw_parts_mut(frame_table_ptr, len),
+            ram_range,
+            FixedOffset::identity(),
+        )
+    };
+
+    let image_range: PhysAddrRange = Arch::boot_image();
     let frame_table_range = PhysAddrRange::new(
         image_range.top(),
         len * core::mem::size_of::<FrameTableNode>(),
     );
 
-    let mut frame_table = unsafe {
-        let virt_addr: VirtAddr = Arch::kernel_offset().translate_phys(frame_table_range.base())?;
-        let frame_table_ptr: *mut FrameTableNode = virt_addr.into();
-        FrameTableInner::new(
-            core::slice::from_raw_parts_mut(frame_table_ptr, len),
-            ram_range,
-            mem_translation,
-        )
-    };
-
     frame_table.move_free_range(frame_table_range, FrameUse::FrameTable)?;
     frame_table.move_free_range(image_range, FrameUse::KernelHot)?;
 
     Ok(frame_table_range)
+}
+
+/// Repoint the frame table to another address
+pub fn repoint(virt_addr: VirtAddr, mem_translation: FixedOffset) -> Result<()> {
+    use crate::archs::{arch::Arch, PagerTrait};
+
+    major!("repoint: va: {:?}, trns: {:?}", virt_addr, mem_translation);
+
+    let ram_range: PhysAddrRange = Arch::ram_range()?;
+    let len = ram_range.length_in_pages();
+    let frame_table_ptr: *mut FrameTableNode = virt_addr.into();
+    unsafe {
+        let mut frame_table = ALLOCATOR.lock();
+        let inner = frame_table.inner()?;
+        inner.table = core::slice::from_raw_parts_mut(frame_table_ptr, len);
+        inner.mem_translation = mem_translation;
+    }
+
+    unsafe {
+        info!("{:?}", *(ALLOCATOR.lock()));
+    }
+
+    Ok(())
 }
 
 /// Get the frame table allocator.
@@ -422,6 +451,7 @@ impl FrameTableInner {
 
 impl Allocator for FrameTable {
     fn alloc_zeroed(&mut self, purpose: Purpose) -> Result<PhysAddr> {
+        info!("alloc_zeroed: {:?}", purpose);
         let inner = self.inner()?;
         let mut zero_required = false;
         let i = inner.pop(FrameUse::Zeroed).or_else(|e| match e {
@@ -448,6 +478,8 @@ impl Allocator for FrameTable {
     }
 
     fn alloc_for_overwrite(&mut self, purpose: Purpose) -> Result<PhysAddr> {
+        info!("alloc_for_overwrite: {:?}", purpose);
+
         let inner = self.inner()?;
         let i = inner.pop(FrameUse::Free).or(Err(Error::OutOfMemory))?;
         inner.push(i, purpose.into())?;

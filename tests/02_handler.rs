@@ -20,9 +20,14 @@ fn kernel_init() {
 
 #[kernel_test]
 fn handler_init() {
+    use core::arch::asm;
     use libkernel::handler;
 
     major!("initialising handler");
     handler::init().expect("handler::init");
-    debug!("returned");
+    debug!("init'd");
+
+    unsafe { asm!("svc #0") } // no-op
+
+    info!("returned");
 }

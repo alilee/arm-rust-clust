@@ -21,27 +21,24 @@ use test_macros::kernel_test;
 
 #[no_mangle]
 fn kernel_init() {
-    test_main();
+    use libkernel::{handler, pager};
+
+    fn next() -> ! {
+        test_main();
+        unreachable!()
+    }
+
+    handler::init().expect("handler::init");
+    pager::init(next);
 }
 
 #[kernel_test]
 fn test_heap() {
-    info!("test_heap");
     use alloc::boxed::Box;
 
-    let backing = Page::new();
-    debug!("backing");
-
-    unsafe {
-        let mut heap = libkernel::pager::alloc::ALLOCATOR.lock();
-        debug!("lock");
-        heap.init(VirtAddr::from(&backing).get(), PAGESIZE_BYTES);
-        debug!("init");
-    }
-
     let x = Box::new(1);
-    debug!("new");
+    info!("new: {:?}", &*x as *const i32);
 
     assert_eq!(*x, 1);
-    debug!("returning");
+    info!("returning");
 }
