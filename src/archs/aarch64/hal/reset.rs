@@ -6,7 +6,7 @@ use core::arch::asm;
 
 use crate::pager::{Addr, PhysAddr};
 
-use tock_registers::interfaces::{ReadWriteable, Writeable, Readable};
+use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
 #[link_section = ".startup"]
 #[no_mangle]
@@ -21,11 +21,11 @@ use tock_registers::interfaces::{ReadWriteable, Writeable, Readable};
 /// NOTE: must not use stack before SP set.
 pub unsafe extern "C" fn reset(pdtb: *const u8) -> ! {
     asm!(
-        "   adrp x1, STACK_TOP",
+        "   adrp x1, image_base",
         "   mov  sp, x1",
         "   mrs  x1, mpidr_el1",
-        "   and  x1, x1, 0xFF",             // aff0
-        "   cbnz x1, 2f",                   // not core 0
+        "   and  x1, x1, 0xFF", // aff0
+        "   cbnz x1, 2f",       // not core 0
         "   bl   enable_boot_vm",
         "   b    kernel_init",
         "2: wfe",

@@ -4,7 +4,8 @@ use crate::util::locked::Locked;
 use crate::{Error, Result};
 
 use super::{
-    Addr, AddrRange, FixedOffset, PhysAddr, PhysAddrRange, Translate, VirtAddr, PAGESIZE_BYTES,
+    mem_translation, Addr, AddrRange, PhysAddr, PhysAddrRange, Translate, VirtAddr, PAGESIZE_BYTES,
+    {layout, layout::RangeContent},
 };
 
 use enum_map::{Enum, EnumMap};
@@ -91,41 +92,59 @@ impl FrameDeque {
         Ok(())
     }
 
-    pub fn move_range(
-        &mut self,
-        i: usize,
-        count: usize,
-        table: &mut [FrameTableNode],
-    ) -> Result<()> {
-        trace!("move_range(i: {}, count: {}, ...)", i, count);
-        if FrameTableNode::is_clear(table[i].prev()) {
-            // Can't detach head from another list.
-            unimplemented!()
-        }
-        let prev = table[i].prev();
-        let tail = i + count - 1;
-        let next = table[tail].next();
-        table[prev].set_next(next);
-        table[next].set_prev(prev);
-        table[tail].clear_next();
-        dbg!(self.tail);
-        match self.tail {
-            None => {
-                assert_eq!(self.count, 0);
-                assert_none!(self.head);
-                table[i].clear_prev();
-                self.head = Some(i);
-            }
-            Some(tail) => {
-                assert_ne!(self.count, 0);
-                assert!(FrameTableNode::is_clear(table[tail].next()));
-                table[tail].set_next(i);
-                table[i].set_prev(tail);
+    pub fn remove_section(&mut self, i: usize, count: usize, table: &mut [FrameTableNode]) -> () {
+        debug!("remove_section: {:?}, {:?}", i, count);
+
+        let before = table[i].prev();
+        let end = i + count - 1;
+        let after = table[end].next();
+
+        if self.head != Some(i) {
+            table[before].set_next(after);
+            table[i].clear_prev();
+        } else {
+            if self.tail == Some(end) {
+                self.head = None;
+            } else {
+                self.head = Some(after);
+                table[after].clear_prev();
             }
         }
-        self.tail = Some(tail);
+
+        if self.tail != Some(end) {
+            table[after].set_prev(before);
+            table[end].clear_next();
+        } else {
+            if self.head == Some(i) {
+                self.tail = None;
+            } else {
+                self.tail = Some(before);
+                table[before].clear_next();
+            }
+        }
+
+        self.count -= count;
+
+        assert!(FrameTableNode::is_clear(table[i].prev()));
+        assert!(FrameTableNode::is_clear(table[end].next()));
+        assert!(self.head.is_none() || FrameTableNode::is_clear(table[self.head.unwrap()].prev()));
+        assert!(self.tail.is_none() || FrameTableNode::is_clear(table[self.tail.unwrap()].next()));
+    }
+
+    pub fn append_section(&mut self, i: usize, count: usize, table: &mut [FrameTableNode]) -> () {
+        debug!("append_section: {:?}, {:?}", i, count);
+
+        let end = i + count - 1;
+        if self.head.is_none() {
+            self.head = Some(i);
+            self.tail = Some(end);
+        } else {
+            let old_head = self.head.unwrap();
+            table[old_head].set_prev(end);
+            table[end].set_next(old_head);
+            self.head = Some(i);
+        }
         self.count += count;
-        Ok(())
     }
 
     pub fn push(&mut self, i: usize, table: &mut [FrameTableNode]) -> Result<()> {
@@ -169,8 +188,7 @@ type FrameTableNodes = &'static mut [FrameTableNode];
 pub struct FrameTableInner {
     frame_lists: EnumMap<FrameUse, FrameDeque>,
     table: FrameTableNodes,
-    ram_range: PhysAddrRange,     // range of ram to be managed
-    mem_translation: FixedOffset, // translation to enable physical pages to be accessed for zero-ing.
+    ram_range: PhysAddrRange, // range of ram to be managed
 }
 
 pub struct FrameTable(Option<FrameTableInner>);
@@ -285,7 +303,7 @@ impl From<Purpose> for FrameUse {
 
 #[derive(Copy, Clone, Debug)]
 #[repr(C)]
-struct FrameTableNode {
+pub(crate) struct FrameTableNode {
     _prev: u32,
     _next: u32,
 }
@@ -330,60 +348,42 @@ impl FrameTableNode {
 /// Initialise the frame table
 ///
 /// Take the first n pages after the kernel image as a frame table.
-pub fn init() -> Result<PhysAddrRange> {
+pub fn init() -> Result<()> {
     use crate::archs::{arch::Arch, PagerTrait};
 
     major!("init");
 
-    // during start-up place frame table just after load image in physical memory
-    extern "C" {
-        static image_end: u8;
-    }
-    let frame_table_addr = unsafe { VirtAddr::from_linker_symbol(&image_end) };
-    debug!("frame_table_addr: {:?}", frame_table_addr);
+    // paging is not enabled yet
+    let frame_table_range = layout::get_phys_range(RangeContent::FrameTable)?;
+
+    debug!("frame_table_range: {:?}", frame_table_range);
 
     let ram_range: PhysAddrRange = Arch::ram_range()?;
     let len = ram_range.length_in_pages();
 
     let mut frame_table = unsafe {
-        let frame_table_ptr: *mut FrameTableNode = frame_table_addr.into();
-        FrameTableInner::new(
+        let frame_table_ptr: *mut FrameTableNode =
+            VirtAddr::identity_mapped(frame_table_range.base()).into();
+        let result = FrameTableInner::new(
             core::slice::from_raw_parts_mut(frame_table_ptr, len),
             ram_range,
-            FixedOffset::identity(),
-        )
+        );
+        result
     };
 
-    let image_range: PhysAddrRange = Arch::boot_image();
-    let frame_table_range = PhysAddrRange::new(
-        image_range.top(),
-        len * core::mem::size_of::<FrameTableNode>(),
-    );
+    let reset_stack_range = layout::get_phys_range(RangeContent::ResetStack)?;
+    frame_table.move_free_range(reset_stack_range, FrameUse::KernelHot)?;
 
-    frame_table.move_free_range(frame_table_range, FrameUse::FrameTable)?;
+    let image_range: PhysAddrRange = Arch::boot_image();
     frame_table.move_free_range(image_range, FrameUse::KernelHot)?;
 
-    Ok(frame_table_range)
-}
-
-/// Repoint the frame table to another address
-pub fn repoint(virt_addr: VirtAddr, mem_translation: FixedOffset) -> Result<()> {
-    use crate::archs::{arch::Arch, PagerTrait};
-
-    major!("repoint: va: {:?}, trns: {:?}", virt_addr, mem_translation);
-
-    let ram_range: PhysAddrRange = Arch::ram_range()?;
-    let len = ram_range.length_in_pages();
-    let frame_table_ptr: *mut FrameTableNode = virt_addr.into();
-    unsafe {
-        let mut frame_table = ALLOCATOR.lock();
-        let inner = frame_table.inner()?;
-        inner.table = core::slice::from_raw_parts_mut(frame_table_ptr, len);
-        inner.mem_translation = mem_translation;
-    }
+    frame_table.move_free_range(frame_table_range, FrameUse::FrameTable)?;
 
     unsafe {
-        info!("{:?}", *(ALLOCATOR.lock()));
+        let mut lock = ALLOCATOR.lock();
+        *lock = FrameTable(Some(frame_table));
+
+        debug!("{:?}", *lock);
     }
 
     Ok(())
@@ -398,10 +398,13 @@ pub fn allocator() -> &'static Locked<FrameTable> {
 ///
 /// After reset, the frame table is placed just after the data section. Layout will
 /// put it somewhere else in kernel memory so the pointers need to be updated.
-pub(in crate::pager) fn repoint_frame_table(virt_addr: VirtAddr) -> Result<()> {
+pub(in crate::pager) fn repoint_frame_table() -> Result<()> {
+    info!("repoint_frame_table");
+
+    let virt_addr = layout::get_range(RangeContent::FrameTable)?;
     let mut lock = allocator().lock();
 
-    let frame_table_ptr: *mut FrameTableNode = virt_addr.into();
+    let frame_table_ptr: *mut FrameTableNode = virt_addr.base().into();
     let inner = lock.inner()?;
     let len = inner.ram_range.length_in_pages();
     inner.table = unsafe { core::slice::from_raw_parts_mut(frame_table_ptr, len) };
@@ -410,7 +413,7 @@ pub(in crate::pager) fn repoint_frame_table(virt_addr: VirtAddr) -> Result<()> {
 }
 
 impl FrameTableInner {
-    fn new(table: FrameTableNodes, ram_range: PhysAddrRange, mem_translation: FixedOffset) -> Self {
+    fn new(table: FrameTableNodes, ram_range: PhysAddrRange) -> Self {
         let mut frame_lists: EnumMap<FrameUse, FrameDeque> = EnumMap::default();
         frame_lists[FrameUse::Free]
             .reset(table)
@@ -419,7 +422,6 @@ impl FrameTableInner {
             table,
             frame_lists,
             ram_range,
-            mem_translation,
         }
     }
 
@@ -428,12 +430,15 @@ impl FrameTableInner {
         phys_addr_range: PhysAddrRange,
         frame_use: FrameUse,
     ) -> Result<()> {
+        debug!("move_free_range: {:?}, {:?}", phys_addr_range, frame_use);
         let count = phys_addr_range.length_in_pages();
         let phys_addr = phys_addr_range.base();
         let i = phys_addr.offset_above(self.ram_range.base()) / PAGESIZE_BYTES;
 
-        self.frame_lists[FrameUse::Free].count -= count;
-        self.frame_lists[frame_use].move_range(i, count, self.table)
+        assert_ne!(0, count);
+        self.frame_lists[FrameUse::Free].remove_section(i, count, self.table);
+        self.frame_lists[frame_use].append_section(i, count, self.table);
+        Ok(())
     }
 
     fn push(&mut self, i: usize, frame_use: FrameUse) -> Result<()> {
@@ -467,7 +472,7 @@ impl Allocator for FrameTable {
 
         if zero_required {
             debug!("No zeroed free memory. Just-in-time zeroing on alloc.");
-            let page: *mut u8 = inner.mem_translation.translate_phys(phys_addr)?.into();
+            let page: *mut u8 = mem_translation().translate_phys(phys_addr)?.into();
             unsafe {
                 core::ptr::write_bytes(page, 0, PAGESIZE_BYTES);
             }
@@ -511,12 +516,10 @@ mod tests {
 
         let pages = [Page::new(); 3];
         let pages_base = unsafe { PhysAddr::from_ptr(&pages) };
-        let mem_translation = FixedOffset::identity();
         let ram_range = PhysAddrRange::new(pages_base, size_of_val(&pages));
         trace!("{:?}", ram_range);
 
-        let mut inner =
-            unsafe { FrameTableInner::new(&mut FRAME_TABLE_NODES, ram_range, mem_translation) };
+        let mut inner = unsafe { FrameTableInner::new(&mut FRAME_TABLE_NODES, ram_range) };
         dbg!(&inner);
 
         inner
@@ -538,13 +541,11 @@ mod tests {
             [FrameTableNode::null(); FRAME_TABLE_LENGTH];
 
         let pages = [Page::new(); 3];
-        let mem_translation = FixedOffset::identity();
         let ram_range =
             unsafe { PhysAddrRange::new(PhysAddr::from_ptr(&pages), size_of_val(&pages)) };
         trace!("{:?}", ram_range);
 
-        let alloc =
-            unsafe { FrameTableInner::new(&mut FRAME_TABLE_NODES, ram_range, mem_translation) };
+        let alloc = unsafe { FrameTableInner::new(&mut FRAME_TABLE_NODES, ram_range) };
 
         unsafe {
             assert_eq!((&FRAME_TABLE_NODES).len(), FRAME_TABLE_LENGTH);

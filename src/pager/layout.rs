@@ -13,6 +13,7 @@ use core::fmt::{Debug, Formatter};
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum RangeContent {
     RAM,
+    ResetStack,
     KernelText,
     KernelStatic,
     KernelData,
@@ -49,11 +50,9 @@ impl Debug for KernelExtent {
     }
 }
 
-static mut FRAME_TABLE_RANGE: Option<PhysAddrRange> = None;
-
 const GB: usize = 1024 * 1024 * 1024;
 
-static mut LAYOUT: [KernelExtent; 8] = [
+static mut LAYOUT: [KernelExtent; 9] = [
     KernelExtent {
         content: RangeContent::RAM,
         virt_range_align: 1 * GB,
@@ -64,18 +63,26 @@ static mut LAYOUT: [KernelExtent; 8] = [
         virt_range: None,
     },
     KernelExtent {
+        content: RangeContent::ResetStack,
+        virt_range_align: 1 * GB,
+        virt_range_min_extent: 0,
+        virt_range_gap: &{ || None },
+        phys_addr_range: &{
+            || {
+                Some(PhysAddrRange::between(
+                    Arch::ram_range().expect("Arch::ram_range").base(),
+                    Arch::text_image().base(),
+                ))
+            }
+        },
+        attributes: Attributes::KERNEL_DATA,
+        virt_range: None,
+    },
+    KernelExtent {
         content: RangeContent::KernelText,
         virt_range_align: 1 * GB,
         virt_range_min_extent: 0,
-        virt_range_gap: &{
-            || {
-                Some(
-                    Arch::text_image()
-                        .base()
-                        .offset_above(Arch::ram_range().expect("Arch::ram_range").base()),
-                )
-            }
-        },
+        virt_range_gap: &{ || None },
         phys_addr_range: &{ || Some(Arch::text_image()) },
         attributes: Attributes::KERNEL_EXEC,
         virt_range: None,
@@ -103,7 +110,17 @@ static mut LAYOUT: [KernelExtent; 8] = [
         virt_range_align: 1 * GB,
         virt_range_min_extent: 1 * GB,
         virt_range_gap: &{ || None },
-        phys_addr_range: &{ || unsafe { FRAME_TABLE_RANGE } },
+        phys_addr_range: &{
+            || {
+                let len = Arch::ram_range()
+                    .expect("Arch::ram_range")
+                    .length_in_pages();
+                Some(PhysAddrRange::new(
+                    Arch::boot_image().top(),
+                    len * core::mem::size_of::<super::frames::FrameTableNode>(),
+                ))
+            }
+        },
         attributes: Attributes::KERNEL_DATA.set(AttributeField::Block),
         virt_range: None,
     },
@@ -111,7 +128,7 @@ static mut LAYOUT: [KernelExtent; 8] = [
         content: RangeContent::KernelStack,
         virt_range_align: 1 * GB,
         virt_range_min_extent: 1 * GB,
-        virt_range_gap: &{ || None },
+        virt_range_gap: &{ || Some(1 * GB) },
         phys_addr_range: &{ || None },
         attributes: Attributes::KERNEL_DATA,
         virt_range: None,
@@ -120,7 +137,7 @@ static mut LAYOUT: [KernelExtent; 8] = [
         content: RangeContent::KernelHeap,
         virt_range_align: 1 * GB,
         virt_range_min_extent: 8 * GB,
-        virt_range_gap: &{ || None },
+        virt_range_gap: &{ || Some(1 * GB) },
         phys_addr_range: &{ || None },
         attributes: Attributes::KERNEL_DATA,
         virt_range: None,
@@ -129,7 +146,7 @@ static mut LAYOUT: [KernelExtent; 8] = [
         content: RangeContent::Device,
         virt_range_align: 1 * GB,
         virt_range_min_extent: 1 * GB,
-        virt_range_gap: &{ || None },
+        virt_range_gap: &{ || Some(1 * GB) },
         phys_addr_range: &{ || None },
         attributes: Attributes::DEVICE,
         virt_range: None,
@@ -139,13 +156,9 @@ static mut LAYOUT: [KernelExtent; 8] = [
 static mut MEM_FIXED_OFFSET: FixedOffset = FixedOffset::identity();
 
 /// Initialise
-pub fn init(frame_table_range: PhysAddrRange) -> Result<()> {
+pub fn init() -> Result<()> {
     info!("init");
     info!("Kernel base: {:?}", Arch::kernel_base());
-
-    unsafe {
-        FRAME_TABLE_RANGE = Some(frame_table_range);
-    }
 
     let mut virt_addr = Arch::kernel_base();
     unsafe {
@@ -257,6 +270,15 @@ impl IntoIterator for Layout {
     }
 }
 
+/// Modify the mem_translation when paging enabled.
+pub fn update_mem_translation() -> Result<()> {
+    info!("update_mem_translation");
+    unsafe {
+        MEM_FIXED_OFFSET = FixedOffset::new(Arch::ram_range()?.base(), Arch::kernel_base());
+    }
+    Ok(())
+}
+
 /// Get the offset of real RAM from the kernel-mapped area.
 #[inline(always)]
 pub fn mem_translation() -> &'static impl super::Translate {
@@ -265,6 +287,7 @@ pub fn mem_translation() -> &'static impl super::Translate {
 
 /// Search the kernel layout for the virtual address range of the first kernel heap area.
 pub fn get_range(content: RangeContent) -> Result<VirtAddrRange> {
+    info!("get_range: {:?}", content);
     unsafe {
         LAYOUT
             .iter()
@@ -274,16 +297,31 @@ pub fn get_range(content: RangeContent) -> Result<VirtAddrRange> {
     }
 }
 
+/// Search the kernel layout for the virtual address range of the first kernel heap area.
+pub fn get_phys_range(content: RangeContent) -> Result<PhysAddrRange> {
+    info!("get_phys_range: {:?}", content);
+    unsafe {
+        LAYOUT
+            .iter()
+            .find(|extent| (*extent).content == content)
+            .and_then(|e| (e.phys_addr_range)())
+            .ok_or(Error::Undefined)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pager::PhysAddr;
 
     #[test]
     fn calculate() {
         assert_err!(get_range(RangeContent::KernelHeap));
-        init(PhysAddrRange::new(PhysAddr::at(0x4000_0000), 0x1000)).unwrap();
+        init().unwrap();
         for item in layout().unwrap() {
+            assert_eq!(
+                item.phys_addr_range.ok_or(Error::Undefined),
+                get_phys_range(item.content)
+            );
             assert_eq!(item.virt_addr_range, get_range(item.content).unwrap());
         }
     }

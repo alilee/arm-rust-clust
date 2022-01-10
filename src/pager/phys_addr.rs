@@ -28,7 +28,9 @@ impl Addr<PhysAddr, PhysAddrRange> for PhysAddr {
 
 impl PhysAddr {
     /// Const for compile-time constant
-    pub const fn fixed(addr: usize) -> Self { Self(addr) }
+    pub const fn fixed(addr: usize) -> Self {
+        Self(addr)
+    }
 
     /// Construct bottom of virtual address range.
     pub const fn null() -> Self {
@@ -72,7 +74,7 @@ impl PhysAddr {
 }
 
 /// A physical address range.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub struct PhysAddrRange {
     base: PhysAddr,
     length: usize,

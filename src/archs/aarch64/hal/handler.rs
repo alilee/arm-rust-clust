@@ -84,6 +84,9 @@ fn el1_sp1_sync_handler(exc: &ExceptionContext) -> () {
         Some(EC::Value::DataAbortCurrentEL) => {
             super::pager::handle_data_abort_el1(esr).expect("pager::handle_data_abort_el1")
         }
+        Some(EC::Value::InstrAbortCurrentEL) => {
+            super::pager::handle_instr_abort_el1(esr).expect("pager::handle_instr_abort_el1")
+        }
         Some(EC::Value::SVC64) => {
             handle_svc64(exc.esr_el1.read(ESR_EL1::ISS_SVC_IMMEDIATE) as u16, exc)
         }
@@ -95,13 +98,13 @@ fn el1_sp1_sync_handler(exc: &ExceptionContext) -> () {
 }
 
 ///
-pub fn handle_svc64(imm: u16, _exc: &ExceptionContext) -> Option<u64> {
+pub fn handle_svc64(imm: u16, _exc: &ExceptionContext) -> () {
     info!("handle_svc64");
 
     match imm {
-        0 => None, // no-op
+        0 => (), // no-op
         _ => panic!("unknown SVC immediate: {:?}", imm),
-    }
+    };
 }
 
 #[no_mangle]

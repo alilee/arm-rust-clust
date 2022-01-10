@@ -7,6 +7,7 @@ SECTIONS
     }
 
     . = 0xffffff8200080000;
+    # . = 0x40080000;
     image_base = .;
 
     .text :
@@ -28,10 +29,6 @@ SECTIONS
     {
         static_end = .;
         data_base = .;
-        . = ALIGN(0x1000);
-        stack = .;
-        . = . + 0x1000;
-        STACK_TOP = .;
         *(.data*)
     }
 

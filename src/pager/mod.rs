@@ -14,7 +14,7 @@ mod translation;
 mod virt_addr;
 
 #[cfg(not(test))]
-pub mod alloc;
+mod alloc;
 
 pub use addr::*;
 pub use attributes::*;
@@ -33,7 +33,6 @@ pub use layout::mem_translation;
 use crate::archs::{arch, arch::Arch, DeviceTrait, PageDirectory, PagerTrait};
 use crate::debug::Level;
 use crate::pager::bump::PageBumpAllocator;
-use crate::pager::layout::RangeContent;
 use crate::util::locked::Locked;
 use crate::Result;
 
@@ -49,6 +48,7 @@ pub struct Pager {}
 
 impl Paging for Pager {
     fn map_device(phys_addr_range: PhysAddrRange) -> Result<VirtAddrRange> {
+        info!("map_device");
         let virt_addr_range = DEVICE_MEM_ALLOCATOR
             .lock()
             .alloc(phys_addr_range.length_in_pages())?;
@@ -68,11 +68,10 @@ impl Paging for Pager {
 pub const PAGESIZE_BYTES: usize = 4096;
 
 /// Available virtual memory within device range.
-pub static DEVICE_MEM_ALLOCATOR: Locked<PageBumpAllocator> = Locked::new(PageBumpAllocator::new());
+static DEVICE_MEM_ALLOCATOR: Locked<PageBumpAllocator> = Locked::new(PageBumpAllocator::new());
 
 /// Available virtual memory for handler stacks (1 per CPU).
-pub static KERNEL_STACK_ALLOCATOR: Locked<PageBumpAllocator> =
-    Locked::new(PageBumpAllocator::new());
+static KERNEL_STACK_ALLOCATOR: Locked<PageBumpAllocator> = Locked::new(PageBumpAllocator::new());
 
 /// Pointers to kernel page directory.
 static KERNEL_PAGE_DIRECTORY: Locked<arch::PageDirectory> = Locked::new(arch::PageDirectory::new());
@@ -80,36 +79,49 @@ static KERNEL_PAGE_DIRECTORY: Locked<arch::PageDirectory> = Locked::new(arch::Pa
 /// Initialise the virtual memory manager and jump to the kernel in high memory.
 ///
 /// Can only reference debug, arch and self. Other modules not initialised.
-pub fn init() -> Result<()> {
-    info!("init");
+pub fn init(next: fn() -> !) -> ! {
+    fn do_init() -> Result<VirtAddr> {
+        major!("init");
 
-    let frame_table_range = frames::init()?;
-    layout::init(frame_table_range).expect("pager::layout::init");
+        layout::init()?;
+        frames::init()?;
 
-    Arch::pager_init().expect("arch::pager::init");
+        Arch::pager_init()?;
 
-    let mut page_directory = KERNEL_PAGE_DIRECTORY.lock();
-    map_ranges(&mut (*page_directory), &frames::allocator())?;
+        {
+            let mut page_directory = KERNEL_PAGE_DIRECTORY.lock();
 
-    // FIXME: Access to logging enabled.
-    if log_enabled!(Level::Trace) {
-        page_directory.dump(&Identity::new());
+            map_ranges(&mut (*page_directory), &frames::allocator())?;
+
+            // FIXME: Access to logging enabled.
+            if log_enabled!(Level::Trace) {
+                page_directory.dump(&Identity::new());
+            }
+        }
+
+        frames::repoint_frame_table()?;
+        layout::update_mem_translation()?;
+
+        {
+            let page_directory = KERNEL_PAGE_DIRECTORY.lock();
+            Arch::enable_paging(&(*page_directory))?;
+        }
+
+        #[cfg(not(test))]
+        alloc::init()?;
+
+        allocate_core_stack()
     }
 
-    // FIXME: needs frame::allocator to allocate stack.
-    init_core()?;
-
-    let frame_table_range = layout::get_range(RangeContent::FrameTable)?;
-    frames::repoint_frame_table(frame_table_range.base())?;
-
-    info!("{:?}", *frames::allocator().lock());
-
-    Ok(())
+    let stack_pointer = do_init().expect("pager::init");
+    Arch::move_stack(stack_pointer, next)
 }
 
 fn allocate_core_stack() -> Result<VirtAddr> {
     use frames::Purpose;
     use AttributeField::*;
+
+    major!("allocate_core_stack");
 
     // core 0 kernel stack
     const KERNEL_STACK_LEN_PAGES: usize = 6;
@@ -129,9 +141,7 @@ fn allocate_core_stack() -> Result<VirtAddr> {
     let mut kernel_stack_page = kernel_stack.resize(PAGESIZE_BYTES).step();
 
     for _ in 0..KERNEL_STACK_LEN_PAGES {
-        let phys_addr = frames::allocator()
-            .lock()
-            .alloc_for_overwrite(Purpose::Kernel)?;
+        let phys_addr = frames::allocator().lock().alloc_zeroed(Purpose::Kernel)?;
         let translation = FixedOffset::new(phys_addr, kernel_stack_page.base());
         KERNEL_PAGE_DIRECTORY.lock().map_translation(
             kernel_stack_page,
@@ -146,74 +156,68 @@ fn allocate_core_stack() -> Result<VirtAddr> {
 }
 
 /// Enable paging and use dedicated stack for current core.
-pub fn init_core() -> Result<()> {
+pub fn init_core(next: fn() -> !) -> ! {
+    major!("init_core");
     {
         let page_directory = KERNEL_PAGE_DIRECTORY.lock();
-        Arch::enable_paging(&(*page_directory)).expect("Arch::enable-paging");
+        Arch::enable_paging(&(*page_directory)).expect("Arch::enable_paging");
     }
-    let stack_pointer = allocate_core_stack()?;
-    Arch::move_stack(stack_pointer);
-    Ok(())
+    let stack_pointer = allocate_core_stack().expect("pager::allocate_core_stack");
+    Arch::move_stack(stack_pointer, next)
 }
 
 fn map_ranges(
     page_directory: &mut impl PageDirectory,
     allocator: &Locked<impl FrameAllocator>,
 ) -> Result<()> {
-    use crate::Error;
-
     let mem_access_translation = &Identity::new();
 
-    for kernel_range in layout::layout().expect("layout::layout") {
+    for kernel_range in layout::layout()? {
         use layout::RangeContent::*;
 
         major!("{:?}", kernel_range);
 
-        match kernel_range.content {
-            RAM | KernelText | KernelStatic | KernelData | FrameTable => {
-                let attributes = kernel_range.attributes.set(AttributeField::Accessed);
-                let phys_addr_range = kernel_range
-                    .phys_addr_range
-                    .expect("kernel_range.phys_addr_range");
-                let translation =
-                    FixedOffset::new(phys_addr_range.base(), kernel_range.virt_addr_range.base());
+        if let Some(phys_addr_range) = kernel_range.phys_addr_range {
+            let attributes = kernel_range.attributes.set(AttributeField::Accessed);
+            let translation =
+                FixedOffset::new(phys_addr_range.base(), kernel_range.virt_addr_range.base());
 
+            page_directory.map_translation(
+                kernel_range
+                    .virt_addr_range
+                    .resize(phys_addr_range.length()),
+                translation,
+                attributes,
+                allocator,
+                mem_access_translation,
+            )?;
+        }
+
+        match kernel_range.content {
+            KernelStack => {
+                KERNEL_STACK_ALLOCATOR
+                    .lock()
+                    .reset(kernel_range.virt_addr_range)?;
+            }
+            KernelHeap => {
                 page_directory.map_translation(
-                    kernel_range
-                        .virt_addr_range
-                        .resize(phys_addr_range.length()),
-                    translation,
-                    attributes,
+                    kernel_range.virt_addr_range,
+                    NullTranslation::new(),
+                    kernel_range.attributes,
                     allocator,
                     mem_access_translation,
                 )?;
-
-                match kernel_range.content {
-                    FrameTable => {
-                        frame_table_addr = Ok(kernel_range.virt_addr_range.base());
-                    }
-                    _ => {}
-                };
-
-                assert!(
-                    kernel_range.content != RAM
-                        || kernel_range.virt_addr_range.base() == Arch::kernel_base()
-                );
             }
-            KernelStack => {
-                let mut lock = KERNEL_STACK_ALLOCATOR.lock();
-                lock.reset(kernel_range.virt_addr_range)?;
-            }
-            KernelHeap => {}
             Device => {
                 DEVICE_MEM_ALLOCATOR
                     .lock()
                     .reset(kernel_range.virt_addr_range)?;
             }
+            _ => {}
         };
     }
 
-    warn!("Debug output device identity-mapped");
+    error!("Debug output device identity-mapped");
     page_directory.map_translation(
         unsafe { VirtAddrRange::identity_mapped(Arch::debug_uart()?) },
         Identity::new(),

@@ -31,7 +31,7 @@ impl super::PagerTrait for Arch {
     }
 
     fn boot_image() -> PhysAddrRange {
-        unimplemented!()
+        PhysAddrRange::between(PhysAddr::at(0x4008_0000), PhysAddr::at(0x400b_d000))
     }
 
     fn text_image() -> PhysAddrRange {
@@ -58,7 +58,7 @@ impl super::PagerTrait for Arch {
         unimplemented!()
     }
 
-    fn move_stack(stack_pointer: VirtAddr) -> () {
+    fn move_stack(stack_pointer: VirtAddr, next: fn() -> !) -> ! {
         unimplemented!()
     }
 }

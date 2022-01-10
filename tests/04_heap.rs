@@ -16,25 +16,24 @@ extern crate claim;
 
 extern crate alloc;
 
+use libkernel::debug::_breakpoint;
 use libkernel::pager::{Addr, Page, VirtAddr, PAGESIZE_BYTES};
 use test_macros::kernel_test;
 
 #[no_mangle]
-fn kernel_init() {
-    use libkernel::{handler, pager};
-
-    fn next() -> ! {
-        test_main();
-        unreachable!()
-    }
-
-    handler::init().expect("handler::init");
-    pager::init(next);
+pub extern "C" fn collect_tests() -> () {
+    info!("hello collect_tests");
+    test_main()
 }
 
 #[kernel_test]
 fn test_heap() {
+    info!("test_heap");
     use alloc::boxed::Box;
+
+    panic!("hello");
+
+    _breakpoint();
 
     let x = Box::new(1);
     info!("new: {:?}", &*x as *const i32);

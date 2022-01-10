@@ -8,7 +8,7 @@ pub fn enable_paging(_: u64, _: u64, _: u16) -> Result<()> {
     unimplemented!()
 }
 
-pub fn move_stack(_: usize) -> () {
+pub fn move_stack(_: usize, _next: fn() -> !) -> ! {
     unimplemented!()
 }
 

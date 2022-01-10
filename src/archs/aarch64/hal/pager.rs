@@ -70,12 +70,15 @@ pub fn enable_paging(ttb1: u64, ttb0: u64, asid: u16) -> Result<()> {
     Ok(())
 }
 
-#[inline(never)]
 /// Set the stack pointer
-pub fn move_stack(stack_pointer: usize) -> () {
+pub fn move_stack(stack_pointer: usize, next: fn() -> !) -> ! {
     unsafe {
-        asm!("mov sp, {}",
-             in(reg) stack_pointer)
+        asm!("mov  sp, {0}",
+             "br   {1}",
+             in(reg) stack_pointer,
+             in(reg) next,
+             options(noreturn),
+        )
     }
 }
 
@@ -83,7 +86,7 @@ pub fn move_stack(stack_pointer: usize) -> () {
 ///
 /// Page table entry for read or write access is invalid - either paged out
 /// or was never mapped.
-pub fn handle_data_abort_el1(esr: LocalRegisterCopy<u64, ESR_EL1::Register>) -> Result<()> {
+pub fn handle_data_abort_el1(esr: EsrEL1) -> Result<()> {
     use crate::pager::{Addr, VirtAddr};
     use ESR_EL1::ISS_DATA_FAULT_STATUS_CODE_REASON::Value;
     info!("handle_data_abort_el1");
@@ -102,4 +105,15 @@ pub fn handle_data_abort_el1(esr: LocalRegisterCopy<u64, ESR_EL1::Register>) -> 
         Value::AccessFlag => unimplemented!(),
         _ => unimplemented!(),
     }
+}
+
+/// EL1 has triggered an instruction abort
+///
+/// Page table entry for execute access is invalid - either paged out
+/// or was never mapped.
+pub fn handle_instr_abort_el1(_esr: EsrEL1) -> Result<()> {
+    use crate::Error;
+    info!("handle_instr_abort_el1");
+
+    Err(Error::SegmentFault)
 }

@@ -31,21 +31,39 @@ pub fn test_runner(tests: &[&test_types::UnitTest]) {
     exit_success()
 }
 
-
 #[linkage = "weak"]
 #[no_mangle]
 fn core_init() {
     use core::sync::atomic::{AtomicBool, Ordering};
 
-        static ACCESS: AtomicBool = AtomicBool::new(true);
+    static ACCESS: AtomicBool = AtomicBool::new(true);
 
-        while ACCESS.swap(false, Ordering::Relaxed) {
-            // handler::core().expect("handler::core");
-            // pager::core(core_main).expect("pager::join_core");
-            info!("sandwich");
+    while ACCESS.swap(false, Ordering::Relaxed) {
+        // handler::core().expect("handler::core");
+        // pager::core(core_main).expect("pager::join_core");
+        info!("sandwich");
 
-            ACCESS.store(true, Ordering::Relaxed);
+        ACCESS.store(true, Ordering::Relaxed);
+    }
+
+    loop {}
+}
+
+#[linkage = "weak"]
+#[no_mangle]
+fn kernel_init() -> ! {
+    use crate::{handler, pager};
+
+    fn next() -> ! {
+        info!("hello next");
+
+        extern "C" {
+            fn collect_tests() -> ();
         }
+        unsafe { collect_tests() };
+        unreachable!()
+    }
 
-        loop {}
+    handler::init().expect("handler::init");
+    pager::init(next)
 }

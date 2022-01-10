@@ -13,17 +13,6 @@ extern crate libkernel;
 
 use test_macros::kernel_test;
 
-#[no_mangle]
-fn kernel_init() {
-    use libkernel::{handler, pager};
-
-    handler::init().expect("handler::init");
-    pager::init().expect("pager::init");
-    pager::alloc::init().expect("pager::alloc::init");
-
-    test_main();
-}
-
 #[kernel_test]
 fn device_init() {
     use libkernel::device;

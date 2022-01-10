@@ -11,6 +11,7 @@
 #[macro_use]
 extern crate libkernel;
 
+use libkernel::util::testing::exit_success;
 use test_macros::kernel_test;
 
 #[no_mangle]
@@ -22,18 +23,22 @@ fn kernel_init() {
 fn paging_init() {
     use libkernel::{handler, pager};
 
-    handler::init().expect("handler::init");
-    pager::init().expect("pager::init");
-    pager::alloc::init().expect("pager::alloc::init");
+    _breakpoint();
 
-    info!("!!!");
+    fn next() -> ! {
+        info!("!!!");
+        exit_success()
+    }
+
+    handler::init().expect("handler::init");
+    pager::init(next)
 }
 
-use libkernel::debug::Level;
+use libkernel::debug::{Level, _breakpoint};
 
 #[no_mangle]
 pub fn _is_enabled(level: Level, module_path: &str) -> bool {
-    const LOG_LEVEL_SETTINGS: &[(&str, Level)] = &[("aarch64::pager", Level::Debug)];
+    const LOG_LEVEL_SETTINGS: &[(&str, Level)] = &[("aarch64::pager", Level::Info)];
 
     let setting = LOG_LEVEL_SETTINGS
         .into_iter()
@@ -44,5 +49,5 @@ pub fn _is_enabled(level: Level, module_path: &str) -> bool {
                 base
             }
         });
-    level >= setting
+    true || level >= setting
 }

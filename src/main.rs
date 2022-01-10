@@ -14,12 +14,7 @@ extern "C" fn kernel_init() -> ! {
     major!("starting");
 
     handler::init().expect("handler::init");
-    pager::init().expect("pager::init");
-
-    #[cfg(not(test))]
-    pager::alloc::init().expect("pager::alloc::init");
-
-    kernel_main()
+    pager::init(kernel_main)
 }
 
 /// Kernel in high memory, initialise rest of kernel.
@@ -45,23 +40,29 @@ fn kernel_main() -> ! {
     loop {}
 }
 
-/// Core entry point, called from architecture-specific reset.
+/// Additional cores entry point, called from architecture-specific reset.
 ///
 /// Note: stack pointer is at top of small, temporary, shared,
 /// start-up stack and memory manager is not yet enabled so is
-/// running directed mapped in low memory.
+/// running a simplified high-memory map.
 #[no_mangle]
 extern "C" fn core_init() -> ! {
     use core::sync::atomic::{AtomicBool, Ordering};
+    major!("core_init");
 
     static ACCESS: AtomicBool = AtomicBool::new(true);
 
-    while ACCESS.swap(false, Ordering::Relaxed) {
-        handler::init_core().expect("handler::init_core");
-        pager::init_core().expect("pager::init_core");
-
+    fn release_and_loop() -> ! {
         ACCESS.store(true, Ordering::Relaxed);
+        major!("core initialised");
+        major!("looping");
+        loop {}
     }
 
-    loop {}
+    handler::init_core().expect("handler::init_core");
+    while ACCESS.swap(false, Ordering::SeqCst) {
+        pager::init_core(release_and_loop)
+    }
+
+    unreachable!()
 }

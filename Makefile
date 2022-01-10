@@ -68,6 +68,7 @@ test: unit_test qemu.dtb target/kernel_test_runner.sh
 	cargo test --tests
 
 clean:
+	rm -fr test_output
 	cargo clean
 
 %.bin: % $(linker.ld)

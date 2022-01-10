@@ -486,7 +486,7 @@ mod tests {
         let table_desc = TableDescriptor::new_entry(None, attributes);
         let phys_addr = PhysAddr::at(0x1234_9000);
         let page_desc =
-            PageBlockDescriptor::from(PageTableEntry::from(table_desc).demand_page(phys_addr))
+            PageBlockDescriptor::from(PageTableEntry::from(table_desc).demand_page(0, phys_addr))
                 ._cleanse_table_bits();
         let page_desc_direct =
             PageBlockDescriptor::new_entry(3, Some(phys_addr), attributes, false);

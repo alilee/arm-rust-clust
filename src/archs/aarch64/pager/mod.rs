@@ -84,9 +84,9 @@ impl PagerTrait for Arch {
         hal::enable_paging(ttb1, ttb0, 0)
     }
 
-    fn move_stack(stack_pointer: VirtAddr) -> () {
+    fn move_stack(stack_pointer: VirtAddr, next: fn() -> !) -> ! {
         info!("move_stack: {:?}", stack_pointer);
-        hal::move_stack(stack_pointer.get())
+        hal::move_stack(stack_pointer.get(), next)
     }
 }
 
@@ -319,18 +319,11 @@ impl crate::archs::PageDirectory for PageDirectory {
         allocator: &Locked<impl FrameAllocator>,
         mem_access_translation: &impl Translate,
     ) -> Result<()> {
+        info!("demand_page: {:?}", virt_addr);
         let (mut phys_addr, mut level, purpose) = if virt_addr < Arch::kernel_base() {
-            (
-                self.ttb0.unwrap(),
-                TTB0_FIRST_LEVEL as usize,
-                FramePurpose::User,
-            )
+            (self.ttb0.unwrap(), TTB0_FIRST_LEVEL, FramePurpose::User)
         } else {
-            (
-                self.ttb1.unwrap(),
-                TTB1_FIRST_LEVEL as usize,
-                FramePurpose::Kernel,
-            )
+            (self.ttb1.unwrap(), TTB1_FIRST_LEVEL, FramePurpose::Kernel)
         };
 
         let mut parent_entry = PageTableEntry::null();
@@ -340,7 +333,7 @@ impl crate::archs::PageDirectory for PageDirectory {
                     .translate_phys(phys_addr)?
                     .as_mut_ref::<PageTable>()
             };
-            let entry = virt_addr.get_page_table_entry(LEVEL_WIDTH, LEVEL_OFFSETS[level]);
+            let entry = virt_addr.get_page_table_entry(LEVEL_WIDTH, LEVEL_OFFSETS[level as usize]);
 
             if !page_table[entry].is_valid() {
                 let purpose = match level {
@@ -356,12 +349,13 @@ impl crate::archs::PageDirectory for PageDirectory {
                     }
                     page_table[entry] = parent_entry;
                 }
-                page_table[entry].demand_page(phys_addr);
+                page_table[entry].demand_page(level, phys_addr);
             }
             parent_entry = page_table[entry];
             phys_addr = parent_entry.next_level_table_address();
             level += 1;
         }
+        debug!("done");
         Ok(())
     }
 

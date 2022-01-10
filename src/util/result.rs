@@ -3,7 +3,7 @@
 //! Uniform structure for errors and results.
 
 /// Specified errors.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Error {
     /// Function completes with no adverse conditions
     Success,
