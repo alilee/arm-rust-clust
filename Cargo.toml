@@ -27,7 +27,7 @@ cortex-a = { path = "../cortex-a" }
 dtb = "0.2.0"
 
 [profile.dev]
-opt-level = 0
+opt-level = 1
 panic = 'abort'
 
 [dev-dependencies]

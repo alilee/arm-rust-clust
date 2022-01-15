@@ -70,3 +70,14 @@ pub fn data_image() -> PhysAddrRange {
         kernel_offset().translate_range(VirtAddrRange::from_linker_symbols(&data_base, &data_end))
     }
 }
+
+/// Stack section of the kernel boot image (using linker symbols)
+pub fn stack_range() -> PhysAddrRange {
+    extern "C" {
+        static stack_base: u8;
+        static stack_end: u8;
+    }
+    unsafe {
+        kernel_offset().translate_range(VirtAddrRange::from_linker_symbols(&stack_base, &stack_end))
+    }
+}

@@ -36,6 +36,7 @@ pub use hal::core_id;
 #[cfg(test)]
 pub use hal_test::core_id;
 
+pub use pager::PageBlockDescriptor;
 pub use pager::PageDirectory;
 
 #[cfg(test)]

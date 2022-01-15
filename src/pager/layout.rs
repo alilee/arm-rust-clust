@@ -50,7 +50,8 @@ impl Debug for KernelExtent {
     }
 }
 
-const GB: usize = 1024 * 1024 * 1024;
+const MB: usize = 1024 * 1024;
+const GB: usize = 1024 * MB;
 
 static mut LAYOUT: [KernelExtent; 9] = [
     KernelExtent {
@@ -63,42 +64,36 @@ static mut LAYOUT: [KernelExtent; 9] = [
         virt_range: None,
     },
     KernelExtent {
-        content: RangeContent::ResetStack,
-        virt_range_align: 1 * GB,
-        virt_range_min_extent: 0,
-        virt_range_gap: &{ || None },
-        phys_addr_range: &{
-            || {
-                Some(PhysAddrRange::between(
-                    Arch::ram_range().expect("Arch::ram_range").base(),
-                    Arch::text_image().base(),
-                ))
-            }
-        },
-        attributes: Attributes::KERNEL_DATA,
-        virt_range: None,
-    },
-    KernelExtent {
         content: RangeContent::KernelText,
         virt_range_align: 1 * GB,
         virt_range_min_extent: 0,
-        virt_range_gap: &{ || None },
+        virt_range_gap: &{
+            || {
+                Some(
+                    PhysAddrRange::between(
+                        Arch::ram_range().expect("Arch::ram_range").base(),
+                        Arch::text_image().base(),
+                    )
+                    .length(),
+                )
+            }
+        },
         phys_addr_range: &{ || Some(Arch::text_image()) },
         attributes: Attributes::KERNEL_EXEC,
         virt_range: None,
     },
     KernelExtent {
         content: RangeContent::KernelStatic,
-        virt_range_align: 0,
+        virt_range_align: 2 * MB,
         virt_range_min_extent: 0,
         virt_range_gap: &{ || None },
         phys_addr_range: &{ || Some(Arch::static_image()) },
-        attributes: Attributes::KERNEL_STATIC,
+        attributes: Attributes::KERNEL_RO_DATA,
         virt_range: None,
     },
     KernelExtent {
         content: RangeContent::KernelData,
-        virt_range_align: 0,
+        virt_range_align: 2 * MB,
         virt_range_min_extent: 0,
         virt_range_gap: &{ || None },
         phys_addr_range: &{ || Some(Arch::data_image()) },
@@ -106,18 +101,24 @@ static mut LAYOUT: [KernelExtent; 9] = [
         virt_range: None,
     },
     KernelExtent {
+        content: RangeContent::ResetStack,
+        virt_range_align: 2 * MB,
+        virt_range_min_extent: 0,
+        virt_range_gap: &{ || None },
+        phys_addr_range: &{ || Some(Arch::stack_range()) },
+        attributes: Attributes::KERNEL_DATA,
+        virt_range: None,
+    },
+    KernelExtent {
         content: RangeContent::FrameTable,
         virt_range_align: 1 * GB,
         virt_range_min_extent: 1 * GB,
-        virt_range_gap: &{ || None },
+        virt_range_gap: &{ || Some(1 * GB) },
         phys_addr_range: &{
             || {
-                let len = Arch::ram_range()
-                    .expect("Arch::ram_range")
-                    .length_in_pages();
                 Some(PhysAddrRange::new(
                     Arch::boot_image().top(),
-                    len * core::mem::size_of::<super::frames::FrameTableNode>(),
+                    super::frames::frame_table_bytes(),
                 ))
             }
         },
@@ -190,6 +191,8 @@ pub fn init() -> Result<()> {
             }
 
             virt_addr = extent.virt_range.unwrap().step().base();
+
+            info!("{:?}", extent);
         }
     }
 

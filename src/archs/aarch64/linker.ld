@@ -16,18 +16,20 @@ SECTIONS
         *(.startup)
         *(.handler)
         *(.text*)
+        . = ALIGN(0x1000);
+        text_end = .;
     }
 
-    .rodata ALIGN(0x1000) :
+    .rodata ALIGN(0x200000) :
     {
-        text_end = .;
         static_base = .;
         *(.rodata*)
+        . = ALIGN(0x1000);
+        static_end = .;
     }
 
-    .data ALIGN(0x1000) :
+    .data ALIGN(0x200000) :
     {
-        static_end = .;
         data_base = .;
         *(.data*)
     }
@@ -41,5 +43,12 @@ SECTIONS
     }
 
     data_end = .;
+
+    .stack ALIGN(0x200000) :
+    {
+        stack_base = .;
+        . = . + 0x8000;
+        stack_end = .;
+    }
     image_end = .;
 }

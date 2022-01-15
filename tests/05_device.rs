@@ -13,6 +13,11 @@ extern crate libkernel;
 
 use test_macros::kernel_test;
 
+#[no_mangle]
+pub extern "C" fn collect_tests() -> () {
+    test_main()
+}
+
 #[kernel_test]
 fn device_init() {
     use libkernel::device;

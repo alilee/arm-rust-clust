@@ -7,8 +7,6 @@ use tock_registers::fields::FieldValue;
 use crate::pager::{Addr, AttributeField, Attributes, PhysAddr, PAGESIZE_BYTES};
 use crate::util::bitfield::{register_bitfields, Bitfield};
 
-use crate::pager::AttributeField::OnDemand;
-
 use core::fmt::{Debug, Formatter};
 use core::mem;
 use core::ops::{Index, IndexMut};
@@ -50,27 +48,6 @@ impl PageTableEntry {
 
     pub const fn is_table(self, level: u8) -> bool {
         level < 3 && self.0 & 0b10 != 0
-    }
-
-    pub fn copy_down(&mut self, level: u8) -> Self {
-        info!("copy_down");
-        if level < 3 {
-            TableDescriptor::new_branch(PhysAddr::null(), (*self).into()).into()
-        } else {
-            PageBlockDescriptor::new_leaf(PhysAddr::null(), (*self).into()).into()
-        }
-    }
-
-    pub fn demand_page(&mut self, level: u8, phys_addr: PhysAddr) -> Self {
-        self.0 |= (phys_addr.get() & Self::OUTPUT_MASK) as u64 | TableDescriptorFields::Valid.mask;
-        if level == 3 {
-            debug!("setting AF");
-            use PageBlockDescriptorFields::*;
-            let mut pbd = PageBlockDescriptor::from(*self);
-            pbd.modify(AF::SET);
-            self.0 = pbd.get();
-        }
-        *self
     }
 
     pub const fn is_same_permissions(self, other: PageTableEntry) -> bool {
@@ -176,25 +153,31 @@ impl From<Attributes> for TableDescriptorMask {
 
 impl TableDescriptor {
     /// Create a new table descriptor entry from attributes.
-    pub fn new_entry(maybe_phys_addr: Option<PhysAddr>, attributes: Attributes) -> Self {
+    ///
+    /// If the table descriptor is higher than level 2, then don't lock access.
+    pub fn new_entry(
+        is_kernel: bool,
+        level: u8,
+        maybe_phys_addr: Option<PhysAddr>,
+        attributes: Attributes,
+    ) -> Self {
         use TableDescriptorFields::*;
 
+        let attributes = if level < 2 {
+            if is_kernel {
+                Attributes::KERNEL_RWX
+            } else {
+                Attributes::USER_RWX
+            }
+        } else {
+            attributes
+        };
         let mut field = TableDescriptorMask::from(attributes);
         field += Type::Table;
-        match maybe_phys_addr {
-            Some(phys_addr) => {
-                field +=
-                    Valid::SET + NextLevelTableAddress.val(phys_addr.page() as PageTableEntryType);
-                Self::from(field)
-            }
-            None => {
-                assert!(attributes.is_set(OnDemand));
-                let page = PageBlockDescriptorMask::from(attributes);
-                let mut result = Self::new(page.value);
-                result.modify(field);
-                result
-            }
+        if let Some(phys_addr) = maybe_phys_addr {
+            field += Valid::SET + NextLevelTableAddress.val(phys_addr.page() as PageTableEntryType);
         }
+        Self::from(field)
     }
 
     /// Create a new table descriptor with the same security as the entry in the parent table.
@@ -255,6 +238,7 @@ register_bitfields! {
     ]
 }
 
+/// A Page Table Entry for an accessible page.
 pub type PageBlockDescriptor = Bitfield<PageTableEntryType, PageBlockDescriptorFields::Register>;
 type PageBlockDescriptorMask = FieldValue<PageTableEntryType, PageBlockDescriptorFields::Register>;
 
@@ -389,13 +373,6 @@ impl PageBlockDescriptor {
             (self.read(PageBlockDescriptorFields::OutputAddress) * PAGESIZE_BYTES as u64) as usize,
         )
     }
-
-    /// Remove extraneous bits (for testing)
-    #[doc(hidden)]
-    fn _cleanse_table_bits(self) -> Self {
-        const _PAGE_BLOCK_MASK: PageTableEntryType = (1 << 58) - 1;
-        Self::new(self.get() & _PAGE_BLOCK_MASK)
-    }
 }
 
 impl From<PageBlockDescriptor> for PageTableEntry {
@@ -431,9 +408,23 @@ mod tests {
     fn test_table_descriptor_entry() {
         let next_level_table_addr = PhysAddr::at(0x123_0000);
         let attributes = Attributes::DEVICE;
-        let result = TableDescriptor::new_entry(Some(next_level_table_addr), attributes);
-        trace!("{:x}", result.get());
+        let is_kernel = true;
+        let result =
+            TableDescriptor::new_entry(is_kernel, 0, Some(next_level_table_addr), attributes);
+        trace!("{:?}", result);
+        assert_eq!(0x1000000001230003, result.get());
+        let result =
+            TableDescriptor::new_entry(is_kernel, 1, Some(next_level_table_addr), attributes);
+        trace!("{:?}", result);
+        assert_eq!(0x1000000001230003, result.get());
+        let result =
+            TableDescriptor::new_entry(is_kernel, 2, Some(next_level_table_addr), attributes);
+        trace!("{:?}", result);
         assert_eq!(0x1800000001230003, result.get());
+        let result =
+            PageBlockDescriptor::new_entry(3, Some(next_level_table_addr), attributes, false);
+        trace!("{:?}", result);
+        assert_eq!(0x0060000001230603, result.get());
     }
 
     #[test]
@@ -482,17 +473,26 @@ mod tests {
 
     #[test]
     fn test_demand_page_desc() {
-        let attributes = Attributes::KERNEL_DATA;
-        let table_desc = TableDescriptor::new_entry(None, attributes);
+        use PageBlockDescriptorFields::*;
+        use TableDescriptorFields::*;
+
+        let attributes = Attributes::KERNEL_DATA | AttributeField::Accessed;
+        let table_desc_l1 = TableDescriptor::new_entry(true, 1, None, attributes);
+        let table_desc_l2 = TableDescriptor::new_entry(true, 2, None, attributes);
         let phys_addr = PhysAddr::at(0x1234_9000);
-        let page_desc =
-            PageBlockDescriptor::from(PageTableEntry::from(table_desc).demand_page(0, phys_addr))
-                ._cleanse_table_bits();
-        let page_desc_direct =
-            PageBlockDescriptor::new_entry(3, Some(phys_addr), attributes, false);
-        dbg!(table_desc);
+        let page_desc_copied = PageBlockDescriptor::from(PageTableEntry::from(table_desc_l2));
+        let page_desc = PageBlockDescriptor::new_entry(3, Some(phys_addr), attributes, false);
+        dbg!(table_desc_l1);
+        assert!(!table_desc_l1.is_set(PXNTable));
+        assert!(table_desc_l1.is_set(UXNTable));
+        dbg!(table_desc_l2);
+        assert!(table_desc_l2.is_set(PXNTable));
+        assert!(table_desc_l2.is_set(UXNTable));
+        dbg!(page_desc_copied);
         dbg!(page_desc);
-        dbg!(page_desc_direct);
-        assert_eq!(page_desc.get(), page_desc_direct.get());
+        assert!(page_desc.is_set(UXN));
+        assert!(page_desc.is_set(PXN));
+        assert!(page_desc.is_set(AF));
+        assert_eq!(page_desc.read(AP), AP::PrivOnly.value);
     }
 }

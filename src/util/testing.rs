@@ -55,7 +55,7 @@ fn kernel_init() -> ! {
     use crate::{handler, pager};
 
     fn next() -> ! {
-        info!("hello next");
+        major!("paging initialised for testing");
 
         extern "C" {
             fn collect_tests() -> ();
@@ -66,4 +66,10 @@ fn kernel_init() -> ! {
 
     handler::init().expect("handler::init");
     pager::init(next)
+}
+
+#[linkage = "weak"]
+#[no_mangle]
+fn collect_tests() -> () {
+    panic!("Override collect_tests() -> () to call test_main()")
 }

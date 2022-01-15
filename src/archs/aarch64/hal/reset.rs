@@ -21,7 +21,7 @@ use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 /// NOTE: must not use stack before SP set.
 pub unsafe extern "C" fn reset(pdtb: *const u8) -> ! {
     asm!(
-        "   adrp x1, image_base",
+        "   adrp x1, stack_end",
         "   mov  sp, x1",
         "   mrs  x1, mpidr_el1",
         "   and  x1, x1, 0xFF", // aff0

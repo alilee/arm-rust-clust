@@ -106,14 +106,14 @@ impl Attributes {
         .set(Block);
     /// For kernel code
     pub const KERNEL_EXEC: Attributes = Attributes::new().set(KernelExec);
-    /// For kernel static
-    pub const KERNEL_STATIC: Attributes = Attributes::new().set(KernelRead);
+    /// For kernel read-only data
+    pub const KERNEL_RO_DATA: Attributes = Attributes::new().set(KernelRead);
     /// For kernel stack and heap
     pub const KERNEL_DATA: Attributes = Attributes::new()
         .set(KernelRead)
         .set(KernelWrite)
         .set(OnDemand);
-    /// For kernel identity map on init
+    /// For kernel identity map on init, and Branch tables
     pub const KERNEL_RWX: Attributes = Attributes::new()
         .set(KernelRead)
         .set(KernelWrite)
@@ -125,13 +125,12 @@ impl Attributes {
         .set(KernelWrite)
         .set(Device)
         .set(Block);
+    /// For user-space branch tables
+    pub const USER_RWX: Attributes = Attributes::new().set(UserRead).set(UserWrite).set(UserExec);
     /// For user process code
-    pub const USER_EXEC: Attributes = Attributes::new()
-        .set(KernelRead)
-        .set(KernelWrite)
-        .set(UserExec);
+    pub const USER_EXEC: Attributes = Attributes::new().set(UserExec);
     /// For user process data
-    pub const USER_STATIC: Attributes = Attributes::new().set(UserRead);
+    pub const USER_RO_DATA: Attributes = Attributes::new().set(UserRead);
     /// For user process data
-    pub const USER_DATA: Attributes = Attributes::new().set(UserRead).set(UserWrite).set(OnDemand);
+    pub const USER_DATA: Attributes = Attributes::new().set(UserRead).set(UserWrite);
 }

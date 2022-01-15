@@ -29,6 +29,8 @@ pub trait PagerTrait {
     fn bss_image() -> PhysAddrRange;
     /// Kernel dynamic data (includes bss)
     fn data_image() -> PhysAddrRange;
+    /// Kernel reset stack
+    fn stack_range() -> PhysAddrRange;
 
     /// Initialise virtual memory management.
     fn pager_init() -> Result<()>;
@@ -57,6 +59,7 @@ pub trait PageDirectory {
     fn demand_page(
         &mut self,
         virt_addr: VirtAddr,
+        attributes: Attributes,
         allocator: &Locked<impl FrameAllocator>,
         mem_access_translation: &impl Translate,
     ) -> Result<()>;

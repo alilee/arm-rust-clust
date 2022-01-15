@@ -33,12 +33,12 @@ pub fn _print(args: Arguments) {
 /// This code is linked weakly, so that the integration tests can overload it to align the debug
 /// output to the test case
 #[cfg(not(test))]
-#[linkage = "weak"]
 #[no_mangle]
 pub fn _is_enabled(level: Level, module_path: &str) -> bool {
-    let setting = LOG_LEVEL_SETTINGS
+    let (default_level, settings) = _override_log_levels();
+    let setting = settings
         .into_iter()
-        .fold(Level::Info, |base, (pat, level)| {
+        .fold(default_level, |base, (pat, level)| {
             if module_path.ends_with(pat) {
                 *level
             } else {
@@ -46,6 +46,14 @@ pub fn _is_enabled(level: Level, module_path: &str) -> bool {
             }
         });
     level >= setting
+}
+
+#[cfg(not(test))]
+#[linkage = "weak"]
+#[no_mangle]
+/// Link hook to specify alternative log settings.
+pub fn _override_log_levels() -> (Level, &'static [(&'static str, Level)]) {
+    (Level::Major, LOG_LEVEL_SETTINGS)
 }
 
 #[cfg(test)]

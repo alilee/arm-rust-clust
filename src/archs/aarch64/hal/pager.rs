@@ -35,7 +35,7 @@ pub fn enable_paging(ttb1: u64, ttb0: u64, asid: u16) -> Result<()> {
         registers::{SCTLR_EL1::*, TCR_EL1::*, *},
     };
 
-    debug!("enable_paging: {:x}, {:x}, {}", ttb0, ttb1, asid);
+    debug!("enable_paging: 0x{:x}, 0x{:x}, {}", ttb0, ttb1, asid);
 
     // nothing in low memory except debug device, so no debugging
     unsafe {

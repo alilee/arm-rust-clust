@@ -12,7 +12,7 @@
 #![feature(const_mut_refs)] // for as_mut_ref
 #![feature(const_fn_trait_bound)] // for BitField::new
 #![feature(const_btree_new)] // for device-name maps
-
+#![feature(variant_count)] // for page frame deque
 #![warn(missing_docs)]
 
 #[macro_use]

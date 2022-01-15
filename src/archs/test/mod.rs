@@ -50,6 +50,10 @@ impl super::PagerTrait for Arch {
         PhysAddrRange::new(PhysAddr::at(0x4009_9000), 0x1000)
     }
 
+    fn stack_range() -> PhysAddrRange {
+        PhysAddrRange::new(PhysAddr::at(0x4040_0000), 0x8000)
+    }
+
     fn pager_init() -> Result<()> {
         Ok(())
     }
@@ -62,6 +66,8 @@ impl super::PagerTrait for Arch {
         unimplemented!()
     }
 }
+
+pub struct PageBlockDescriptor(u64);
 
 pub struct PageDirectory {}
 
@@ -91,6 +97,7 @@ impl super::PageDirectory for PageDirectory {
     fn demand_page(
         &mut self,
         virt_addr: VirtAddr,
+        attributes: Attributes,
         allocator: &Locked<impl FrameAllocator>,
         mem_access_translation: &impl Translate,
     ) -> Result<()> {

@@ -14,8 +14,9 @@ extern crate libkernel;
 use test_macros::kernel_test;
 
 #[no_mangle]
-fn kernel_init() {
+fn kernel_init() -> ! {
     test_main();
+    unreachable!()
 }
 
 #[kernel_test]
