@@ -5,6 +5,7 @@
 use core::arch::asm;
 
 use crate::archs::aarch64;
+use crate::pager::HandlerReturnAction;
 use crate::Result;
 
 use super::handler::EsrEL1;
@@ -86,7 +87,7 @@ pub fn move_stack(stack_pointer: usize, next: fn() -> !) -> ! {
 ///
 /// Page table entry for read or write access is invalid - either paged out
 /// or was never mapped.
-pub fn handle_data_abort_el1(esr: EsrEL1) -> Result<()> {
+pub fn handle_data_abort_el1(esr: EsrEL1) -> Result<HandlerReturnAction> {
     use crate::pager::{Addr, VirtAddr};
     use ESR_EL1::ISS_DATA_FAULT_STATUS_CODE_REASON::Value;
     info!("handle_data_abort_el1");
@@ -111,7 +112,7 @@ pub fn handle_data_abort_el1(esr: EsrEL1) -> Result<()> {
 ///
 /// Page table entry for execute access is invalid - either paged out
 /// or was never mapped.
-pub fn handle_instr_abort_el1(_esr: EsrEL1) -> Result<()> {
+pub fn handle_instr_abort_el1(_esr: EsrEL1) -> Result<HandlerReturnAction> {
     use crate::Error;
     info!("handle_instr_abort_el1");
 

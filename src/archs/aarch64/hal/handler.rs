@@ -2,7 +2,7 @@
 
 //! Interaction with physical exceptions
 
-use crate::pager::{Addr, VirtAddr};
+use crate::pager::{Addr, HandlerReturnAction, VirtAddr};
 use crate::Result;
 
 use core::arch::asm;
@@ -73,14 +73,14 @@ fn el1_sp0_sync_handler() -> ! {
 }
 
 #[no_mangle]
-fn el1_sp1_sync_handler(exc: &ExceptionContext) -> () {
+extern "C" fn el1_sp1_sync_handler(exc: &ExceptionContext) -> () {
     use cortex_a::registers::{ESR_EL1::*, *};
 
     info!("EL1 SP1 Sync Exception!");
     print_exception_details();
 
     let esr = ESR_EL1.extract();
-    match esr.read_as_enum(ESR_EL1::EC) {
+    let return_action = match esr.read_as_enum(ESR_EL1::EC) {
         Some(EC::Value::DataAbortCurrentEL) => {
             super::pager::handle_data_abort_el1(esr).expect("pager::handle_data_abort_el1")
         }
@@ -88,13 +88,14 @@ fn el1_sp1_sync_handler(exc: &ExceptionContext) -> () {
             super::pager::handle_instr_abort_el1(esr).expect("pager::handle_instr_abort_el1")
         }
         Some(EC::Value::SVC64) => {
-            handle_svc64(exc.esr_el1.read(ESR_EL1::ISS_SVC_IMMEDIATE) as u16, exc)
+            panic!("kernel made supervisor call");
         }
         None => unreachable!(),
         _ => {
             panic!("unknown exception: 0b{:06b}", exc.esr_el1.read(ESR_EL1::EC));
         }
     };
+    assert_eq!(HandlerReturnAction::Return, return_action);
 }
 
 ///
@@ -107,21 +108,57 @@ pub fn handle_svc64(imm: u16, _exc: &ExceptionContext) -> () {
     };
 }
 
+static mut X: u64 = 0;
+
 #[no_mangle]
-fn el0_64_sync_handler() -> () {
-    use cortex_a::registers::*;
+static mut SVC_TABLE: [usize; 2] = [0; 2];
 
-    info!("EL0 Synchronous Exception!");
-    print_exception_details();
+#[inline(never)]
+fn init_svc() {
+    unsafe {
+        SVC_TABLE[0] = one as usize;
+        SVC_TABLE[1] = two as usize;
+    }
+}
 
-    // gic::print_state();
+fn one(i: u64) -> u64 {
+    unsafe {
+        X = 98;
+    }
+    i + 1
+}
 
-    info!("DAIF: 0b{:b}", DAIF.get());
-    info!("CNTP_TVAL_EL0: 0x{:x}", CNTP_TVAL_EL0.get());
-    info!("CNTP_CTL_EL0: 0b{:b}", CNTP_CTL_EL0.get());
+fn two() {
+    unsafe {
+        X = 99;
+    }
+}
 
-    info!("looping...");
-    loop {}
+#[no_mangle]
+unsafe fn el0_64_sync_handler() -> HandlerReturnAction {
+    use cortex_a::registers::ESR_EL1::EC;
+
+    init_svc();
+
+    let esr = ESR_EL1.extract();
+
+    match esr.read_as_enum(ESR_EL1::EC) {
+        Some(EC::Value::DataAbortLowerEL) => {
+            super::pager::handle_data_abort_el1().expect("pager::handle_data_abort_el1")
+        }
+        Some(EC::Value::InstrAbortLowerEL) => {
+            super::pager::handle_instr_abort_el1().expect("pager::handle_instr_abort_el1")
+        }
+        Some(EC::Value::SVC64) => {
+            unreachable!()
+        }
+        None => {
+            unreachable!()
+        }
+        _ => {
+            unimplemented!()
+        }
+    }
 }
 
 #[no_mangle]
@@ -216,6 +253,40 @@ vector_table_el1:   mov x0, 0
 .balign 0x080
 				    mov     x0, 7
 				    EXCEPTION_ENTRY default_handler
+				    
+.balign 0x080       /* Exception taken from EL0 */
+                    /* Synchronous */
+				    /* EXCEPTION_ENTRY el0_64_sync_handler */
+				    
+				    stp x14, x15, [sp, #-16]!
+				    
+				    mrs x14, ESR_EL1
+				    and x14, x14, #0xfc000000   /* EC */
+				    mov w15, #0x54000000        /* SVC */
+				    cmp x14, x15
+				    b.ne .call_rust_handler
+				    
+				    /* SVC */
+				    str lr, [sp]
+				    mrs x15, ESR_EL1             
+				    and x15, x15, #0b1          /* imm16 */
+				    adrp x14, SVC_TABLE
+				    add x14, x14, :lo12:SVC_TABLE
+				    ldr x14, [x14, x15, lsl #3]
+				    blr x14                    
+	                ldp xzr, lr, [sp], #16
+	                eret
+	            	              			    
+.balign 0x080
+				    mov     x0, 9
+				    EXCEPTION_ENTRY default_handler
+.balign 0x080
+				    mov     x0, 10
+				    EXCEPTION_ENTRY default_handler
+.balign 0x080
+				    mov     x0, 11
+				    EXCEPTION_ENTRY default_handler
+
 .balign 0x080
 .handler_return:    ldr	w19,      [sp, #16 * 16]
                     ldp	lr,  x20, [sp, #16 * 15]
@@ -239,6 +310,29 @@ vector_table_el1:   mov x0, 0
                     ldp	x28, x29, [sp, #16 * 14]
                 
                     add	sp,  sp,  #16 * 17
+                    eret
+                    
+.call_rust_handler: stp x12, x13, [sp, #-16]!
+	                stp x10, x11, [sp, #-16]!
+	                stp x8, x9, [sp, #-16]!
+                    stp x6, x7, [sp, #-16]!
+	                stp x4, x5, [sp, #-16]!
+	                stp x2, x3, [sp, #-16]!
+	                stp x0, x1, [sp, #-16]!
+	                str lr, [sp, #-16]!
+	                
+	                bl el0_64_sync_handler
+                    
+                    ldr lr, [sp], #16
+	                ldp x0, x1, [sp], #16
+	                ldp x2, x3, [sp], #16
+	                ldp x4, x5, [sp], #16
+                    ldp x6, x7, [sp], #16
+	                ldp x8, x9, [sp], #16
+	                ldp x10, x11, [sp], #16
+                    ldp x12, x13, [sp], #16
+                    ldp x14, x15, [sp], #16
+
                     eret
 "#
 );
