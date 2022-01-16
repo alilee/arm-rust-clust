@@ -274,7 +274,7 @@ vector_table_el1:   mov x0, 0
 				    add x14, x14, :lo12:SVC_TABLE
 				    ldr x14, [x14, x15, lsl #3]
 				    blr x14                    
-	                ldp xzr, lr, [sp], #16
+	                ldr lr, [sp], #16
 	                eret
 	            	              			    
 .balign 0x080
