@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 
 use crate::archs::{arch::Arch, PagerTrait};
+use crate::device;
 use crate::pager::FixedOffset;
 use crate::{Error, Result};
 
@@ -12,15 +13,26 @@ use core::fmt::{Debug, Formatter};
 /// Content within Range.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum RangeContent {
+    /// Where all physical memory is mapped into kernel-space
     RAM,
+    /// A few pages for cores to use, one at a time, while they initialise
     ResetStack,
+    /// Executable code for the Kernel
     KernelText,
+    /// Read-only data for the Kernel
     KernelStatic,
+    /// Read-write data for the Kernel
     KernelData,
+    /// Array of records to track the use of each page of physical memory  
     FrameTable,
+    /// Area to map Kernel stacks for each core
     KernelStack,
+    /// Area for shared Kernel heap
     KernelHeap,
+    /// Area to map memory-mapped device pages
     Device,
+    /// The device tree blob
+    DTB,
 }
 
 /// Range requiring to be mapped.
@@ -53,7 +65,7 @@ impl Debug for KernelExtent {
 const MB: usize = 1024 * 1024;
 const GB: usize = 1024 * MB;
 
-static mut LAYOUT: [KernelExtent; 9] = [
+static mut LAYOUT: [KernelExtent; 10] = [
     KernelExtent {
         content: RangeContent::RAM,
         virt_range_align: 1 * GB,
@@ -150,6 +162,15 @@ static mut LAYOUT: [KernelExtent; 9] = [
         virt_range_gap: &{ || Some(1 * GB) },
         phys_addr_range: &{ || None },
         attributes: Attributes::DEVICE,
+        virt_range: None,
+    },
+    KernelExtent {
+        content: RangeContent::DTB,
+        virt_range_align: 1 * GB,
+        virt_range_min_extent: 1 * GB,
+        virt_range_gap: &{ || None },
+        phys_addr_range: &{ || unsafe { device::PDTB } },
+        attributes: Attributes::KERNEL_RO_DATA,
         virt_range: None,
     },
 ];

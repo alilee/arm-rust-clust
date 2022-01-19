@@ -4,7 +4,7 @@
 
 use core::arch::asm;
 
-use crate::pager::{Addr, PhysAddr};
+use crate::pager::{Addr, AddrRange, PhysAddr, PhysAddrRange};
 
 use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
@@ -19,7 +19,7 @@ use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 /// with the first core, and parks the rest.
 ///
 /// NOTE: must not use stack before SP set.
-pub unsafe extern "C" fn reset(pdtb: *const u8) -> ! {
+pub unsafe extern "C" fn reset(pdtb: *const u32) -> ! {
     asm!(
         "   adrp x1, stack_end",
         "   mov  sp, x1",
@@ -41,10 +41,23 @@ pub unsafe extern "C" fn reset(pdtb: *const u8) -> ! {
 /// TODO: CPACR to enable FP in EL1
 /// FIXME: initialise BSS memory
 /// TODO: register assignments and translate should be from const (depends on consts in traits)
-extern "C" fn enable_boot_vm() {
+extern "C" fn enable_boot_vm(pdtb: *const u32) {
     use crate::archs::aarch64;
+    use crate::device;
     use aarch64::pager::TABLE_ENTRIES;
     use cortex_a::{asm::barrier, registers::SCTLR_EL1::*, registers::TCR_EL1::*, registers::*};
+
+    unsafe {
+        let pdtb_base = PhysAddr::from_ptr(pdtb);
+        if pdtb_base != PhysAddr::null() {
+            let magic = *pdtb;
+            if magic == u32::from_be(0xd00dfeed) {
+                let length = u32::from_be(*pdtb.offset(1)) as usize;
+                let pdtb = PhysAddrRange::new(pdtb_base, length);
+                device::PDTB = Some(pdtb);
+            }
+        };
+    }
 
     #[repr(align(4096))]
     struct TempMap([u64; TABLE_ENTRIES]);

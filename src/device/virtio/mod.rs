@@ -7,11 +7,13 @@ mod block;
 use crate::pager::{
     Addr, AddrRange, FixedOffset, Pager, Paging, PhysAddr, PhysAddrRange, Translate, PAGESIZE_BYTES,
 };
-use crate::Result;
+use crate::{Error, Result};
 
 use tock_registers::interfaces::Readable;
 use tock_registers::registers::{ReadOnly, WriteOnly};
 use tock_registers::{register_bitfields, register_structs};
+
+use dtb::StructItem;
 
 register_bitfields! [u32,
     MagicValue [
@@ -59,35 +61,52 @@ register_structs! {
     }
 }
 
-#[allow(dead_code)]
-#[derive(Debug)]
-struct VirtIONode {
-    interrupts: u8,
-    reg: PhysAddrRange,
+fn make_addr(prop: StructItem) -> Result<PhysAddr> {
+    let mut buf = [0u8; 32];
+    let list = prop
+        .value_u32_list(&mut buf)
+        .or(Err(Error::DeviceIncompatible))?;
+    Ok(PhysAddr::fixed(
+        (list[0] as usize) << 32 | (list[1] as usize),
+    ))
 }
 
-const VIRTIO_NODES: [VirtIONode; 1] = [
-    // virtio_mmio@a000000 {
-    // 		dma-coherent;
-    // 		interrupts = <0x00 0x10 0x01>;
-    // 		reg = <0x00 0xa000000 0x00 0x200>;
-    // 		compatible = "virtio,mmio";
-    // 	};
-    VirtIONode {
-        interrupts: 0x10,
-        reg: PhysAddrRange::fixed(PhysAddr::fixed(0xa000000), 0x200),
-    },
-];
+fn make_intr(prop: StructItem) -> Result<(u32, u32, u32)> {
+    let mut buf = [0u8; 32];
+    let list = prop
+        .value_u32_list(&mut buf)
+        .or(Err(Error::DeviceIncompatible))?;
+    assert_eq!(3, list.len());
+    Ok((list[0], list[1], list[2]))
+}
 
 /// Initialise virtio devices.
-pub fn init() -> Result<()> {
+pub fn init(dtb_root: dtb::StructItems) -> Result<()> {
     use alloc::collections::BTreeMap;
+    {
+        let mut buf = [0u8; 32];
+        let (prop, _) = dtb_root.path_struct_items("/#size-cells").next().unwrap();
+        let size_cells = prop
+            .value_u32_list(&mut buf)
+            .or(Err(Error::DeviceIncompatible))?[0];
+        assert_eq!(2, size_cells);
+
+        let (prop, _) = dtb_root
+            .path_struct_items("/#address-cells")
+            .next()
+            .unwrap();
+        let address_cells = prop
+            .value_u32_list(&mut buf)
+            .or(Err(Error::DeviceIncompatible))?[0];
+        assert_eq!(2, address_cells);
+    }
 
     let mut device_pages: BTreeMap<PhysAddr, FixedOffset> = BTreeMap::new();
 
-    for node in VIRTIO_NODES.iter() {
-        debug!("initialising {:?}", node);
-        let page_base = node.reg.base().align_down(PAGESIZE_BYTES);
+    for (node, node_iter) in dtb_root.path_struct_items("/virtio_mmio") {
+        let (prop, _) = node_iter.clone().path_struct_items("reg").next().unwrap();
+        let phys_addr = make_addr(prop)?;
+        let page_base = phys_addr.align_down(PAGESIZE_BYTES);
 
         if !device_pages.contains_key(&page_base) {
             let virt_addr = Pager::map_device(PhysAddrRange::page_at(page_base))?;
@@ -96,19 +115,46 @@ pub fn init() -> Result<()> {
         };
 
         let translation = device_pages.get(&page_base).unwrap();
-        let virt_addr = translation.translate_phys(node.reg.base())?;
-        let device: &VirtIODevice = unsafe { virt_addr.as_ref() };
+        let reg = translation.translate_phys(phys_addr)?;
+        let device: &VirtIODevice = unsafe { reg.as_ref() };
 
         if device.magic_value.read(MagicValue::MAGIC) == MagicValue::MAGIC::Magic.value
             && device.version.get() == 2
         {
-            debug!("version 2 device found at {:?}", node.reg);
-            if device.device_id.read(DeviceID::TYPE) == DeviceID::TYPE::Block.value {
-                let block_device = block::init(node, device)?;
-                super::BLOCK_DEVICES
-                    .lock()
-                    .insert(block_device.name(), block_device);
-            }
+            debug!(
+                "version 2 device ({:?}) found at {:?}",
+                device.device_id.read(DeviceID::TYPE),
+                node
+            );
+            match device.device_id.read_as_enum(DeviceID::TYPE) {
+                Some(DeviceID::TYPE::Value::Invalid) => {}
+                Some(DeviceID::TYPE::Value::Block) => {
+                    let (interrupt, _) = node_iter
+                        .clone()
+                        .path_struct_items("interrupts")
+                        .next()
+                        .unwrap();
+                    let interrupt = make_intr(interrupt)?;
+                    let block_device = block::init(reg, interrupt.1, device)?;
+                    super::BLOCK_DEVICES
+                        .lock()
+                        .insert(block_device.name(), block_device);
+                }
+                Some(_) => {
+                    info!(
+                        "unimplemented DeviceID::TYPE.value {:?} ({:?})",
+                        device.device_id.read(DeviceID::TYPE),
+                        reg
+                    );
+                }
+                None => {
+                    error!(
+                        "Unknown DeviceID::TYPE {:?}",
+                        device.device_id.read(DeviceID::TYPE)
+                    );
+                    unimplemented!()
+                }
+            };
         }
     }
 

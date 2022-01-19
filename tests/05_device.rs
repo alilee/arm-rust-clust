@@ -26,3 +26,18 @@ fn device_init() {
     device::init().expect("device::init");
     debug!("returned");
 }
+
+use libkernel::debug::Level;
+
+#[no_mangle]
+fn _override_log_levels() -> (Level, &'static [(&'static str, Level)]) {
+    const LOG_LEVEL_SETTINGS: &[(&str, Level)] = &[
+        ("aarch64::pager", Level::Major),
+        ("pager", Level::Info),
+        ("pager::layout", Level::Major),
+        ("pager::frames", Level::Info),
+        ("pager::bump", Level::Major),
+        ("pager::alloc", Level::Major),
+    ];
+    (Level::Trace, LOG_LEVEL_SETTINGS)
+}

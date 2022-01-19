@@ -9,7 +9,7 @@ use crate::pager::Translate;
 use crate::Result;
 
 #[cfg(not(test))]
-use crate::device::uart::Uart;
+use crate::device::serial::Uart;
 #[cfg(not(test))]
 use crate::util::locked::Locked;
 

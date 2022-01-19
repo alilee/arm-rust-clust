@@ -144,10 +144,10 @@ unsafe fn el0_64_sync_handler() -> HandlerReturnAction {
 
     match esr.read_as_enum(ESR_EL1::EC) {
         Some(EC::Value::DataAbortLowerEL) => {
-            super::pager::handle_data_abort_el1().expect("pager::handle_data_abort_el1")
+            super::pager::handle_data_abort_el1(esr).expect("pager::handle_data_abort_el1")
         }
         Some(EC::Value::InstrAbortLowerEL) => {
-            super::pager::handle_instr_abort_el1().expect("pager::handle_instr_abort_el1")
+            super::pager::handle_instr_abort_el1(esr).expect("pager::handle_instr_abort_el1")
         }
         Some(EC::Value::SVC64) => {
             unreachable!()

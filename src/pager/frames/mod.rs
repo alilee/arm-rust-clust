@@ -3,6 +3,7 @@
 mod deque;
 
 use crate::archs::{arch::Arch, PagerTrait};
+use crate::device;
 use crate::util::locked::Locked;
 use crate::{Error, Error::Unimplemented, Result};
 
@@ -250,10 +251,16 @@ pub fn init() -> Result<()> {
     frame_table.move_contiguous_range(data_range, FrameUse::Kernel)?;
 
     unsafe {
+        if let Some(dtb_range) = device::PDTB {
+            frame_table.move_contiguous_range(dtb_range, FrameUse::Kernel)?;
+        }
+    }
+
+    unsafe {
         let mut lock = ALLOCATOR.lock();
         *lock = FrameTable(Some(frame_table));
 
-        debug!("{:?}", *lock);
+        info!("{:?}", *lock);
     }
 
     Ok(())

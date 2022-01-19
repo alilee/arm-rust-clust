@@ -4,7 +4,7 @@ TARGET = aarch64-unknown-none-softfloat
 
 QEMU = qemu-system-aarch64
 QEMU_SMP = -smp 2
-QEMU_DISK = -device virtio-blk-pci,drive=drive0,id=virtblk0,num-queues=4 -drive file=disk.qcow2,if=none,id=drive0
+QEMU_DISK = -global virtio-mmio.force-legacy=false -device virtio-blk-device,drive=drive0,id=virtblk0,num-queues=4 -drive file=disk.qcow2,if=none,id=drive0
 
 GDB = gdb
 
@@ -48,7 +48,7 @@ mkdir -p test_output
 
 $(OBJCOPY) -O binary $$argv[1] $$argv[1].bin
 $(OBJDUMP) -d $$argv[1] > test_output/(basename $$argv[1].s)
-$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic -semihosting -kernel $$argv[1].bin > test_output/(basename $$argv[1].out)
+$(QEMU) -M $(BOARD) -cpu $(CPU) -m 256M -nographic $(QEMU_SMP) $(QEMU_DISK) -semihosting -dtb qemu.dtb -kernel $$argv[1].bin > test_output/(basename $$argv[1].out)
 set result $$status
 #if test $$result -ne 0
 #    cat $$argv[1].out

@@ -2,15 +2,17 @@
 
 //! Responding to virtual memory exceptions
 
-use super::{
-    frames, mem_translation, AttributeField, Attributes, Handler, VirtAddr, KERNEL_PAGE_DIRECTORY,
-};
+use super::{frames, mem_translation, AttributeField, Attributes, VirtAddr, KERNEL_PAGE_DIRECTORY};
 
 use crate::archs::{arch::Arch, PageDirectory, PagerTrait};
 use crate::Result;
 
+/// What the architecture should do after a handler invocation.
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum HandlerReturnAction {
+    /// Resume the thread running at the time of the exception  
     Return,
+    /// Prepare to suspend the process and yield to the scheduler
     Yield,
 }
 

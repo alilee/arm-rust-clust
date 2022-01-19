@@ -28,7 +28,7 @@ pub use frames::allocator as frame_allocator;
 pub use frames::Allocator as FrameAllocator;
 pub use frames::Purpose as FramePurpose;
 
-pub use layout::mem_translation;
+pub use layout::{get_range, mem_translation, RangeContent};
 
 use crate::archs::{arch, arch::Arch, DeviceTrait, PageDirectory, PagerTrait};
 use crate::debug::Level;
