@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 
+use crate::pager::VirtAddr;
 use crate::Result;
 
 pub fn init_mair() {}
@@ -18,4 +19,8 @@ pub fn set_vbar() -> Result<()> {
 
 pub fn core_id() -> u8 {
     1
+}
+
+pub fn invalidate_tlb(_virt_addr: VirtAddr) -> Result<()> {
+    unimplemented!()
 }

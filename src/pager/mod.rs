@@ -8,6 +8,7 @@ mod bump;
 mod frames;
 mod handlers;
 mod layout;
+mod owned;
 mod page;
 mod phys_addr;
 mod translation;
@@ -19,6 +20,7 @@ mod alloc;
 pub use addr::*;
 pub use attributes::*;
 pub use handlers::*;
+pub use owned::*;
 pub use page::*;
 pub use phys_addr::*;
 pub use translation::*;
@@ -28,39 +30,78 @@ pub use frames::allocator as frame_allocator;
 pub use frames::Allocator as FrameAllocator;
 pub use frames::Purpose as FramePurpose;
 
-pub use layout::{get_range, mem_translation, RangeContent};
+pub use layout::{get_range, mem_fixed_offset, mem_translation, RangeContent};
 
 use crate::archs::{arch, arch::Arch, DeviceTrait, PageDirectory, PagerTrait};
 use crate::debug::Level;
 use crate::pager::bump::PageBumpAllocator;
+use crate::pager::frames::Purpose;
 use crate::util::locked::Locked;
 use crate::Result;
+
+use ::alloc::sync::Arc;
 
 /// Major interface trait of paging module.
 pub trait Paging {
     /// Map a memory-mapped IO range to an unused kernel address range in the
     /// device range, with access attributes for device memory.
-    fn map_device(phys_addr_range: PhysAddrRange) -> Result<VirtAddrRange>;
+    fn map_device(phys_addr_range: PhysAddrRange) -> Result<Arc<OwnedMapping>>;
+    /// Map contiguous physical pages to an unused device memory range in the
+    /// with access attributes for device memory.
+    fn map_dma(contiguous_pages: u8) -> Result<Arc<OwnedMapping>>;
+    /// Return the current physical address for a virtual address
+    fn maps_to(virt_addr: VirtAddr) -> Result<PhysAddr>;
 }
 
 /// Implements the Paging interface trait.
 pub struct Pager {}
 
 impl Paging for Pager {
-    fn map_device(phys_addr_range: PhysAddrRange) -> Result<VirtAddrRange> {
+    fn map_device(phys_addr_range: PhysAddrRange) -> Result<Arc<OwnedMapping>> {
         info!("map_device");
         let virt_addr_range = DEVICE_MEM_ALLOCATOR
             .lock()
             .alloc(phys_addr_range.length_in_pages())?;
         let translation = FixedOffset::new(phys_addr_range.base(), virt_addr_range.base());
         let mut page_directory = KERNEL_PAGE_DIRECTORY.lock();
-        page_directory.map_translation(
+        let virt_addr_range = page_directory.map_translation(
             virt_addr_range,
             translation,
             Attributes::DEVICE,
             frames::allocator(),
             mem_translation(),
-        )
+        )?;
+        Ok(Arc::new(OwnedMapping::new(virt_addr_range)))
+    }
+
+    fn map_dma(contiguous_pages: u8) -> Result<Arc<OwnedMapping>> {
+        major!("map_dma");
+        if contiguous_pages > 1 {
+            unimplemented!()
+        }
+        let virt_addr_range = DEVICE_MEM_ALLOCATOR
+            .lock()
+            .alloc(contiguous_pages as usize)?;
+        let phys_addr_page = frames::allocator()
+            .lock()
+            .alloc_zeroed(Purpose::DirectMemoryAccess)?;
+        info!("phys_addr_page: {:?}", phys_addr_page);
+        let translation = FixedOffset::new(phys_addr_page, virt_addr_range.base());
+        let mut page_directory = KERNEL_PAGE_DIRECTORY.lock();
+        let virt_addr_range = page_directory.map_translation(
+            virt_addr_range,
+            translation,
+            Attributes::DEVICE,
+            frames::allocator(),
+            mem_translation(),
+        )?;
+        Ok(Arc::new(OwnedMapping::new(virt_addr_range)))
+    }
+
+    fn maps_to(virt_addr: VirtAddr) -> Result<PhysAddr> {
+        KERNEL_PAGE_DIRECTORY
+            .lock()
+            .maps_to(virt_addr, mem_fixed_offset())
     }
 }
 
@@ -118,7 +159,6 @@ pub fn init(next: fn() -> !) -> ! {
 }
 
 fn allocate_core_stack() -> Result<VirtAddr> {
-    use frames::Purpose;
     use AttributeField::*;
 
     major!("allocate_core_stack");

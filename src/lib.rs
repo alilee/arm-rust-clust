@@ -13,6 +13,8 @@
 #![feature(const_fn_trait_bound)] // for BitField::new
 #![feature(const_btree_new)] // for device-name maps
 #![feature(variant_count)] // for page frame deque
+#![feature(type_alias_impl_trait)] // for walk visitor function
+#![feature(generic_associated_types)] // for walk iterator struct
 #![warn(missing_docs)]
 
 #[macro_use]

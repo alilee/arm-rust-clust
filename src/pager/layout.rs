@@ -309,6 +309,12 @@ pub fn mem_translation() -> &'static impl super::Translate {
     unsafe { &MEM_FIXED_OFFSET }
 }
 
+/// Get the offset of real RAM from the kernel-mapped area.
+#[inline(always)]
+pub fn mem_fixed_offset() -> &'static FixedOffset {
+    unsafe { &MEM_FIXED_OFFSET }
+}
+
 /// Search the kernel layout for the virtual address range of the first kernel heap area.
 pub fn get_range(content: RangeContent) -> Result<VirtAddrRange> {
     info!("get_range: {:?}", content);

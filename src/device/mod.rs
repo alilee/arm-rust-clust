@@ -11,7 +11,7 @@ pub mod intc;
 pub mod serial;
 pub mod virtio;
 
-use crate::archs::aarch64::Arch;
+use crate::archs::arch::Arch;
 use crate::archs::DeviceTrait;
 use crate::pager::{
     get_range, Addr, AddrRange, HandlerReturnAction, PhysAddr, PhysAddrRange, RangeContent,
@@ -59,7 +59,7 @@ pub trait InterruptController: Send {
 }
 
 /// Functions for a block storage device
-pub trait Block: Send {
+pub trait Block {
     fn name(&self) -> String;
     fn read(&self, phys_addr: PhysAddr, sector: u64, length: usize) -> Result<()>;
     fn write(&self, phys_addr: PhysAddr, sector: u64, length: usize) -> Result<()>;
@@ -68,7 +68,8 @@ pub trait Block: Send {
     fn flush(&self) -> Result<()>;
 }
 
-static BLOCK_DEVICES: Locked<BTreeMap<String, Box<dyn Block>>> = Locked::new(BTreeMap::new());
+static BLOCK_DEVICES: Locked<BTreeMap<String, Locked<Box<dyn Block + Send>>>> =
+    Locked::new(BTreeMap::new());
 
 #[cfg(test)]
 mod tests {

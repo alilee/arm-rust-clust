@@ -5,7 +5,7 @@
 use core::arch::asm;
 
 use crate::archs::aarch64;
-use crate::pager::HandlerReturnAction;
+use crate::pager::{Addr, AddrRange, HandlerReturnAction, VirtAddr, VirtAddrRange};
 use crate::Result;
 
 use super::handler::EsrEL1;
@@ -117,4 +117,25 @@ pub fn handle_instr_abort_el1(_esr: EsrEL1) -> Result<HandlerReturnAction> {
     info!("handle_instr_abort_el1");
 
     Err(Error::SegmentFault)
+}
+
+/// Invalidate TLB for range
+pub fn invalidate_tlb(virt_addr: VirtAddr) -> Result<()> {
+    use asm::barrier;
+    use core::sync::atomic;
+    use cortex_a::asm;
+
+    let base = virt_addr.get() >> 12;
+    // asm::tlbi(TLBI::Type::VAA, TLBI::Level::E1, virt_addr_range.base());
+    unsafe {
+        asm!(
+            "tlbi VAAE1, {}",
+            in(reg) base,
+        );
+
+        atomic::fence(atomic::Ordering::SeqCst);
+        barrier::dsb(barrier::SY);
+    }
+
+    Ok(())
 }

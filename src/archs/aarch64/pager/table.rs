@@ -2,14 +2,15 @@
 
 //! Page table data structures.
 
-use tock_registers::fields::FieldValue;
-
 use crate::pager::{Addr, AttributeField, Attributes, PhysAddr, PAGESIZE_BYTES};
 use crate::util::bitfield::{register_bitfields, Bitfield};
 
 use core::fmt::{Debug, Formatter};
 use core::mem;
 use core::ops::{Index, IndexMut};
+use core::slice::Iter;
+
+use tock_registers::fields::FieldValue;
 
 pub type PageTableEntryType = u64;
 
@@ -19,7 +20,7 @@ pub struct PageTableEntry(PageTableEntryType);
 
 impl Debug for PageTableEntry {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "PageTableEntry({:#x})", self.0)
+        write!(f, "PageTableEntry(0x{:016x})", self.0)
     }
 }
 
@@ -30,41 +31,63 @@ impl PageTableEntry {
         Self(0)
     }
 
-    pub fn get(self) -> PageTableEntryType {
+    pub fn get(&self) -> PageTableEntryType {
         self.0
     }
 
-    pub const fn is_valid(self) -> bool {
+    #[cfg(test)]
+    pub fn set(&mut self, v: PageTableEntryType) -> () {
+        self.0 = v;
+    }
+
+    pub const fn is_valid(&self) -> bool {
         0 != self.0 & 1
     }
 
-    pub const fn is_null(self) -> bool {
+    pub const fn is_null(&self) -> bool {
         0 == self.0
     }
 
-    pub fn next_level_table_address(self) -> PhysAddr {
-        PhysAddr::at((self.0 as usize) & Self::OUTPUT_MASK)
+    pub fn next_level_table_address(&self) -> PhysAddr {
+        assert!(self.is_valid());
+        let output_address = (self.0 as usize) & Self::OUTPUT_MASK;
+        PhysAddr::at(output_address)
     }
 
-    pub const fn is_table(self, level: u8) -> bool {
+    pub const fn is_table(&self, level: u8) -> bool {
         level < 3 && self.0 & 0b10 != 0
     }
 
-    pub const fn is_same_permissions(self, other: PageTableEntry) -> bool {
+    pub const fn is_same_permissions(&self, other: PageTableEntry) -> bool {
         (self.0 ^ other.0) | (Self::OUTPUT_MASK as PageTableEntryType) == 0
     }
 }
 
+/// Number of levels in the Page Directory.
+pub const MAX_LEVELS: usize = 4;
+
 /// Number of entries in a page table.
 pub const TABLE_ENTRIES: usize = PAGESIZE_BYTES / mem::size_of::<PageTableEntry>();
+
 /// Bit positions of the table offsets within a virtual address.
-pub const LEVEL_OFFSETS: [usize; 4] = [39, 30, 21, 12];
+pub const LEVEL_OFFSETS: [usize; MAX_LEVELS] = [39, 30, 21, 12];
+
 /// Width of the table offsets within a virtual address.
 pub const LEVEL_WIDTH: usize = 9;
 
 #[derive(Copy, Clone)]
 #[repr(align(4096))]
 pub struct PageTable([PageTableEntry; TABLE_ENTRIES]);
+
+impl PageTable {
+    pub(crate) fn iter(&self) -> Iter<PageTableEntry> {
+        self.0.iter()
+    }
+    #[cfg(test)]
+    pub fn new() -> Self {
+        PageTable([PageTableEntry::null(); TABLE_ENTRIES])
+    }
+}
 
 impl Index<usize> for PageTable {
     type Output = PageTableEntry;
@@ -307,7 +330,7 @@ impl From<Attributes> for PageBlockDescriptorMask {
             attributes.is_set(KernelRead),
             attributes.is_set(KernelWrite),
         ) {
-            (true, true, true, true) => {
+            (true, true, _, _) => {
                 result += AP::ReadWrite;
             }
             (false, false, true, true) => {
@@ -323,7 +346,7 @@ impl From<Attributes> for PageBlockDescriptorMask {
                 // presumably execute-only
                 result += AP::PrivReadOnly;
             }
-            _ => panic!(),
+            x => panic!("{:?}", x),
         }
 
         if attributes.is_set(Device) {

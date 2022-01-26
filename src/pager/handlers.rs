@@ -2,7 +2,10 @@
 
 //! Responding to virtual memory exceptions
 
-use super::{frames, mem_translation, AttributeField, Attributes, VirtAddr, KERNEL_PAGE_DIRECTORY};
+use super::{
+    frames, mem_translation, Addr, AddrRange, AttributeField, Attributes, FixedOffset,
+    FrameAllocator, FramePurpose, VirtAddr, VirtAddrRange, KERNEL_PAGE_DIRECTORY,
+};
 
 use crate::archs::{arch::Arch, PageDirectory, PagerTrait};
 use crate::Result;
@@ -24,10 +27,17 @@ pub fn kernel_translation_fault(
     _level: Option<u64>,
 ) -> Result<HandlerReturnAction> {
     info!("kernel_translation_fault: {:?}", fault_addr);
+
     assert_gt!(fault_addr, Arch::kernel_base());
+    let phys_addr = frames::allocator()
+        .lock()
+        .alloc_zeroed(FramePurpose::Kernel)?;
+    let translation = FixedOffset::new(phys_addr, fault_addr.page_base());
     const ATTRIBUTES: Attributes = Attributes::KERNEL_DATA.set(AttributeField::Accessed);
-    KERNEL_PAGE_DIRECTORY.lock().demand_page(
-        fault_addr,
+    let mut page_directory = KERNEL_PAGE_DIRECTORY.lock();
+    page_directory.map_translation(
+        VirtAddrRange::page_containing(fault_addr),
+        translation,
         ATTRIBUTES,
         frames::allocator(),
         mem_translation(),

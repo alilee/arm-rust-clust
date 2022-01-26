@@ -13,7 +13,7 @@ use dtb::StructItems;
 pub trait DeviceTrait {
     /// Initialise architecture-specific devices - interrupt controller
     fn device_init(dtb_root: StructItems) -> Result<()> {
-        major!("init");
+        major!("device_init");
         intc::init(dtb_root)
     }
 

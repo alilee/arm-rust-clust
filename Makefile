@@ -4,7 +4,7 @@ TARGET = aarch64-unknown-none-softfloat
 
 QEMU = qemu-system-aarch64
 QEMU_SMP = -smp 2
-QEMU_DISK = -global virtio-mmio.force-legacy=false -device virtio-blk-device,drive=drive0,id=virtblk0,num-queues=4 -drive file=disk.qcow2,if=none,id=drive0
+QEMU_DISK = -global virtio-mmio.force-legacy=false -device virtio-blk-device,drive=drive0,id=virtblk0,num-queues=4,packed=on -drive file=disk.qcow2,if=none,id=drive0
 
 GDB = gdb
 

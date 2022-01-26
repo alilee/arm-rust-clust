@@ -3,7 +3,8 @@
 //! Interface for paging functions.
 
 use crate::pager::{
-    Attributes, FixedOffset, FrameAllocator, PhysAddrRange, Translate, VirtAddr, VirtAddrRange,
+    Attributes, FixedOffset, FrameAllocator, PhysAddr, PhysAddrRange, Translate, VirtAddr,
+    VirtAddrRange,
 };
 use crate::util::locked::Locked;
 use crate::Result;
@@ -55,13 +56,19 @@ pub trait PageDirectory {
         mem_access_translation: &impl Translate,
     ) -> Result<VirtAddrRange>;
 
-    /// Provision a page for a previously mapped, but absent, virtual address.
-    fn demand_page(
-        &mut self,
+    /// Return the current physical address for a virtual address
+    fn maps_to(
+        &self,
         virt_addr: VirtAddr,
-        attributes: Attributes,
-        allocator: &Locked<impl FrameAllocator>,
-        mem_access_translation: &impl Translate,
+        mem_access_translation: &FixedOffset,
+    ) -> Result<PhysAddr>;
+
+    /// Unmap a previously mapped range, and return any memory to the allocator.
+    fn unmap(
+        &mut self,
+        virt_addr_range: VirtAddrRange,
+        allocator: &'static Locked<impl FrameAllocator>,
+        mem_access_translation: &FixedOffset,
     ) -> Result<()>;
 
     /// Log the state of the page directory at debug.

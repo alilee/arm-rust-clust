@@ -9,8 +9,8 @@ use super::{Addr, PhysAddr, PhysAddrRange, VirtAddr, VirtAddrRange};
 
 use crate::{Error, Result};
 
-use core::fmt::{Debug, Formatter};
 use crate::pager::AddrRange;
+use core::fmt::{Debug, Formatter};
 
 /// Able to translate.
 pub trait Translate {
@@ -22,11 +22,15 @@ pub trait Translate {
 
     /// Translate a virtual address to a physical address.
     fn translate_range(&self, virt_addr_range: VirtAddrRange) -> PhysAddrRange {
-        PhysAddrRange::new(self.translate(virt_addr_range.base()), virt_addr_range.length())
+        PhysAddrRange::new(
+            self.translate(virt_addr_range.base()),
+            virt_addr_range.length(),
+        )
     }
 
     /// Reverse translate a physical address to a virtual address, if defined..
-    fn translate_phys(&self, _phys_addr: PhysAddr) -> Result<VirtAddr> {
+    #[allow(unused_variables)]
+    fn translate_phys(&self, phys_addr: PhysAddr) -> Result<VirtAddr> {
         Err(Error::Undefined)
     }
 }

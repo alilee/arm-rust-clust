@@ -8,6 +8,9 @@ use crate::pager::{Addr, AddrRange, PhysAddr, PhysAddrRange};
 
 use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
+#[no_mangle]
+static A: usize = 0xa003e00;
+
 #[link_section = ".startup"]
 #[no_mangle]
 #[naked]
@@ -21,6 +24,17 @@ use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 /// NOTE: must not use stack before SP set.
 pub unsafe extern "C" fn reset(pdtb: *const u32) -> ! {
     asm!(
+        "   adrp x1, A",
+        "   add  x1, x1, :lo12:A",
+        "   ldr  x1, [x1]",
+        "   ldr  w3, [x1, #0]",    // magic
+        "   ldr  w3, [x1, #4]",    // version
+        "   ldr  w3, [x1, #8]",    // device id
+        "   ldr  w2, [x1, #0x70]", // status
+        "   orr  w3, wzr, #1",
+        "   str  w3, [x1, #0x70]",
+        "   dsb  ish",
+        "   ldr  w4, [x1, #0x70]",
         "   adrp x1, stack_end",
         "   mov  sp, x1",
         "   mrs  x1, mpidr_el1",

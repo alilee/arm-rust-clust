@@ -21,12 +21,12 @@ impl Debug for VirtAddr {
 }
 
 impl Addr<VirtAddr, VirtAddrRange> for VirtAddr {
-    fn get(&self) -> usize {
-        self.0
-    }
-
     fn at(addr: usize) -> Self {
         Self(addr)
+    }
+
+    fn get(&self) -> usize {
+        self.0
     }
 }
 
@@ -115,7 +115,7 @@ impl Debug for VirtAddrRange {
             f,
             "VirtAddr(0x{:08x}..0x{:08x}, 0x{:09x})",
             self.base.0,
-            self.base.0 + self.length,
+            self.base.0 as u128 + self.length as u128,
             self.length
         )
     }
@@ -157,35 +157,6 @@ impl VirtAddrRange {
     /// Length of the range in bytes.
     pub const fn length_in_pages(&self) -> usize {
         (self.length + PAGESIZE_BYTES - 1) / PAGESIZE_BYTES
-    }
-
-    /// Length of the range in bytes.
-    pub fn intersection(&self, other: &Self) -> VirtAddrRange {
-        use core::cmp::{max, min};
-
-        let base = max(self.base.0, other.base.0);
-        let low_top = min(self.top().0, other.top().0);
-        let top = min(self.top().0, other.top().0);
-        if base > low_top {
-            return VirtAddrRange::new(VirtAddr::null(), 0);
-        }
-        VirtAddrRange {
-            base: VirtAddr(base),
-            length: (top - base) as usize,
-        }
-    }
-
-    /// Increment the range by its length.
-    pub fn step(self: &Self) -> Self {
-        Self {
-            base: self.base.increment(self.length),
-            length: self.length,
-        }
-    }
-
-    /// True iff the range extends to at least the base and top of other.
-    pub fn covers(&self, other: &Self) -> bool {
-        self.base <= other.base && self.top() >= other.top()
     }
 }
 
@@ -244,11 +215,11 @@ mod tests {
         let lower = VirtAddrRange::between(VirtAddr(0x345_0000), VirtAddr(0x545_0000));
         let higher = VirtAddrRange::between(VirtAddr(0x445_0000), VirtAddr(0x645_0000));
         let intersection = VirtAddrRange::between(VirtAddr(0x445_0000), VirtAddr(0x545_0000));
-        assert_eq!(intersection, lower.intersection(&higher));
-        assert_eq!(intersection, higher.intersection(&lower));
-        assert_eq!(lower, lower.intersection(&lower));
+        assert_eq!(intersection, lower.intersection(&higher).unwrap());
+        assert_eq!(intersection, higher.intersection(&lower).unwrap());
+        assert_eq!(lower, lower.intersection(&lower).unwrap());
         let disjoint = VirtAddrRange::between(VirtAddr(0x745_0000), VirtAddr(0x800_0000));
-        assert_eq!(0, lower.intersection(&disjoint).length());
+        assert_none!(lower.intersection(&disjoint));
 
         assert!(!lower.covers(&higher));
         assert!(lower.covers(&intersection));

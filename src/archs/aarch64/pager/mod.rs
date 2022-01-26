@@ -5,10 +5,12 @@
 mod layout;
 mod mair;
 mod table;
+mod walk;
 
 pub use layout::kernel_offset;
-pub use table::{PageTableEntry, TABLE_ENTRIES};
+pub use table::{PageTableEntry, MAX_LEVELS, TABLE_ENTRIES};
 
+// FIXME: why is this public?
 pub use table::PageBlockDescriptor;
 
 use table::{PageTable, TableDescriptor, LEVEL_OFFSETS, LEVEL_WIDTH};
@@ -18,13 +20,15 @@ use super::{hal, Arch};
 use crate::archs::{DeviceTrait, PagerTrait};
 use crate::pager::{
     Addr, AddrRange, AttributeField, Attributes, FixedOffset, FrameAllocator, FramePurpose,
-    PhysAddr, PhysAddrRange, Translate, VirtAddr, VirtAddrRange,
+    PhysAddr, PhysAddrRange, Translate, VirtAddr, VirtAddrRange, PAGESIZE_BYTES,
 };
 use crate::util::locked::Locked;
 use crate::{Error, Result};
 
+use crate::archs::aarch64::pager::walk::{PageDirectoryWalk, TraversalOrder};
 use core::any::Any;
 use core::intrinsics::unchecked_sub;
+use core::sync::atomic;
 
 impl PagerTrait for Arch {
     fn ram_range() -> Result<PhysAddrRange> {
@@ -136,6 +140,50 @@ impl PageDirectory {
         self.ttb1
     }
 
+    fn start_walk(&self, virt_addr_range: VirtAddrRange) -> Result<(PhysAddr, u8)> {
+        if virt_addr_range.base() < Arch::kernel_base() {
+            Ok((
+                self.ttb0.ok_or_else(|| Error::UnInitialised)?,
+                TTB0_FIRST_LEVEL,
+            ))
+        } else {
+            Ok((
+                self.ttb1.ok_or_else(|| Error::UnInitialised)?,
+                TTB1_FIRST_LEVEL,
+            ))
+        }
+    }
+
+    fn preorder<'a>(
+        &self,
+        virt_addr_range: VirtAddrRange,
+        mem_access_translation: &'a FixedOffset,
+    ) -> Result<PageDirectoryWalk<'a>> {
+        let (phys_addr_table, first_level) = self.start_walk(virt_addr_range)?;
+        Ok(PageDirectoryWalk::new(
+            TraversalOrder::Preorder,
+            virt_addr_range,
+            first_level,
+            phys_addr_table,
+            mem_access_translation,
+        ))
+    }
+
+    fn postorder<'a>(
+        &self,
+        virt_addr_range: VirtAddrRange,
+        mem_access_translation: &'a FixedOffset,
+    ) -> Result<PageDirectoryWalk<'a>> {
+        let (phys_addr_table, first_level) = self.start_walk(virt_addr_range)?;
+        Ok(PageDirectoryWalk::new(
+            TraversalOrder::Postorder,
+            virt_addr_range,
+            first_level,
+            phys_addr_table,
+            mem_access_translation,
+        ))
+    }
+
     /// Return the virtual address range for the required span for a page table entry to be contiguous.
     fn contiguous_virt_range(
         level: u8,
@@ -153,7 +201,6 @@ impl PageDirectory {
     }
 
     fn map_level(
-        &mut self,
         target_range: VirtAddrRange,
         translation: &(impl Translate + core::fmt::Debug),
         level: u8,
@@ -220,15 +267,26 @@ impl PageDirectory {
                         contiguous,
                     )
                     .into();
+                    if let Some(phys_addr) = maybe_output_addr {
+                        let ram_range = Arch::ram_range()?;
+                        if ram_range.contains(phys_addr) {
+                            let phys_addr_range =
+                                PhysAddrRange::new(phys_addr, entry_range.length());
+                            let mut allocator = allocator.lock();
+                            for phys_addr in phys_addr_range.chunks(PAGESIZE_BYTES) {
+                                allocator.increment_map_count(phys_addr)?;
+                            }
+                        }
+                    }
                     trace!("{:?}", page_table[index]);
                     continue;
                 }
             }
             let maybe_phys_addr_table = if page_table[index].is_valid() {
-                // FIXME: check that new attributes are compatible with parent tables
                 Some(page_table[index].next_level_table_address())
             } else {
-                // FIXME: PageTable for the entry may have just been paged out
+                // FIXME: Race condition - PageTable for the entry may have just been paged out
+                // FIXME: All L2 BranchPageTable mappings should point to the same LeafPageTable
                 let maybe_phys_addr = if attributes.is_set(AttributeField::OnDemand)
                     && target_range.covers(&entry_range)
                 {
@@ -248,7 +306,7 @@ impl PageDirectory {
                 maybe_phys_addr
             };
             if let Some(phys_addr_table) = maybe_phys_addr_table {
-                self.map_level(
+                Self::map_level(
                     entry_target_range,
                     translation,
                     level + 1,
@@ -261,6 +319,27 @@ impl PageDirectory {
             }
         }
         Ok(target_range)
+    }
+
+    fn free_table_if_empty(
+        level: u8,
+        pte: &mut PageTableEntry,
+        allocator: &Locked<impl FrameAllocator>,
+        mem_access_translation: &impl Translate,
+    ) -> Result<()> {
+        assert!(pte.is_table(level));
+        let phys_addr_next_table = pte.next_level_table_address();
+        let next_page_table = unsafe {
+            mem_access_translation
+                .translate_phys(phys_addr_next_table)?
+                .as_mut_ref::<PageTable>()
+        };
+        if next_page_table.iter().all(|pte| pte.is_null()) {
+            *pte = PageTableEntry::null();
+            // No need to invalidate TLB because no entries in lower tables
+            allocator.lock().free(phys_addr_next_table);
+        }
+        Ok(())
     }
 }
 
@@ -282,34 +361,24 @@ impl crate::archs::PageDirectory for PageDirectory {
             target_range, translation, attributes
         );
 
-        let (phys_addr_table, page_table_virt_addr_range_base, first_level) =
-            if target_range.base() < Arch::kernel_base() {
-                self.ttb0 = self.ttb0.or_else(|| {
-                    allocator
-                        .lock()
-                        .alloc_zeroed(FramePurpose::BranchPageTable)
-                        .ok()
-                });
-                (
-                    self.ttb0.ok_or(Error::OutOfMemory)?,
-                    VirtAddr::null(),
-                    TTB0_FIRST_LEVEL,
-                )
-            } else {
-                self.ttb1 = self.ttb1.or_else(|| {
-                    allocator
-                        .lock()
-                        .alloc_zeroed(FramePurpose::BranchPageTable)
-                        .ok()
-                });
-                (
-                    self.ttb1.ok_or(Error::OutOfMemory)?,
-                    Arch::kernel_base(),
-                    TTB1_FIRST_LEVEL,
-                )
-            };
+        if target_range.base() < Arch::kernel_base() {
+            self.ttb0 = self
+                .ttb0
+                .or_else(|| allocator.lock().alloc_zeroed(FramePurpose::User).ok())
+        } else {
+            self.ttb1 = self
+                .ttb1
+                .or_else(|| allocator.lock().alloc_zeroed(FramePurpose::Kernel).ok())
+        }
 
-        self.map_level(
+        let (phys_addr_table, first_level) = self.start_walk(target_range)?;
+        let page_table_virt_addr_range_base = if target_range.base() < Arch::kernel_base() {
+            VirtAddr::null()
+        } else {
+            Arch::kernel_base()
+        };
+
+        Self::map_level(
             target_range,
             &translation,
             first_level,
@@ -321,52 +390,54 @@ impl crate::archs::PageDirectory for PageDirectory {
         )
     }
 
-    fn demand_page(
-        &mut self,
+    fn maps_to(
+        &self,
         virt_addr: VirtAddr,
-        attributes: Attributes,
-        allocator: &Locked<impl FrameAllocator>,
-        mem_access_translation: &impl Translate,
-    ) -> Result<()> {
-        info!("demand_page: {:?}", virt_addr);
-        let (mut phys_addr, first_level, purpose) = if virt_addr < Arch::kernel_base() {
-            (self.ttb0.unwrap(), TTB0_FIRST_LEVEL, FramePurpose::User)
-        } else {
-            (self.ttb1.unwrap(), TTB1_FIRST_LEVEL, FramePurpose::Kernel)
-        };
+        mem_access_translation: &FixedOffset,
+    ) -> Result<PhysAddr> {
+        info!("maps_to: {:?}", virt_addr);
 
-        let mut level = first_level;
+        let virt_addr_range = VirtAddrRange::page_containing(virt_addr);
 
-        while level <= 3 {
-            let page_table = unsafe {
-                mem_access_translation
-                    .translate_phys(phys_addr)?
-                    .as_mut_ref::<PageTable>()
-            };
-            let entry = virt_addr.get_page_table_entry(LEVEL_WIDTH, LEVEL_OFFSETS[level as usize]);
-
-            if !page_table[entry].is_valid() {
-                if page_table[entry].is_null() && level == first_level {
-                    return Err(Error::SegmentFault);
-                }
-                let purpose = match level {
-                    3 => purpose,
-                    2 => FramePurpose::LeafPageTable,
-                    1 => FramePurpose::BranchPageTable,
-                    _ => unreachable!(),
-                };
-                phys_addr = allocator.lock().alloc_zeroed(purpose)?;
-                page_table[entry] = if level == 3 {
-                    PageBlockDescriptor::new_entry(level, Some(phys_addr), attributes, false).into()
-                } else {
-                    let is_kernel = virt_addr >= Arch::kernel_base();
-                    TableDescriptor::new_entry(is_kernel, level, Some(phys_addr), attributes).into()
-                };
+        for (level, entry_range, pte) in self.postorder(virt_addr_range, mem_access_translation)? {
+            if !pte.is_valid() {
+                break;
             }
-            phys_addr = page_table[entry].next_level_table_address();
-            level += 1;
+            assert!(entry_range.contains(virt_addr));
+            // TODO: support large page-blocks
+            assert_eq!(3, level);
+            let phys_addr = pte
+                .next_level_table_address()
+                .increment(virt_addr.page_offset());
+            return Ok(phys_addr);
         }
-        debug!("done");
+        Err(Error::SegmentFault)
+    }
+
+    fn unmap(
+        &mut self,
+        virt_addr_range: VirtAddrRange,
+        allocator: &'static Locked<impl FrameAllocator>,
+        mem_access_translation: &FixedOffset,
+    ) -> Result<()> {
+        info!("unmapping: {:?}", virt_addr_range);
+        for (level, entry_range, pte) in self.postorder(virt_addr_range, mem_access_translation)? {
+            assert!(virt_addr_range.covers(&entry_range));
+            if !pte.is_valid() {
+                return Err(Error::SegmentFault);
+            };
+            if pte.is_table(level) {
+                Self::free_table_if_empty(level, pte, allocator, mem_access_translation)?;
+            } else {
+                let phys_addr = pte.next_level_table_address();
+                *pte = PageTableEntry::null();
+                atomic::fence(atomic::Ordering::SeqCst);
+                hal::invalidate_tlb(entry_range.base());
+                if Arch::ram_range()?.contains(phys_addr) {
+                    allocator.lock().free(phys_addr);
+                }
+            };
+        }
         Ok(())
     }
 
@@ -533,7 +604,9 @@ impl Iterator for PageTableEntries {
         if self.index < self.top {
             let result = (
                 self.index,
-                self.entry_span.intersection(&self.bounds),
+                self.entry_span
+                    .intersection(&self.bounds)
+                    .expect("entry not intersecting bounds"),
                 self.entry_span,
             );
             self.index += 1;
@@ -678,6 +751,14 @@ mod tests {
             self.next += 1;
             Ok(result)
         }
+
+        fn increment_map_count(&mut self, phys_addr: PhysAddr) -> Result<()> {
+            todo!()
+        }
+
+        fn free(&mut self, phys_addr: PhysAddr) -> Result<()> {
+            todo!()
+        }
     }
 
     #[test]
@@ -726,54 +807,6 @@ mod tests {
             attributes,
             &allocator,
             &mem_access_translation,
-        ));
-    }
-
-    #[test]
-    fn test_demand_paging() {
-        let mut page_dir = super::PageDirectory::new();
-        let base = Arch::kernel_base();
-        let target_range = VirtAddrRange::new(base, 0x10_0000_0000);
-        let translation = FixedOffset::new(PhysAddr::null(), base);
-        let attributes = Attributes::KERNEL_DATA | AttributeField::Accessed;
-        let allocator = Locked::new(TestAllocator::new(6));
-        let mem_access_translation = FixedOffset::identity();
-
-        assert_ok!(page_dir.map_translation(
-            target_range,
-            translation,
-            attributes,
-            &allocator,
-            &mem_access_translation,
-        ));
-        assert_ok!(page_dir.demand_page(base, attributes, &allocator, &mem_access_translation));
-        page_dir.dump(&mem_access_translation);
-    }
-
-    #[test]
-    fn test_demand_paging_page_fault() {
-        let mut page_dir = super::PageDirectory::new();
-        let base = Arch::kernel_base();
-        let target_range = VirtAddrRange::new(base, 0x10_0000_0000);
-        let translation = FixedOffset::new(PhysAddr::null(), base);
-        let attributes = Attributes::KERNEL_DATA | AttributeField::Accessed;
-        let allocator = Locked::new(TestAllocator::new(6));
-        let mem_access_translation = FixedOffset::identity();
-
-        assert_ok!(page_dir.map_translation(
-            target_range,
-            translation,
-            attributes,
-            &allocator,
-            &mem_access_translation,
-        ));
-        assert_none!(page_dir.ttb0);
-        let mut page_dir = super::PageDirectory::load(0, page_dir.ttb1.unwrap().get() as u64);
-        assert_err!(page_dir.demand_page(
-            target_range.top(),
-            attributes,
-            &allocator,
-            &mem_access_translation
         ));
     }
 

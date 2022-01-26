@@ -21,12 +21,12 @@ pub fn exit_success() -> ! {
 ///
 /// NOTE: This is not used for unit tests.
 pub fn test_runner(tests: &[&test_types::UnitTest]) {
-    info!("running {} tests", tests.len());
+    major!("running {} tests", tests.len());
     for test in tests {
-        info!("testing {}", test.name);
+        major!("testing {}", test.name);
         (test.test_func)();
     }
-    info!("test result: ok.");
+    major!("test result: ok.");
 
     exit_success()
 }

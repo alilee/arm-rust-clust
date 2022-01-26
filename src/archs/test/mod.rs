@@ -5,8 +5,8 @@
 #![allow(missing_docs)]
 
 use crate::pager::{
-    Addr, AddrRange, Attributes, FixedOffset, FrameAllocator, PhysAddr, PhysAddrRange, Translate,
-    VirtAddr, VirtAddrRange,
+    Addr, AddrRange, Attributes, FixedOffset, FrameAllocator, HandlerReturnAction, PhysAddr,
+    PhysAddrRange, Translate, VirtAddr, VirtAddrRange,
 };
 use crate::util::locked::Locked;
 use crate::Result;
@@ -94,12 +94,19 @@ impl super::PageDirectory for PageDirectory {
         unimplemented!()
     }
 
-    fn demand_page(
-        &mut self,
+    fn maps_to(
+        &self,
         virt_addr: VirtAddr,
-        attributes: Attributes,
+        mem_access_translation: &FixedOffset,
+    ) -> Result<PhysAddr> {
+        unimplemented!()
+    }
+
+    fn unmap(
+        &mut self,
+        virt_addr_range: VirtAddrRange,
         allocator: &Locked<impl FrameAllocator>,
-        mem_access_translation: &impl Translate,
+        mem_access_translation: &FixedOffset,
     ) -> Result<()> {
         unimplemented!()
     }
@@ -114,6 +121,10 @@ pub fn new_page_directory() -> impl super::PageDirectory {
 }
 
 impl super::DeviceTrait for Arch {
+    fn add_handler(_interrupt: u8, _handler: fn() -> HandlerReturnAction) -> Result<()> {
+        unimplemented!()
+    }
+
     fn debug_uart() -> Result<PhysAddrRange> {
         unimplemented!()
     }

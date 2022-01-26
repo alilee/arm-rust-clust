@@ -30,5 +30,5 @@ fn handler_init() {
 
     unsafe { asm!("svc #0") } // no-op
 
-    info!("returned");
+    major!("returned");
 }

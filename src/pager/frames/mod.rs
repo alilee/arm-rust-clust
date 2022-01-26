@@ -44,6 +44,13 @@ pub trait Allocator {
     fn alloc_for_overwrite(&mut self, purpose: Purpose) -> Result<PhysAddr> {
         self.alloc_zeroed(purpose)
     }
+
+    /// A physical page is being mapped, so increase its reference count.
+    fn increment_map_count(&mut self, phys_addr: PhysAddr) -> Result<()>;
+
+    /// A physical page is being unmapped, so decrease its reference count and
+    /// move to free list if no further references.
+    fn free(&mut self, phys_addr: PhysAddr) -> Result<()>;
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -94,6 +101,7 @@ impl Into<u8> for FrameUse {
 pub struct FrameTableEntry {
     _persisted: Option<NonZeroU64>,
     _page_block_descriptor: Option<NonNull<crate::archs::arch::PageBlockDescriptor>>,
+    map_count: u8,
 }
 
 impl Default for FrameTableEntry {
@@ -101,6 +109,7 @@ impl Default for FrameTableEntry {
         Self {
             _persisted: None,
             _page_block_descriptor: None,
+            map_count: 0,
         }
     }
 }
@@ -170,6 +179,22 @@ impl Allocator for FrameTableInner {
                 i
             })
             .map(|i| PhysAddr::ram_page(i as usize))
+    }
+
+    fn increment_map_count(&mut self, phys_addr: PhysAddr) -> Result<()> {
+        let i = PhysAddrRange::between(self.ram_range.base(), phys_addr).length_in_pages() as u32;
+        self.table[i].map_count += 1;
+        Ok(())
+    }
+
+    fn free(&mut self, phys_addr: PhysAddr) -> Result<()> {
+        let i = PhysAddrRange::between(self.ram_range.base(), phys_addr).length_in_pages() as u32;
+        self.table[i].map_count -= 1;
+        if self.table[i].map_count == 0 {
+            self.table.remove_to(i, FrameUse::Free).and(Ok(()))
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -296,6 +321,16 @@ impl Allocator for FrameTable {
     fn alloc_for_overwrite(&mut self, purpose: Purpose) -> Result<PhysAddr> {
         info!("alloc_zeroed: {:?}", purpose);
         self.inner()?.alloc_for_overwrite(purpose)
+    }
+
+    fn increment_map_count(&mut self, phys_addr: PhysAddr) -> Result<()> {
+        info!("increment_map_count: {:?}", phys_addr);
+        self.inner()?.increment_map_count(phys_addr)
+    }
+
+    fn free(&mut self, phys_addr: PhysAddr) -> Result<()> {
+        info!("free: {:?}", phys_addr);
+        self.inner()?.free(phys_addr)
     }
 }
 

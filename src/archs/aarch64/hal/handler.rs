@@ -88,7 +88,9 @@ extern "C" fn el1_sp1_sync_handler(exc: &ExceptionContext) -> () {
             super::pager::handle_instr_abort_el1(esr).expect("pager::handle_instr_abort_el1")
         }
         Some(EC::Value::SVC64) => {
-            panic!("kernel made supervisor call");
+            error!("kernel made supervisor call");
+            HandlerReturnAction::Return
+            // panic!("kernel made supervisor call");
         }
         None => unreachable!(),
         _ => {
