@@ -5,6 +5,8 @@
 mod block;
 mod queue;
 
+use super::make_addr_range;
+
 use crate::pager::{
     Addr, AddrRange, FixedOffset, OwnedMapping, Pager, Paging, PhysAddr, PhysAddrRange, Translate,
     PAGESIZE_BYTES,
@@ -130,16 +132,6 @@ impl VirtIODevice {
     }
 }
 
-fn make_addr(prop: StructItem) -> Result<PhysAddr> {
-    let mut buf = [0u8; 32];
-    let list = prop
-        .value_u32_list(&mut buf)
-        .or(Err(Error::DeviceIncompatible))?;
-    Ok(PhysAddr::fixed(
-        (list[0] as usize) << 32 | (list[1] as usize),
-    ))
-}
-
 fn make_intr(prop: StructItem) -> Result<(u32, u32, u32)> {
     let mut buf = [0u8; 32];
     let list = prop
@@ -174,8 +166,8 @@ pub fn init(dtb_root: dtb::StructItems) -> Result<()> {
 
     for (node, node_iter) in dtb_root.path_struct_items("/virtio_mmio") {
         let (prop, _) = node_iter.clone().path_struct_items("reg").next().unwrap();
-        let phys_addr = make_addr(prop)?;
-        let page_base = phys_addr.align_down(PAGESIZE_BYTES);
+        let phys_addr_range = make_addr_range(prop)?;
+        let page_base = phys_addr_range.base().align_down(PAGESIZE_BYTES);
 
         if !device_pages.contains_key(&page_base) {
             let mapping = Pager::map_device(PhysAddrRange::page_at(page_base))?;
@@ -185,7 +177,7 @@ pub fn init(dtb_root: dtb::StructItems) -> Result<()> {
 
         let (mapping, translation) = device_pages.get(&page_base).expect("device_pages.get");
         info!("translation: {:?}", translation);
-        let reg = translation.translate_phys(phys_addr)?;
+        let reg = translation.translate_phys(phys_addr_range.base())?;
         let device: &mut VirtIODevice = unsafe { reg.as_mut_ref() };
 
         if device.magic_value.read(MagicValue::MAGIC) == MagicValue::MAGIC::Magic.value

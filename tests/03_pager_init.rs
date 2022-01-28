@@ -35,6 +35,6 @@ use libkernel::debug::Level;
 
 #[no_mangle]
 pub fn _override_log_settings() -> (Level, &'static [(&'static str, Level)]) {
-    const LOG_LEVEL_SETTINGS: &[(&str, Level)] = &[("aarch64::pager", Level::Debug)];
-    (Level::Info, LOG_LEVEL_SETTINGS)
+    const LOG_LEVEL_SETTINGS: &[(&str, Level)] = &[];
+    (Level::Trace, LOG_LEVEL_SETTINGS)
 }

@@ -124,10 +124,10 @@ pub fn init(next: fn() -> !) -> ! {
     fn do_init() -> Result<VirtAddr> {
         major!("init");
 
+        Arch::pager_init()?;
+
         layout::init()?;
         frames::init()?;
-
-        Arch::pager_init()?;
 
         {
             let mut page_directory = KERNEL_PAGE_DIRECTORY.lock();

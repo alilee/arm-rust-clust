@@ -128,7 +128,7 @@ impl FrameTableInner {
         phys_addr_range: PhysAddrRange,
         frame_use: FrameUse,
     ) -> Result<()> {
-        let i = PhysAddrRange::between(Arch::ram_range()?.base(), phys_addr_range.base())
+        let i = PhysAddrRange::between(Arch::ram_range().base(), phys_addr_range.base())
             .length_in_pages() as u32;
         let j = i + phys_addr_range.length_in_pages() as u32 - 1;
         self.table.remove_seq_to(i, j, frame_use)?;
@@ -188,6 +188,7 @@ impl Allocator for FrameTableInner {
     }
 
     fn free(&mut self, phys_addr: PhysAddr) -> Result<()> {
+        assert!(self.ram_range.contains(phys_addr));
         let i = PhysAddrRange::between(self.ram_range.base(), phys_addr).length_in_pages() as u32;
         self.table[i].map_count -= 1;
         if self.table[i].map_count == 0 {
@@ -227,7 +228,7 @@ impl From<Purpose> for FrameUse {
 }
 
 pub fn frame_table_bytes() -> usize {
-    let ram_range: PhysAddrRange = Arch::ram_range().expect("Arch::ram_range");
+    let ram_range: PhysAddrRange = Arch::ram_range();
     let entries = ram_range.length_in_pages();
 
     deque::Deque::<FrameTableEntry, FrameUse>::storage_bytes(entries)
@@ -244,7 +245,7 @@ pub fn init() -> Result<()> {
 
     debug!("frame_table_range: {:?}", frame_table_range);
 
-    let ram_range: PhysAddrRange = Arch::ram_range()?;
+    let ram_range: PhysAddrRange = Arch::ram_range();
     let len = ram_range.length_in_pages() as u32;
 
     let mut frame_table = unsafe {
@@ -265,13 +266,10 @@ pub fn init() -> Result<()> {
 
     let reset_stack_range = layout::get_phys_range(RangeContent::ResetStack)?;
     frame_table.move_contiguous_range(reset_stack_range, FrameUse::Kernel)?;
-
     let text_range: PhysAddrRange = Arch::text_image();
     frame_table.move_contiguous_range(text_range, FrameUse::Kernel)?;
-
     let static_range: PhysAddrRange = Arch::static_image();
     frame_table.move_contiguous_range(static_range, FrameUse::Kernel)?;
-
     let data_range: PhysAddrRange = Arch::data_image();
     frame_table.move_contiguous_range(data_range, FrameUse::Kernel)?;
 

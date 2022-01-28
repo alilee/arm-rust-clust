@@ -217,7 +217,7 @@ impl<'a> Iterator for PageDirectoryWalk<'a> {
                             self.current_level -= 1;
                             break;
                         }
-                        Some((level, entry_range, pte)) => {
+                        Some((level, _, pte)) => {
                             if pte.is_valid() && pte.is_table(level) {
                                 info!("entry is table");
                                 dbg!(self.target_range);
@@ -290,7 +290,7 @@ mod tests {
     use super::*;
     use crate::archs::aarch64::PageBlockDescriptor;
     use crate::archs::aarch64::{pager::table::TableDescriptor, pager::PagerTrait, Arch};
-    use crate::pager::{Attributes, Page, PAGESIZE_BYTES};
+    use crate::pager::{Attributes, PAGESIZE_BYTES};
 
     const IDENTITY: &FixedOffset = &FixedOffset::identity();
 
@@ -301,9 +301,9 @@ mod tests {
 
     #[test]
     fn test_table_first() {
-        let mut page = Page::new();
+        let mut page = PageTable::new();
         let phys_addr_table = IDENTITY.translate(VirtAddr::from(&page));
-        page[0] = 1;
+        page[0].set(1);
 
         let one_page = VirtAddrRange::new(VirtAddr::null(), PAGESIZE_BYTES);
 
@@ -315,17 +315,17 @@ mod tests {
             assert_eq!(PAGESIZE_BYTES, entry_range.length());
             assert_eq!(one_page, entry_range);
             assert_eq!(
-                pte as *const PageTableEntry as *const (),
-                &page[0] as *const u64 as *const ()
+                pte as *const PageTableEntry,
+                &page[0] as *const PageTableEntry
             );
         }
     }
 
     #[test]
     fn test_table_last() {
-        let mut page = Page::new();
+        let mut page = PageTable::new();
         let phys_addr_table = IDENTITY.translate(VirtAddr::from(&page));
-        page[511] = 1;
+        page[511].set(1);
 
         let one_page = VirtAddrRange::new(VirtAddr::at(511 * PAGESIZE_BYTES), PAGESIZE_BYTES);
 
@@ -337,20 +337,20 @@ mod tests {
             assert_eq!(PAGESIZE_BYTES, entry_range.length());
             assert_eq!(one_page, entry_range);
             assert_eq!(
-                pte as *const PageTableEntry as *const (),
-                &page[511] as *const u64 as *const ()
+                pte as *const PageTableEntry,
+                &page[511] as *const PageTableEntry
             );
         }
     }
 
     #[test]
     fn test_table_span() {
-        let mut page = Page::new();
+        let mut page = PageTable::new();
         let phys_addr_table = IDENTITY.translate(VirtAddr::from(&page));
-        page[200] = 1;
-        page[201] = 1;
-        page[202] = 1;
-        page[203] = 1;
+        page[200].set(1);
+        page[201].set(1);
+        page[202].set(1);
+        page[203].set(1);
 
         let page_range = VirtAddrRange::new(VirtAddr::at(200 * PAGESIZE_BYTES), 4 * PAGESIZE_BYTES);
 
@@ -366,10 +366,10 @@ mod tests {
 
     #[test]
     fn test_table_complete() {
-        let mut page = Page::new();
+        let mut page = PageTable::new();
         let phys_addr_table = IDENTITY.translate(VirtAddr::from(&page));
         for i in 0..512 {
-            page[i] = 1;
+            page[i].set(1);
         }
 
         let page_range = VirtAddrRange::new(VirtAddr::null(), 512 * PAGESIZE_BYTES);
@@ -386,7 +386,7 @@ mod tests {
 
     #[test]
     fn test_branch_table_span() {
-        let mut page = Page::new();
+        let page = PageTable::new();
         let phys_addr_table = IDENTITY.translate(VirtAddr::from(&page));
 
         for target_level in 0..LEVEL_OFFSETS.len() {
@@ -420,16 +420,16 @@ mod tests {
             if i >= 86 && i <= 89 {
                 dbg!(i);
                 dbg!(page[i]);
-                assert_eq!(4, page[i]);
+                assert_eq!(4, page[i].get());
             } else {
-                assert_eq!(0, page[i]);
+                assert!(page[i].is_null());
             }
         }
     }
 
     #[test]
     fn test_sub_table_span() {
-        let mut page = Page::new();
+        let page = PageTable::new();
         let phys_addr_table = IDENTITY.translate(VirtAddr::from(&page));
         dbg!(phys_addr_table);
 
@@ -469,16 +469,16 @@ mod tests {
             if i >= 86 && i <= 89 {
                 dbg!(i);
                 dbg!(page[i]);
-                assert_eq!(1, page[i]);
+                assert_eq!(1, page[i].get());
             } else {
-                assert_eq!(0, page[i]);
+                assert!(page[i].is_null());
             }
         }
     }
 
     #[test]
     fn test_branch_table_span_kernel() {
-        let mut page = Page::new();
+        let page = PageTable::new();
         let phys_addr_table = IDENTITY.translate(VirtAddr::from(&page));
 
         for target_level in 1..LEVEL_OFFSETS.len() {
@@ -515,9 +515,9 @@ mod tests {
             if i >= 200 && i <= 203 {
                 dbg!(i);
                 dbg!(page[i]);
-                assert_eq!(3, page[i]);
+                assert_eq!(3, page[i].get());
             } else {
-                assert_eq!(0, page[i]);
+                assert!(page[i].is_null());
             }
         }
     }

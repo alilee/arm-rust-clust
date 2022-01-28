@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: Unlicense
 
 //! Understanding of physical layout on reset
+//!
+//! FIXME: should layout be an arch concern?
 
-use crate::pager::{
-    Addr, FixedOffset, PhysAddr, PhysAddrRange, Translate, VirtAddr, VirtAddrRange,
-};
+use crate::pager::{FixedOffset, PhysAddrRange, Translate, VirtAddrRange};
 
-pub fn kernel_offset() -> FixedOffset {
-    FixedOffset::new(
-        PhysAddr::at(0x4008_0000),
-        VirtAddr::at(0xffff_ff82_0008_0000),
-    )
+/// Where kernel moves during reset
+///
+/// FIXME: assert this is correct during pager::layout::init
+pub const fn kernel_offset() -> FixedOffset {
+    FixedOffset::fixed(0xffff_ff82_0008_0000 - 0x4008_0000)
 }
 
 /// Kernel boot image (using linker symbols)

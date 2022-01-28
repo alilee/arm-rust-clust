@@ -14,7 +14,7 @@ use core::any::Any;
 /// Each architecture must supply the following entry points for paging..
 pub trait PagerTrait {
     /// Physical address range of ram
-    fn ram_range() -> Result<PhysAddrRange>;
+    fn ram_range() -> PhysAddrRange;
     /// Base virtual address of kernel address space
     fn kernel_base() -> VirtAddr;
 

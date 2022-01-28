@@ -31,6 +31,11 @@ impl Addr<VirtAddr, VirtAddrRange> for VirtAddr {
 }
 
 impl VirtAddr {
+    /// Const for compile-time constant
+    pub const fn fixed(addr: usize) -> Self {
+        Self(addr)
+    }
+
     /// Construct from a reference to a linker symbol.
     pub fn from_linker_symbol(sym: *const u8) -> Self {
         Self(sym as usize)

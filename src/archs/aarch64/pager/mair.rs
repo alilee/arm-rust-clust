@@ -5,6 +5,8 @@
 //! Sets up the list of memory access types and publishes the valid
 //! list as an enum.
 
+use super::hal;
+
 use crate::Result;
 
 /// Type for indexes into the MAIR register (referenced in page table).
@@ -27,6 +29,7 @@ impl From<u64> for MAIR {
 
 /// Initialise the MAIR register.
 pub fn init() -> Result<()> {
-    crate::archs::aarch64::hal::init_mair();
+    info!("init");
+    hal::init_mair();
     Ok(())
 }

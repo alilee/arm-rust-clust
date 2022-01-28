@@ -15,11 +15,8 @@ pub struct Arch {}
 
 #[allow(unused_variables)]
 impl super::PagerTrait for Arch {
-    fn ram_range() -> Result<PhysAddrRange> {
-        Ok(PhysAddrRange::between(
-            PhysAddr::at(0x4000_0000),
-            PhysAddr::at(0x8000_0000),
-        ))
+    fn ram_range() -> PhysAddrRange {
+        PhysAddrRange::between(PhysAddr::at(0x4000_0000), PhysAddr::at(0x8000_0000))
     }
 
     fn kernel_base() -> VirtAddr {

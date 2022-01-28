@@ -17,7 +17,9 @@ use table::{PageTable, TableDescriptor, LEVEL_OFFSETS, LEVEL_WIDTH};
 
 use super::{hal, Arch};
 
+use crate::archs::aarch64::pager::walk::{PageDirectoryWalk, TraversalOrder};
 use crate::archs::{DeviceTrait, PagerTrait};
+use crate::device;
 use crate::pager::{
     Addr, AddrRange, AttributeField, Attributes, FixedOffset, FrameAllocator, FramePurpose,
     PhysAddr, PhysAddrRange, Translate, VirtAddr, VirtAddrRange, PAGESIZE_BYTES,
@@ -25,19 +27,17 @@ use crate::pager::{
 use crate::util::locked::Locked;
 use crate::{Error, Result};
 
-use crate::archs::aarch64::pager::walk::{PageDirectoryWalk, TraversalOrder};
 use core::any::Any;
 use core::intrinsics::unchecked_sub;
 use core::sync::atomic;
 
+static mut RAM_RANGE: PhysAddrRange = PhysAddrRange::fixed(PhysAddr::null(), 0);
+
 impl PagerTrait for Arch {
-    fn ram_range() -> Result<PhysAddrRange> {
-        // FIXME: Collect from DTB
-        Ok(PhysAddrRange::between(
-            PhysAddr::at(0x4000_0000),
-            PhysAddr::at(0x5000_0000),
-        ))
+    fn ram_range() -> PhysAddrRange {
+        unsafe { RAM_RANGE }
     }
+
     fn kernel_base() -> VirtAddr {
         let result = VirtAddr::at(!((1 << super::UPPER_VA_BITS) - 1));
         result
@@ -73,7 +73,11 @@ impl PagerTrait for Arch {
 
     fn pager_init() -> Result<()> {
         info!("init");
-        mair::init()
+        mair::init()?;
+        unsafe {
+            RAM_RANGE = device::get_ram_range_early()?;
+        }
+        Ok(())
     }
 
     fn enable_paging(page_directory: &impl crate::archs::PageDirectory) -> Result<()> {
@@ -268,13 +272,15 @@ impl PageDirectory {
                     )
                     .into();
                     if let Some(phys_addr) = maybe_output_addr {
-                        let ram_range = Arch::ram_range()?;
+                        let ram_range = Arch::ram_range();
                         if ram_range.contains(phys_addr) {
                             let phys_addr_range =
                                 PhysAddrRange::new(phys_addr, entry_range.length());
                             let mut allocator = allocator.lock();
-                            for phys_addr in phys_addr_range.chunks(PAGESIZE_BYTES) {
-                                allocator.increment_map_count(phys_addr)?;
+                            if !attributes.is_set(AttributeField::SuppressMapCount) {
+                                for phys_addr in phys_addr_range.chunks(PAGESIZE_BYTES) {
+                                    allocator.increment_map_count(phys_addr)?;
+                                }
                             }
                         }
                     }
@@ -337,7 +343,7 @@ impl PageDirectory {
         if next_page_table.iter().all(|pte| pte.is_null()) {
             *pte = PageTableEntry::null();
             // No need to invalidate TLB because no entries in lower tables
-            allocator.lock().free(phys_addr_next_table);
+            allocator.lock().free(phys_addr_next_table)?;
         }
         Ok(())
     }
@@ -432,9 +438,9 @@ impl crate::archs::PageDirectory for PageDirectory {
                 let phys_addr = pte.next_level_table_address();
                 *pte = PageTableEntry::null();
                 atomic::fence(atomic::Ordering::SeqCst);
-                hal::invalidate_tlb(entry_range.base());
-                if Arch::ram_range()?.contains(phys_addr) {
-                    allocator.lock().free(phys_addr);
+                hal::invalidate_tlb(entry_range.base())?;
+                if Arch::ram_range().contains(phys_addr) {
+                    allocator.lock().free(phys_addr)?;
                 }
             };
         }
@@ -557,15 +563,13 @@ const GB: usize = 1024 * 1024 * 1024;
 /// TODO: Make const
 #[allow(dead_code)]
 fn make_boot_ram_descriptor() -> u64 {
-    let phys_addr = Arch::ram_range().expect("Arch::ram_range").base();
+    let phys_addr = Arch::ram_range().base();
     assert!(phys_addr.is_aligned(1 * GB));
-    let level = 1;
-    let contiguous = false;
     PageBlockDescriptor::new_entry(
-        level,
+        1,
         Some(phys_addr),
         Attributes::KERNEL_RWX.set(AttributeField::Accessed),
-        contiguous,
+        false,
     )
     .get()
 }
@@ -752,11 +756,11 @@ mod tests {
             Ok(result)
         }
 
-        fn increment_map_count(&mut self, phys_addr: PhysAddr) -> Result<()> {
+        fn increment_map_count(&mut self, _phys_addr: PhysAddr) -> Result<()> {
             todo!()
         }
 
-        fn free(&mut self, phys_addr: PhysAddr) -> Result<()> {
+        fn free(&mut self, _phys_addr: PhysAddr) -> Result<()> {
             todo!()
         }
     }
@@ -812,6 +816,7 @@ mod tests {
 
     #[test]
     fn test_boot_descriptors() {
+        unsafe { RAM_RANGE = PhysAddrRange::new(PhysAddr::at(0x40000000), 0x4000000) };
         assert_eq!(make_boot_ram_descriptor(), BOOT_RAM_DESCRIPTOR);
         assert_eq!(make_boot_device_descriptor(), BOOT_DEVICE_DESCRIPTOR);
     }

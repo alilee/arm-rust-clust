@@ -20,14 +20,39 @@ use crate::util::locked::Locked;
 use crate::{Error, Result};
 
 use alloc::{boxed::Box, collections::BTreeMap, string::String};
-use dtb::StructItems;
+
+use dtb::{StructItem, StructItems};
 
 /// Pointer to Device Tree Blob in physical memory, if available.
 ///
 /// Set during reset, before memory is overwritten, so that pager can reserve and map.
 pub static mut PDTB: Option<PhysAddrRange> = None;
 
-#[derive(Copy, Clone, Debug)]
+/// Get physical memory location from direct-mapped physical DTB address (to bootstrap paging)
+///
+/// Unsafety: This function must only be called while physical memory is identity-mapped.
+pub unsafe fn get_ram_range_early() -> Result<PhysAddrRange> {
+    let dtb_addr = PDTB.ok_or(Error::UnInitialised)?.base();
+    let reader =
+        dtb::Reader::read_from_address(dtb_addr.get()).or(Err(Error::DeviceIncompatible))?;
+    let dtb_root = reader.struct_items();
+    let (prop, _) = dtb_root.path_struct_items("/memory/reg").next().unwrap();
+    let phys_addr_range = make_addr_range(prop)?;
+    Ok(phys_addr_range)
+}
+
+fn make_addr_range(prop: StructItem) -> Result<PhysAddrRange> {
+    let mut buf = [0u8; 32];
+    let list = prop
+        .value_u32_list(&mut buf)
+        .or(Err(Error::DeviceIncompatible))?;
+    Ok(PhysAddrRange::new(
+        PhysAddr::fixed((list[0] as usize) << 32 | (list[1] as usize)),
+        (list[2] as usize) << 32 | (list[3] as usize),
+    ))
+}
+
+#[derive(Debug)]
 enum DeviceTypes {
     Unknown,
     Block,

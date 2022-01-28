@@ -111,6 +111,11 @@ impl From<Identity> for FixedOffset {
 }
 
 impl FixedOffset {
+    /// Const for compile-time evaluation
+    pub const fn fixed(offset: usize) -> Self {
+        Self(offset)
+    }
+
     /// Define translation as difference between reference physical and virtual addresses.
     ///
     /// NOTE: pa must not be above va.

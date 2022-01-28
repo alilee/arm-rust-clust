@@ -2,7 +2,7 @@
 
 use crate::archs::{arch::Arch, PagerTrait};
 use crate::device;
-use crate::pager::FixedOffset;
+use crate::pager::{FixedOffset, PhysAddr};
 use crate::{Error, Result};
 
 use super::{Addr, AddrRange, AttributeField, Attributes, PhysAddrRange, VirtAddr, VirtAddrRange};
@@ -71,7 +71,7 @@ static mut LAYOUT: [KernelExtent; 10] = [
         virt_range_align: 1 * GB,
         virt_range_min_extent: 8 * GB,
         virt_range_gap: &{ || None },
-        phys_addr_range: &{ || Some(Arch::ram_range().expect("Arch::ram_range")) },
+        phys_addr_range: &{ || Some(Arch::ram_range()) },
         attributes: Attributes::RAM,
         virt_range: None,
     },
@@ -82,11 +82,8 @@ static mut LAYOUT: [KernelExtent; 10] = [
         virt_range_gap: &{
             || {
                 Some(
-                    PhysAddrRange::between(
-                        Arch::ram_range().expect("Arch::ram_range").base(),
-                        Arch::text_image().base(),
-                    )
-                    .length(),
+                    PhysAddrRange::between(Arch::ram_range().base(), Arch::text_image().base())
+                        .length(),
                 )
             }
         },
@@ -179,8 +176,14 @@ static mut MEM_FIXED_OFFSET: FixedOffset = FixedOffset::identity();
 
 /// Initialise
 pub fn init() -> Result<()> {
-    info!("init");
+    major!("init");
     info!("Kernel base: {:?}", Arch::kernel_base());
+    info!(
+        "Physical RAM: {:?} ({}MB)",
+        Arch::ram_range(),
+        Arch::ram_range().length() / MB
+    );
+    info!("Kernel offset: {:?}", Arch::kernel_offset());
 
     let mut virt_addr = Arch::kernel_base();
     unsafe {
@@ -216,6 +219,16 @@ pub fn init() -> Result<()> {
             info!("{:?}", extent);
         }
     }
+
+    #[cfg(not(test))]
+    assert_eq!(
+        Arch::kernel_offset().offset(),
+        FixedOffset::new(
+            PhysAddr::at(0x04008_0000),
+            get_range(RangeContent::KernelText)?.base()
+        )
+        .offset()
+    );
 
     Ok(())
 }
@@ -298,7 +311,7 @@ impl IntoIterator for Layout {
 pub fn update_mem_translation() -> Result<()> {
     info!("update_mem_translation");
     unsafe {
-        MEM_FIXED_OFFSET = FixedOffset::new(Arch::ram_range()?.base(), Arch::kernel_base());
+        MEM_FIXED_OFFSET = FixedOffset::new(Arch::ram_range().base(), Arch::kernel_base());
     }
     Ok(())
 }

@@ -29,6 +29,8 @@ pub enum AttributeField {
     OnDemand,
     /// Ensure access does not fault due to page entry flags
     Accessed,
+    /// Do not mark the underlying page as mapped
+    SuppressMapCount,
 }
 
 /// Bit flags for page attributes.
@@ -103,7 +105,8 @@ impl Attributes {
     pub const RAM: Attributes = Attributes::new()
         .set(KernelRead)
         .set(KernelWrite)
-        .set(Block);
+        .set(Block)
+        .set(SuppressMapCount);
     /// For kernel code
     pub const KERNEL_EXEC: Attributes = Attributes::new().set(KernelExec);
     /// For kernel read-only data

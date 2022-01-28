@@ -4,12 +4,9 @@
 
 use core::arch::asm;
 
-use crate::pager::{Addr, AddrRange, PhysAddr, PhysAddrRange};
+use crate::pager::{Addr, AddrRange, FixedOffset, PhysAddr, PhysAddrRange};
 
 use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
-
-#[no_mangle]
-static A: usize = 0xa003e00;
 
 #[link_section = ".startup"]
 #[no_mangle]
@@ -24,24 +21,13 @@ static A: usize = 0xa003e00;
 /// NOTE: must not use stack before SP set.
 pub unsafe extern "C" fn reset(pdtb: *const u32) -> ! {
     asm!(
-        "   adrp x1, A",
-        "   add  x1, x1, :lo12:A",
-        "   ldr  x1, [x1]",
-        "   ldr  w3, [x1, #0]",    // magic
-        "   ldr  w3, [x1, #4]",    // version
-        "   ldr  w3, [x1, #8]",    // device id
-        "   ldr  w2, [x1, #0x70]", // status
-        "   orr  w3, wzr, #1",
-        "   str  w3, [x1, #0x70]",
-        "   dsb  ish",
-        "   ldr  w4, [x1, #0x70]",
         "   adrp x1, stack_end",
         "   mov  sp, x1",
         "   mrs  x1, mpidr_el1",
         "   and  x1, x1, 0xFF", // aff0
         "   cbnz x1, 2f",       // not core 0
         "   bl   enable_boot_vm",
-        "   b    kernel_init",
+        "   b   kernel_init",
         "2: wfe",
         "   b    core_init",
         options(noreturn)
@@ -117,11 +103,14 @@ extern "C" fn enable_boot_vm(pdtb: *const u32) {
     unsafe {
         barrier::isb(barrier::SY);
 
-        let kernel_offset = aarch64::pager::kernel_offset();
+        const KERNEL_OFFSET: FixedOffset = aarch64::pager::kernel_offset();
+        let offset = KERNEL_OFFSET.offset() as u64;
 
-        let offset = kernel_offset.offset() as u64;
-        asm!("add sp, sp, {0}",
-             "add lr, lr, {0}",
-             in(reg) offset);
+        asm!(
+            "add sp, sp, {0}",
+            "add lr, lr, {0}",
+            in(reg) offset
+        );
+        // jump to high memory on return
     }
 }

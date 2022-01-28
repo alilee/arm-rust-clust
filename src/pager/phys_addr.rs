@@ -45,10 +45,7 @@ impl PhysAddr {
     /// Address of the i-th page of RAM.
     pub fn ram_page(i: usize) -> PhysAddr {
         use crate::archs::{arch::Arch, PagerTrait};
-        Arch::ram_range()
-            .expect("Arch ram_range")
-            .base()
-            .increment(i * PAGESIZE_BYTES)
+        Arch::ram_range().base().increment(i * PAGESIZE_BYTES)
     }
 
     /// Construct from a pointer.
