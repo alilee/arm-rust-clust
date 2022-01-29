@@ -125,8 +125,10 @@ pub fn invalidate_tlb(virt_addr: VirtAddr) -> Result<()> {
     use core::sync::atomic;
     use cortex_a::asm;
 
+    atomic::fence(atomic::Ordering::SeqCst);
+
     let base = virt_addr.get() >> 12;
-    // asm::tlbi(TLBI::Type::VAA, TLBI::Level::E1, virt_addr_range.base());
+
     unsafe {
         asm!(
             "tlbi VAAE1, {}",

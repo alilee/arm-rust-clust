@@ -45,7 +45,7 @@ pub fn _is_enabled(level: Level, module_path: &str) -> bool {
                 base
             }
         });
-    level >= setting
+    true || level >= setting
 }
 
 #[cfg(not(test))]

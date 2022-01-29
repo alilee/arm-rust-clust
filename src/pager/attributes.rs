@@ -29,7 +29,10 @@ pub enum AttributeField {
     OnDemand,
     /// Ensure access does not fault due to page entry flags
     Accessed,
-    /// Do not mark the underlying page as mapped
+    /// Do not mark the underlying page as mapped because the mapping is outside the frame table
+    ///
+    /// Specifically, the RAM mapping at the bottom of kernel memory bypasses the frame table and
+    /// device memory is not backed by physical ram.
     SuppressMapCount,
 }
 
@@ -127,7 +130,8 @@ impl Attributes {
         .set(KernelRead)
         .set(KernelWrite)
         .set(Device)
-        .set(Block);
+        .set(Block)
+        .set(SuppressMapCount);
     /// For user-space branch tables
     pub const USER_RWX: Attributes = Attributes::new().set(UserRead).set(UserWrite).set(UserExec);
     /// For user process code

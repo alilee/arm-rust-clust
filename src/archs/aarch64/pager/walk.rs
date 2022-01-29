@@ -33,6 +33,7 @@ impl PageTableWalk {
         target_range: VirtAddrRange,
         mem_access_translation: &impl Translate,
     ) -> Self {
+        info!("new: {}, {:?}, {:?}", level, phys_addr_table, target_range);
         let page_table = NonNull::new(
             mem_access_translation
                 .translate_phys(phys_addr_table)
@@ -43,21 +44,25 @@ impl PageTableWalk {
 
         let level_offset = LEVEL_OFFSETS[level];
 
-        let target_range_base = target_range.base().get();
-        let target_chunk = target_range_base >> level_offset;
-        let first = target_chunk & ((1 << LEVEL_WIDTH) - 1);
-        let entries = (target_range.length() + ((1 << level_offset) - 1)) >> level_offset;
+        let target_range_base_chunk = target_range.base().get() >> level_offset;
+        let index = (target_range_base_chunk & ((1 << LEVEL_WIDTH) - 1)) as u16;
+
+        let target_range_last_chunk =
+            (target_range.base().get() + (target_range.length() - 1)) >> level_offset;
+        let top = 1 + (target_range_last_chunk & ((1 << LEVEL_WIDTH) - 1)) as u16;
 
         let next_virt_addr_range = Some(VirtAddrRange::new(
-            VirtAddr::at(target_chunk << level_offset),
+            VirtAddr::at(target_range_base_chunk << level_offset),
             1usize << level_offset,
         ));
+
+        assert_le!(top, TABLE_ENTRIES as u16);
 
         Self {
             level: level as u8,
             page_table,
-            index: first as u16,
-            top: (first + entries) as u16,
+            index,
+            top,
             next_virt_addr_range,
         }
     }
@@ -68,6 +73,7 @@ impl PageTableWalk {
         pte: &PageTableEntry,
         mem_access_translation: &impl Translate,
     ) -> Self {
+        info!("within: {:?}", target_range);
         assert!(pte.is_valid() && pte.is_table(level));
         let phys_addr_table = pte.next_level_table_address();
         Self::new(
@@ -217,16 +223,16 @@ impl<'a> Iterator for PageDirectoryWalk<'a> {
                             self.current_level -= 1;
                             break;
                         }
-                        Some((level, _, pte)) => {
+                        Some((level, entry_range, pte)) => {
                             if pte.is_valid() && pte.is_table(level) {
-                                info!("entry is table");
-                                dbg!(self.target_range);
+                                info!("next entry is table");
+                                dbg!(level);
+                                dbg!(entry_range);
                                 dbg!(self.virt_addr_range);
                                 let target_range = self
-                                    .target_range
-                                    .intersection(&self.virt_addr_range)
+                                    .virt_addr_range
+                                    .intersection(&entry_range)
                                     .expect("entry range within target range");
-                                dbg!(target_range);
                                 let ptw = PageTableWalk::within(
                                     self.current_level,
                                     target_range,
@@ -278,7 +284,7 @@ impl PageDirectoryWalk<'_> {
             first_level,
             current_level: first_level,
             stack,
-            target_range: VirtAddrRange::new(VirtAddr::null(), 0),
+            target_range: VirtAddrRange::new(VirtAddr::null(), !0usize),
             pte: None,
             mem_access_translation,
         }
@@ -523,6 +529,24 @@ mod tests {
     }
 
     #[test]
+    fn test_small_length_across_large_span() {
+        let page = PageTable::new();
+        let phys_addr_table = IDENTITY.translate(VirtAddr::from(&page));
+
+        let page_range = VirtAddrRange::new(VirtAddr::at(0x7fffffe000), 4 * PAGESIZE_BYTES);
+        dbg!(page_range);
+
+        let ptw = PageTableWalk::new(0, phys_addr_table, page_range, IDENTITY);
+        let mut count = 0;
+        for (level, entry_range, pte) in ptw {
+            dbg!(level);
+            dbg!(entry_range);
+            count += 1;
+        }
+        assert_eq!(2, count);
+    }
+
+    #[test]
     fn test_left() {
         let one_page = VirtAddrRange::new(VirtAddr::null(), PAGESIZE_BYTES);
 
@@ -692,5 +716,63 @@ mod tests {
                 assert!(!pte.is_table(i));
             }
         }
+    }
+
+    #[test]
+    fn test_postorder() {
+        let page_range =
+            VirtAddrRange::new(VirtAddr::at(0x8000000000 - 0x2000), 4 * PAGESIZE_BYTES);
+
+        let page_tables = [PageTable::new(); 8];
+        let mut allocated = 0;
+        let phys_addr_table = IDENTITY.translate(VirtAddr::from(&page_tables[allocated]));
+        allocated += 1;
+
+        for (level, virt_addr_range, pte) in PageDirectoryWalk::new(
+            TraversalOrder::Preorder,
+            page_range,
+            0,
+            phys_addr_table,
+            &IDENTITY,
+        ) {
+            if level < 3 {
+                let new_page_table = IDENTITY.translate(VirtAddr::from(&page_tables[allocated]));
+                allocated += 1;
+                let td = TableDescriptor::new_entry(
+                    false,
+                    level,
+                    Some(new_page_table),
+                    Attributes::USER_DATA,
+                );
+                *pte = td.into();
+            } else {
+                *pte =
+                    PageBlockDescriptor::new_entry(level, None, Attributes::USER_RWX, false).into();
+            }
+        }
+        major!("pages mapped: {:?}", page_range);
+        let mut count = 0;
+        for (level, entry_range, pte) in PageDirectoryWalk::new(
+            TraversalOrder::Postorder,
+            page_range,
+            0,
+            phys_addr_table,
+            IDENTITY,
+        ) {
+            count += 1;
+            dbg!(level);
+            dbg!(entry_range);
+            dbg!(*pte);
+            if level < 3 {
+                assert_some!(entry_range.intersection(&page_range));
+                assert!(pte.is_table(level));
+            } else {
+                assert_eq!(level, 3);
+                assert!(page_range.covers(&entry_range));
+                assert!(!pte.is_table(level));
+                *pte = PageTableEntry::null();
+            }
+        }
+        assert_eq!(10, count);
     }
 }

@@ -152,7 +152,7 @@ pub trait AddrRange<A: Addr<A, R> + core::marker::Copy + core::clone::Clone, R: 
 
     /// True iff the range includes the address.
     fn contains(&self, addr: A) -> bool {
-        addr.get() > self.base().get() && addr.get() < self.top().get()
+        addr.get() >= self.base().get() && addr.get() < self.top().get()
     }
 
     /// True iff the range extends to at least the base and top of other.

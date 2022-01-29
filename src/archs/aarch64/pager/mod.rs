@@ -272,15 +272,12 @@ impl PageDirectory {
                     )
                     .into();
                     if let Some(phys_addr) = maybe_output_addr {
-                        let ram_range = Arch::ram_range();
-                        if ram_range.contains(phys_addr) {
+                        if !attributes.is_set(AttributeField::SuppressMapCount) {
                             let phys_addr_range =
                                 PhysAddrRange::new(phys_addr, entry_range.length());
                             let mut allocator = allocator.lock();
-                            if !attributes.is_set(AttributeField::SuppressMapCount) {
-                                for phys_addr in phys_addr_range.chunks(PAGESIZE_BYTES) {
-                                    allocator.increment_map_count(phys_addr)?;
-                                }
+                            for phys_addr in phys_addr_range.chunks(PAGESIZE_BYTES) {
+                                allocator.increment_map_count(phys_addr)?;
                             }
                         }
                     }
@@ -332,7 +329,7 @@ impl PageDirectory {
         pte: &mut PageTableEntry,
         allocator: &Locked<impl FrameAllocator>,
         mem_access_translation: &impl Translate,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         assert!(pte.is_table(level));
         let phys_addr_next_table = pte.next_level_table_address();
         let next_page_table = unsafe {
@@ -340,12 +337,16 @@ impl PageDirectory {
                 .translate_phys(phys_addr_next_table)?
                 .as_mut_ref::<PageTable>()
         };
+        debug!("checking if empty: {:?}", phys_addr_next_table);
         if next_page_table.iter().all(|pte| pte.is_null()) {
+            info!("freeing page");
             *pte = PageTableEntry::null();
             // No need to invalidate TLB because no entries in lower tables
             allocator.lock().free(phys_addr_next_table)?;
+            Ok(true)
+        } else {
+            Ok(false)
         }
-        Ok(())
     }
 }
 
@@ -354,6 +355,7 @@ impl crate::archs::PageDirectory for PageDirectory {
         self
     }
 
+    // FIXME: Use page directory walk for map_translation
     fn map_translation(
         &mut self,
         target_range: VirtAddrRange,
@@ -406,6 +408,9 @@ impl crate::archs::PageDirectory for PageDirectory {
         let virt_addr_range = VirtAddrRange::page_containing(virt_addr);
 
         for (level, entry_range, pte) in self.postorder(virt_addr_range, mem_access_translation)? {
+            dbg!(level);
+            dbg!(entry_range);
+            dbg!(*pte);
             if !pte.is_valid() {
                 break;
             }
@@ -427,17 +432,23 @@ impl crate::archs::PageDirectory for PageDirectory {
         mem_access_translation: &FixedOffset,
     ) -> Result<()> {
         info!("unmapping: {:?}", virt_addr_range);
+        let mut cleaning = true;
         for (level, entry_range, pte) in self.postorder(virt_addr_range, mem_access_translation)? {
-            assert!(virt_addr_range.covers(&entry_range));
+            dbg!(level);
+            dbg!(entry_range);
             if !pte.is_valid() {
                 return Err(Error::SegmentFault);
             };
             if pte.is_table(level) {
-                Self::free_table_if_empty(level, pte, allocator, mem_access_translation)?;
+                assert_some!(virt_addr_range.intersection(&entry_range));
+                if cleaning {
+                    cleaning =
+                        Self::free_table_if_empty(level, pte, allocator, mem_access_translation)?;
+                }
             } else {
+                assert!(virt_addr_range.covers(&entry_range));
                 let phys_addr = pte.next_level_table_address();
                 *pte = PageTableEntry::null();
-                atomic::fence(atomic::Ordering::SeqCst);
                 hal::invalidate_tlb(entry_range.base())?;
                 if Arch::ram_range().contains(phys_addr) {
                     allocator.lock().free(phys_addr)?;
@@ -447,6 +458,7 @@ impl crate::archs::PageDirectory for PageDirectory {
         Ok(())
     }
 
+    // FIXME: Use page directory walk for dump
     #[allow(dead_code)]
     fn dump(&self, mem_access_translation: &impl Translate) {
         fn dump_level(

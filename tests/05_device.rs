@@ -32,7 +32,7 @@ use libkernel::debug::Level;
 #[no_mangle]
 fn _override_log_levels() -> (Level, &'static [(&'static str, Level)]) {
     const LOG_LEVEL_SETTINGS: &[(&str, Level)] = &[
-        ("aarch64::pager", Level::Major),
+        ("aarch64::pager", Level::Info),
         ("pager", Level::Info),
         ("pager::layout", Level::Major),
         ("pager::frames", Level::Info),
