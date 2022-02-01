@@ -29,7 +29,6 @@ use crate::{Error, Result};
 
 use core::any::Any;
 use core::intrinsics::unchecked_sub;
-use core::sync::atomic;
 
 static mut RAM_RANGE: PhysAddrRange = PhysAddrRange::fixed(PhysAddr::null(), 0);
 
@@ -256,6 +255,7 @@ impl PageDirectory {
                     // level 1: 1GB block
                     // level 2: 2MB block
                     // level 3: 4KB page
+                    dbg!(page_table[index]);
                     assert!(!page_table[index].is_valid()); // FIXME: re-mapping
                     let maybe_output_addr = translation.translate_maybe(entry_range.base());
                     trace!(
@@ -285,6 +285,7 @@ impl PageDirectory {
                     continue;
                 }
             }
+            dbg!(page_table[index]);
             let maybe_phys_addr_table = if page_table[index].is_valid() {
                 Some(page_table[index].next_level_table_address())
             } else {
@@ -302,12 +303,14 @@ impl PageDirectory {
                     };
                     Some(allocator.lock().alloc_zeroed(purpose)?)
                 };
+                dbg!(maybe_phys_addr);
                 let is_kernel = target_range.base() >= Arch::kernel_base();
                 page_table[index] =
                     TableDescriptor::new_entry(is_kernel, level, maybe_phys_addr, attributes)
                         .into();
                 maybe_phys_addr
             };
+            dbg!(page_table[index]);
             if let Some(phys_addr_table) = maybe_phys_addr_table {
                 Self::map_level(
                     entry_target_range,

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 
+use crate::archs::{arch::Arch, PagerTrait};
+
 use super::{Addr, AddrRange, VirtAddr, PAGESIZE_BYTES};
 
 use core::fmt::{Debug, Error, Formatter};
@@ -44,8 +46,11 @@ impl PhysAddr {
 
     /// Address of the i-th page of RAM.
     pub fn ram_page(i: usize) -> PhysAddr {
-        use crate::archs::{arch::Arch, PagerTrait};
         Arch::ram_range().base().increment(i * PAGESIZE_BYTES)
+    }
+
+    pub fn frame(&self) -> u32 {
+        PhysAddrRange::between(Arch::ram_range().base(), *self).length_in_pages() as u32
     }
 
     /// Construct from a pointer.

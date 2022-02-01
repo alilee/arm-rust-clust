@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 
 //! Capture and log debugging output.
+//!
+//! FIXME: Replace with log crate
 
 pub mod logger;
 

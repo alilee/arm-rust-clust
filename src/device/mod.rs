@@ -19,7 +19,7 @@ use crate::pager::{
 use crate::util::locked::Locked;
 use crate::{Error, Result};
 
-use alloc::{boxed::Box, collections::BTreeMap, string::String};
+use alloc::{boxed::Box, collections::BTreeMap, string::String, sync::Arc};
 
 use dtb::{StructItem, StructItems};
 
@@ -83,17 +83,33 @@ pub trait InterruptController: Send {
     fn add_handler(&mut self, interrupt: u8, handler: fn() -> HandlerReturnAction) -> Result<()>;
 }
 
+#[derive(Copy, Clone, Debug)]
+#[repr(u8)]
+pub enum RequestStatus {
+    Ok = 0,
+    IOErr = 1,
+    Unsupp = 2,
+    Init = !0,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct RequestId(u16);
+
+#[derive(Copy, Clone, Debug)]
+pub struct Sector(pub u64);
+
 /// Functions for a block storage device
 pub trait Block {
     fn name(&self) -> String;
-    fn read(&self, phys_addr: PhysAddr, sector: u64, length: usize) -> Result<()>;
-    fn write(&self, phys_addr: PhysAddr, sector: u64, length: usize) -> Result<()>;
-    fn discard(&self, phys_addr: PhysAddr, sector: u64, length: usize) -> Result<()>;
-    fn zero(&self, phys_addr: PhysAddr, sector: u64, length: usize) -> Result<()>;
-    fn flush(&self) -> Result<()>;
+    fn status(&mut self, id: RequestId) -> Result<u32>;
+    fn read(&mut self, page_addrs: &[PhysAddr], sector: Sector) -> Result<RequestId>;
+    fn write(&mut self, page_addrs: &[PhysAddr], sector: Sector) -> Result<RequestId>;
+    fn discard(&mut self, sector: Sector, pages: usize) -> Result<RequestId>;
+    fn zero(&mut self, sector: Sector, pages: usize) -> Result<RequestId>;
+    fn flush(&mut self) -> Result<RequestId>;
 }
 
-static BLOCK_DEVICES: Locked<BTreeMap<String, Locked<Box<dyn Block + Send>>>> =
+pub static BLOCK_DEVICES: Locked<BTreeMap<String, Arc<Locked<Box<dyn Block + Send>>>>> =
     Locked::new(BTreeMap::new());
 
 #[cfg(test)]

@@ -5,14 +5,21 @@
 use super::queue;
 use super::{DeviceID, FeaturesSelect, MagicValue, Status, VirtIODevice};
 
-use crate::pager::{Addr, OwnedMapping, PhysAddr, VirtAddr};
+use crate::device::{RequestId, RequestStatus, Sector};
+use crate::pager::{Addr, OwnedMapping, Pager, Paging, PhysAddr, VirtAddr, PAGESIZE_BYTES};
 use crate::{Error, Result};
 
-use core::sync::atomic;
-
 use alloc::boxed::Box;
+use alloc::collections::BTreeMap;
 use alloc::string::{String, ToString};
 use alloc::sync::Arc;
+use alloc::vec;
+use alloc::vec::Vec;
+
+use core::mem;
+use core::pin::Pin;
+use core::sync::atomic;
+use core::sync::atomic::Ordering;
 
 use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 use tock_registers::{register_bitfields, register_structs, LocalRegisterCopy};
@@ -176,6 +183,81 @@ fn negotiate_features(block_device: &VirtIOBlockDevice) -> Result<Features> {
     ))
 }
 
+#[derive(Copy, Clone, Debug)]
+#[repr(u32)]
+enum RequestType {
+    /// Read
+    In = 0,
+    /// Write
+    Out = 1,
+    /// Flush
+    Flush = 4,
+    /// Discard
+    Discard = 11,
+    /// Write zeroes
+    WriteZeroes = 13,
+    /// Init
+    Init = !0,
+}
+
+#[derive(Copy, Clone, Debug)]
+#[repr(C, align(32))]
+struct ReqHeader {
+    req_type: RequestType,
+    _reserved: u32,
+    sector: Sector,
+}
+
+impl Default for ReqHeader {
+    fn default() -> Self {
+        Self {
+            req_type: RequestType::Init,
+            _reserved: 0,
+            sector: Sector(!0),
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+#[repr(C, align(32))]
+struct Request {
+    header: ReqHeader,
+    status: RequestStatus,
+    init_len: u32,
+    id: RequestId,
+    descriptor_count: u16,
+    used: bool,
+}
+
+impl Default for Request {
+    fn default() -> Self {
+        Self {
+            header: ReqHeader::default(),
+            status: RequestStatus::Init,
+            init_len: !0,
+            id: RequestId(!0),
+            descriptor_count: 3,
+            used: false,
+        }
+    }
+}
+
+impl Request {
+    pub fn header_descriptor(&self) -> Result<(PhysAddr, u32)> {
+        Ok((
+            Pager::maps_to((&self.header).into())?,
+            mem::size_of_val(&self.header) as u32,
+        ))
+    }
+
+    pub fn status_descriptor(&self) -> Result<(PhysAddr, u32)> {
+        Ok((
+            Pager::maps_to((&self.status).into())?,
+            mem::size_of_val(&self.status) as u32,
+        ))
+    }
+}
+
 struct BlockDevice<'a> {
     name: String,
     features: Features,
@@ -183,6 +265,7 @@ struct BlockDevice<'a> {
     regs: &'a VirtIOBlockDevice,
     interrupt: u32,
     virt_queue: queue::PackedRing<'a>,
+    requests: BTreeMap<RequestId, Pin<Box<Request>>>,
 }
 
 impl<'a> BlockDevice<'a> {
@@ -201,6 +284,7 @@ impl<'a> BlockDevice<'a> {
             regs,
             interrupt,
             virt_queue,
+            requests: BTreeMap::new(),
         }
     }
 }
@@ -216,23 +300,76 @@ impl crate::device::Block for BlockDevice<'_> {
         self.name.clone()
     }
 
-    fn read(&self, phys_addr: PhysAddr, sector: u64, length: usize) -> Result<()> {
+    fn status(&mut self, id: RequestId) -> Result<u32> {
+        let req = self.requests.get(&id).ok_or(Error::UnexpectedValue)?;
+        dbg!(&req);
+        while let Ok(desc) = self.virt_queue.next_used() {
+            dbg!(desc);
+            let id = desc.id;
+            let req = self.requests.get_mut(&id).ok_or(Error::UnexpectedValue)?;
+            req.used = true;
+            req.init_len = desc.len;
+            self.virt_queue
+                .consume_used(req.descriptor_count as usize)?;
+        }
+        let req = self.requests.get(&id).ok_or(Error::UnexpectedValue)?;
+        dbg!(&req);
+        if req.used {
+            match req.status {
+                RequestStatus::Ok => Ok(req.init_len - 1), // less one byte for status
+                RequestStatus::IOErr => Err(Error::IOError),
+                RequestStatus::Unsupp => Err(Error::DeviceIncompatible),
+                RequestStatus::Init => unreachable!(),
+            }
+        } else {
+            Err(Error::WouldBlock)
+        }
+    }
+
+    fn read(&mut self, page_addrs: &[PhysAddr], sector: Sector) -> Result<RequestId> {
+        let id = self.virt_queue.next(3)?;
+        let request = Box::pin(Request {
+            header: ReqHeader {
+                req_type: RequestType::In,
+                sector,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        dbg!(&request);
+
+        let read_ranges = vec![request.header_descriptor()?];
+        let mut write_ranges: Vec<(PhysAddr, u32)> = page_addrs
+            .iter()
+            .map(|phys_addr| (phys_addr.clone(), PAGESIZE_BYTES as u32))
+            .collect();
+        write_ranges.push(request.status_descriptor()?);
+
+        self.virt_queue.submit(id, &read_ranges, &write_ranges)?;
+        atomic::fence(Ordering::SeqCst);
+        self.regs
+            .virtio_device
+            .queue_notify
+            .set(self.virt_queue.index());
+
+        self.requests.insert(id, request);
+        Ok(id)
+    }
+
+    fn write(&mut self, page_addrs: &[PhysAddr], sector: Sector) -> Result<RequestId> {
         todo!()
     }
 
-    fn write(&self, phys_addr: PhysAddr, sector: u64, length: usize) -> Result<()> {
+    fn discard(&mut self, sector: Sector, length: usize) -> Result<RequestId> {
         todo!()
     }
 
-    fn discard(&self, phys_addr: PhysAddr, sector: u64, length: usize) -> Result<()> {
+    fn zero(&mut self, sector: Sector, length: usize) -> Result<RequestId> {
         todo!()
     }
 
-    fn zero(&self, phys_addr: PhysAddr, sector: u64, length: usize) -> Result<()> {
-        todo!()
-    }
-
-    fn flush(&self) -> Result<()> {
+    fn flush(&mut self) -> Result<RequestId> {
         todo!()
     }
 }
@@ -259,8 +396,9 @@ pub(in crate::device::virtio) fn init(
         assert_eq!(MagicValue::MAGIC::Magic.value, device.magic_value.get(),);
         assert_eq!(2, device.version.get(),);
 
-        device.status.write(Status::ACKNOWLEDGE::SET);
+        device.status.modify(Status::ACKNOWLEDGE::SET);
         atomic::fence(atomic::Ordering::SeqCst);
+        info!("status: 0b{:32b}", device.status.get());
 
         assert_eq!(
             DeviceID::TYPE::Block.value,
@@ -268,7 +406,7 @@ pub(in crate::device::virtio) fn init(
         );
         assert_eq!(reg.increment(0x70), VirtAddr::from(&device.status));
 
-        device.status.write(Status::DRIVER::SET);
+        device.status.modify(Status::DRIVER::SET);
         atomic::fence(atomic::Ordering::SeqCst);
         info!("status: 0b{:32b}", device.status.get());
 

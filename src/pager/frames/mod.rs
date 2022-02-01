@@ -160,7 +160,8 @@ impl Allocator for FrameTableInner {
     }
 
     fn alloc_for_overwrite(&mut self, purpose: Purpose) -> Result<PhysAddr> {
-        self.table
+        let result = self
+            .table
             .drip_to(FrameUse::Free, purpose.into())
             .map(|i| {
                 if purpose == Purpose::User {
@@ -178,7 +179,9 @@ impl Allocator for FrameTableInner {
                 }
                 i
             })
-            .map(|i| PhysAddr::ram_page(i as usize))
+            .map(|i| PhysAddr::ram_page(i as usize));
+        debug!("updated self.table: {:?}", self.table);
+        result
     }
 
     fn increment_map_count(&mut self, phys_addr: PhysAddr) -> Result<()> {

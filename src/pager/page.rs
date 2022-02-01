@@ -14,4 +14,9 @@ impl Page {
     pub const fn new() -> Self {
         Self([0u64; PAGESIZE_BYTES / 8])
     }
+
+    ///
+    pub fn slice(&mut self) -> &mut [u64] {
+        &mut self.0
+    }
 }

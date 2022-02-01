@@ -205,7 +205,7 @@ pub fn init(dtb_root: dtb::StructItems) -> Result<()> {
                     )?;
                     super::BLOCK_DEVICES
                         .lock()
-                        .insert(block_device.name(), Locked::new(block_device));
+                        .insert(block_device.name(), Arc::new(Locked::new(block_device)));
                 }
                 Some(_) => {
                     info!(

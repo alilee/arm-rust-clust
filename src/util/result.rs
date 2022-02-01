@@ -7,6 +7,8 @@
 pub enum Error {
     /// Function completes with no adverse conditions
     Success,
+    /// Synchronous completion would block
+    WouldBlock,
     /// Memory access out of bounds
     SegmentFault,
     /// Out of memory to allocate
@@ -17,8 +19,14 @@ pub enum Error {
     UnexpectedValue,
     /// Function failed because required initialisation not performed
     UnInitialised,
+    /// IO Error
+    IOError,
+    /// Device has no work
+    DeviceIdle,
     /// Device not compatible with driver
     DeviceIncompatible,
+    /// Device unable to accept request
+    DeviceAtCapacity,
     /// Function failed with undefined error
     UnknownError,
     /// Function failed because not implemented

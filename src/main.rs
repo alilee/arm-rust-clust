@@ -22,6 +22,7 @@ fn kernel_main() -> ! {
     major!("kernel_main");
 
     device::init().expect("device::init");
+
     // thread::init().expect("thread::init");
 
     // release_cores();

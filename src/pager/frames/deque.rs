@@ -35,6 +35,12 @@ struct DequeNode<N> {
     node: N,
 }
 
+impl<N> Debug for DequeNode<N> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        write!(f, "prev: {}, next: {}", self.prev, self.next)
+    }
+}
+
 impl<N: Default> DequeNode<N> {
     fn init_queue_empty(i: u32) -> Self {
         Self {
@@ -103,7 +109,7 @@ impl<N: Debug, Q: From<u8> + Debug> Debug for Deque<N, Q> {
     }
 }
 
-impl<N: Default + Debug, Q: Copy + Into<u8>> Deque<N, Q> {
+impl<N: Default + Debug, Q: Copy + Into<u8> + From<u8> + Debug> Deque<N, Q> {
     pub fn storage_bytes(entries: usize) -> usize {
         (entries + variant_count::<Q>()) * core::mem::size_of::<DequeNode<N>>()
     }
@@ -145,10 +151,13 @@ impl<N: Default + Debug, Q: Copy + Into<u8>> Deque<N, Q> {
     }
 
     fn detach_seq(&mut self, i: usize, j: usize) -> () {
+        info!("detach_seq: {}, {}", i, j);
         assert_lt!(i, self.top());
         assert_lt!(j, self.top());
         let prev = self.table[i].prev;
         let next = self.table[j].next;
+        dbg!(prev);
+        dbg!(next);
         self.table[prev as usize].next = next;
         self.table[next as usize].prev = prev;
     }
@@ -166,6 +175,8 @@ impl<N: Default + Debug, Q: Copy + Into<u8>> Deque<N, Q> {
     fn tail(&self, q: Q) -> usize {
         let q = q.into() as usize;
         let q = self.table.len() - (variant_count::<Q>() - q);
+        dbg!(q);
+        dbg!(&self.table[q]);
         self.table[q].prev as usize
     }
 
@@ -191,6 +202,8 @@ impl<N: Default + Debug, Q: Copy + Into<u8>> Deque<N, Q> {
     }
 
     pub fn remove_seq_to(&mut self, i: u32, j: u32, q: Q) -> Result<(u32, u32)> {
+        info!("remove_seq_to: {}, {}, {:?}", i, j, q);
+        dbg!(self.top());
         let i = i as usize;
         let j = j as usize;
         assert_lt!(i, self.top());
@@ -201,11 +214,16 @@ impl<N: Default + Debug, Q: Copy + Into<u8>> Deque<N, Q> {
     }
 
     pub fn drip_to(&mut self, q_from: Q, q_to: Q) -> Result<u32> {
-        self.drip_n_to(q_from, 1, q_to).map(|(i, _)| i)
+        info!("drip_to: {:?} -> {:?}", q_from, q_to);
+        let result = self.drip_n_to(q_from, 1, q_to).map(|(i, _)| i);
+        dbg!(&result);
+        result
     }
 
     pub fn drip_n_to(&mut self, q_from: Q, mut n: u32, q_to: Q) -> Result<(u32, u32)> {
+        major!("drip_n_to: {:?}/{} -> {:?}", q_from, n, q_to);
         let j = self.tail(q_from) as u32;
+        dbg!(j);
         let mut i = j as usize;
         loop {
             if i == self.queue_entry(q_from) as usize {
@@ -217,6 +235,8 @@ impl<N: Default + Debug, Q: Copy + Into<u8>> Deque<N, Q> {
             i = self.table[i].prev as usize;
             n -= 1;
         }
+        dbg!(i);
+        dbg!(j);
         self.remove_seq_to(i as u32, j, q_to)
     }
 
@@ -256,7 +276,7 @@ impl<N: Default + Debug, Q: Copy + Into<u8>> Deque<N, Q> {
     }
 }
 
-impl<N: Default + Debug, Q: Copy + Into<u8>> Index<u32> for Deque<N, Q> {
+impl<N: Default + Debug, Q: Copy + Into<u8> + From<u8> + Debug> Index<u32> for Deque<N, Q> {
     type Output = N;
 
     fn index(&self, index: u32) -> &Self::Output {
@@ -265,7 +285,7 @@ impl<N: Default + Debug, Q: Copy + Into<u8>> Index<u32> for Deque<N, Q> {
     }
 }
 
-impl<N: Default + Debug, Q: Copy + Into<u8>> IndexMut<u32> for Deque<N, Q> {
+impl<N: Default + Debug, Q: Copy + Into<u8> + From<u8> + Debug> IndexMut<u32> for Deque<N, Q> {
     fn index_mut(&mut self, index: u32) -> &mut Self::Output {
         assert_lt!(index as usize, self.top());
         &mut self.table[index as usize].node

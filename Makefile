@@ -1,12 +1,13 @@
 # HOST = x86_64-unknown-linux-gnu
 HOST = x86_64-apple-darwin
 TARGET = aarch64-unknown-none-softfloat
+TARGET_DIR = target/$(TARGET)/debug/deps
 
 QEMU = qemu-system-aarch64
 QEMU_SMP = -smp 2
 QEMU_DISK = -global virtio-mmio.force-legacy=false -device virtio-blk-device,drive=drive0,id=virtblk0,num-queues=4,packed=on -drive file=disk.qcow2,if=none,id=drive0
 
-GDB = gdb
+GDB = rust-gdb
 
 BINTOOLS = rust
 OBJCOPY = $(BINTOOLS)-objcopy
@@ -49,7 +50,7 @@ mkdir -p test_output
 
 $(OBJCOPY) -O binary $$argv[1] $$argv[1].bin
 $(OBJDUMP) -d $$argv[1] > test_output/(basename $$argv[1].s)
-$(QEMU) -M $(BOARD) -cpu $(CPU) -m $(MEM) -nographic $(QEMU_SMP) $(QEMU_DISK) -semihosting -dtb qemu.dtb -kernel $$argv[1].bin > test_output/(basename $$argv[1].out)
+$(QEMU) -M $(BOARD) -cpu $(CPU) -m $(MEM) -nographic $(QEMU_SMP) $(QEMU_DISK) -semihosting -dtb qemu.dtb -d guest_errors -D /tmp/qemu.log -kernel $$argv[1].bin > test_output/(basename $$argv[1].out)
 set result $$status
 #if test $$result -ne 0
 #    cat $$argv[1].out
@@ -95,8 +96,17 @@ qemu.rawdtb: Makefile disk.qcow2
 qemu: $(kernel).bin qemu.dtb
 	$(QEMU) -M $(BOARD) -cpu $(CPU) -m $(MEM) -nographic $(QEMU_SMP) $(QEMU_DISK) -semihosting -s -S -dtb qemu.dtb -kernel $<
 
-gdb: $(kernel)
-	$(GDB) -iex 'file $(kernel)' -iex 'target remote localhost:1234'
+qemu_test: qemu.dtb
+	mkdir -p test_output
+	rm -f test_output/$(TEST_SUBJECT)-*
+	rm -f $(TARGET_DIR)/$(TEST_SUBJECT)-*
+	cargo build --test $(TEST_SUBJECT)
+	$(OBJCOPY) -O binary $(TARGET_DIR)/$(TEST_SUBJECT)-???????????????? $(TARGET_DIR)/$(TEST_SUBJECT)-????????????????.bin
+	$(OBJDUMP) -d $(TARGET_DIR)/$(TEST_SUBJECT)-???????????????? > test_output/$(TEST_SUBJECT).s
+	$(QEMU) -M $(BOARD) -cpu $(CPU) -m $(MEM) -nographic $(QEMU_SMP) $(QEMU_DISK) -semihosting -dtb qemu.dtb -s -S -kernel $(TARGET_DIR)/$(TEST_SUBJECT)-*.bin
+
+gdb:
+	$(GDB) -iex 'file $(shell find . -name '$(TEST_SUBJECT)-????????????????')' -iex 'target remote localhost:1234' -iex 'layout split' -iex 'layout next'
 
 run: $(kernel).bin qemu.dtb
 	$(QEMU) -M $(BOARD) -cpu $(CPU) -m $(MEM) -nographic $(QEMU_SMP) $(QEMU_DISK) -semihosting -dtb qemu.dtb -kernel $<

@@ -164,7 +164,7 @@ fn allocate_core_stack() -> Result<VirtAddr> {
     major!("allocate_core_stack");
 
     // core 0 kernel stack
-    const KERNEL_STACK_LEN_PAGES: usize = 6;
+    const KERNEL_STACK_LEN_PAGES: usize = 8;
 
     let kernel_stack = {
         let mut lock = KERNEL_STACK_ALLOCATOR.lock();

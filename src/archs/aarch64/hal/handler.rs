@@ -60,6 +60,7 @@ fn print_exception_details() {
     info!("ESR_EL1::ISS {:b}", ESR_EL1.read(ESR_EL1::ISS));
     info!("FAR_EL1: {:p}", FAR_EL1.get() as *const ());
     info!("ELR_EL1: {:p}", ELR_EL1.get() as *const ());
+    info!("SP: {:p}", SP.get() as *const ());
 }
 
 #[allow(dead_code)]
@@ -245,6 +246,8 @@ vector_table_el1:   mov x0, 0
 				  
 .balign 0x080       /* Exception taken from EL1 with SP_EL1. */
                     /* Synchronous */
+                    /* loop if double-fault due to SP overflow */
+                    ldr     xzr, [sp]                      
 				    EXCEPTION_ENTRY el1_sp1_sync_handler
 .balign 0x080
 				    mov     x0, 5
